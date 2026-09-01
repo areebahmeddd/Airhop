@@ -295,11 +295,6 @@ function assertMintNetworkAllowed(): void {
   // client every socket is built from, so this request is already inside the
   // tunnel or already failing closed, exactly like a relay socket. Refusing it
   // would decline a call that was never going to leak.
-  //
-  // That is a change from the Orbot era rather than a relaxation. Orbot covered
-  // this socket too, through its VPN, but only while it happened to be running,
-  // and the app could not tell. Owning the client is what turns "probably
-  // covered" into "covered".
   if (Platform.OS !== "ios") return;
 
   // The one escape hatch.

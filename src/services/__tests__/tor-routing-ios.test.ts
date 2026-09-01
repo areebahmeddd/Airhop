@@ -66,15 +66,12 @@ jest.mock("nostr-tools/pool", () => ({
   useWebSocketImplementation: jest.fn(),
 }));
 
-// Deliberately bare: iOS never consults the BLE module for Tor. `default: {}`
-// is the point - it proves the iOS path touches none of it, which is why the
-// VPN-watch calls in setTorActive are optional on the method, not just the
-// module. subscribeVpnLost returns null here for the same reason the real one
-// does when the module is absent: there is nothing to subscribe to.
+// Deliberately bare, and that is the assertion. The Tor path must never reach
+// for the radio module, and a `default: {}` that is never called is how this
+// file proves it.
 jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {},
-  subscribeVpnLost: () => null,
 }));
 
 jest.mock("@bridge/NativeAirhopTor", () => ({
@@ -257,8 +254,9 @@ describe("revalidating on iOS", () => {
 
     await revalidateTorRouting();
 
-    // Arti is ours and a failed bootstrap is usually transient, so the next
-    // launch should retry. Orbot is not ours, which is why Android clears it.
+    // A failed bootstrap is usually transient, so the preference stays on and
+    // the next launch retries rather than silently reverting the user to the
+    // clear net. Both platforms behave the same way.
     expect(mockSetTorEnabled).not.toHaveBeenCalledWith(false);
   });
 

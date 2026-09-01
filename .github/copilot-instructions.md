@@ -44,8 +44,9 @@ src/
   platform/     # thin wrappers over OS APIs
   utils/        # pure helpers
 
-android/        # Kotlin: BLE, WiFi Aware, voice modules + AirhopForegroundService
+android/        # Kotlin: BLE, WiFi Aware, voice, Tor modules + AirhopForegroundService
 ios/            # Swift: BLE, WiFi Aware, pairing, voice, Tor modules
+native/arti/    # Rust: the embedded Tor client both platforms compile
 
 assets/data/    # nostr_relays.csv (bundled from bitchat/georelays/, CI-refreshed)
 docs/

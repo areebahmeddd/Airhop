@@ -8,7 +8,7 @@
 //
 // Binary dependency: ios/Frameworks/arti.xcframework, built by
 // native/arti/build-apple.sh from native/arti/src. The header beside the
-// library is generated from src/ffi.rs, so the declarations below and the Rust
+// library is generated from src/ffi_c.rs, so the declarations below and the Rust
 // they bind to cannot drift without the build saying so.
 
 import Foundation
@@ -18,16 +18,13 @@ import Network
 
 // ---- Arti FFI ---------------------------------------------------------------
 //
-// Five entry points, all of them cheap and none of them blocking. See
-// native/arti/src/ffi.rs for the contract and the error codes.
+// Cheap and non-blocking. See native/arti/src/ffi_c.rs for the contract and the
+// error codes.
 //
 // Bound by symbol rather than through a bridging header, which keeps the Xcode
-// target free of a modulemap for five functions. A symbol that is missing
-// outright is a link error, so a rename cannot reach a user. What the linker
-// will not catch is a symbol present in one slice and absent from another, which
-// is what a partial rebuild produces and which only fails when somebody happens
-// to build for that slice. build-apple.sh checks all five in every slice for
-// exactly that reason.
+// target free of a modulemap for five functions. A missing symbol is a link
+// error; what the linker cannot catch is one present in a device slice and
+// absent from a simulator slice, which build-apple.sh checks for.
 
 @_silgen_name("airhop_tor_start")
 private func airhop_tor_start(_ dataDir: UnsafePointer<CChar>, _ socksPort: UInt16) -> Int32
@@ -44,12 +41,19 @@ private func airhop_tor_status() -> Int32
 @_silgen_name("airhop_tor_summary")
 private func airhop_tor_summary(_ buf: UnsafeMutablePointer<CChar>, _ len: Int32) -> Int32
 
+/// Return codes from the native client, mirroring AIRHOP_TOR_* in
+/// native/arti/src/lib.rs. Only the two the manager distinguishes are named;
+/// every other failure is reported by its number, which is enough to look up.
+enum AirhopTorRC {
+    static let ok: Int32 = 0
+    static let alreadyRunning: Int32 = -1
+}
+
 /// What Arti reports about itself, decoded from the packed status word.
 ///
-/// The Rust side owns this state, so nothing here caches it. Asking is a lock
-/// and a few bit shifts, which is cheaper than the bookkeeping needed to keep a
-/// mirror of it honest, and a mirror is what used to let the manager believe Tor
-/// was running after it had stopped.
+/// The Rust side owns this state and nothing here caches it: asking is a lock
+/// and a few bit shifts, cheaper than the bookkeeping a mirror needs to stay
+/// honest.
 struct ArtiStatus {
     let running: Bool
     let ready: Bool
@@ -86,27 +90,17 @@ public extension Notification.Name {
     static let AirhopTorWillStart      = Notification.Name("AirhopTorWillStart")
     static let AirhopTorWillRestart    = Notification.Name("AirhopTorWillRestart")
     static let AirhopTorDidBecomeReady = Notification.Name("AirhopTorDidBecomeReady")
-    /// Tor is not going to connect on this network, or has stopped being able
-    /// to. Terminal for this attempt.
-    ///
-    /// Two things reach it. Arti reporting that it cannot make forward progress,
-    /// which is what a network blocking Tor produces and which now arrives in
-    /// seconds rather than being inferred, and the bootstrap deadline elapsing,
-    /// which is the backstop for a bootstrap that is neither progressing nor
-    /// admitting it. Without this the app cannot tell "still forming" from
-    /// "never coming" and goes on claiming onion routing over a client that has
-    /// given up.
+    /// Terminal for this attempt: Arti reporting it cannot make forward
+    /// progress, or the bootstrap deadline elapsing. Without it the app cannot
+    /// tell "still forming" from "never coming", and goes on claiming onion
+    /// routing over a client that has given up.
     static let AirhopTorDidStall       = Notification.Name("AirhopTorDidStall")
 }
 
 // ---- SOCKS endpoint ---------------------------------------------------------
 
-/// Where Arti's SOCKS5 listener lives.
-///
-/// Outside the manager because it is read off the main actor: AirhopTorSocket
-/// builds its URLSession on its own queue and the manager is @MainActor, so
-/// reaching through the singleton for a constant is a data race the compiler is
-/// right to reject. Both sides read these, so the port cannot drift.
+/// Outside the manager because AirhopTorSocket reads it off the main actor, and
+/// the manager is @MainActor. Both sides read these, so the port cannot drift.
 enum AirhopTorEndpoint {
     /// 39050, not 9050. Nothing else on the device is expected to hold it, and
     /// keeping clear of the conventional Tor port avoids colliding with a
@@ -132,9 +126,6 @@ public final class AirhopTorManager: ObservableObject {
 
     @Published private(set) public var isReady: Bool = false
     @Published private(set) public var isStarting: Bool = false
-    @Published private(set) public var lastError: Error?
-    @Published private(set) public var bootstrapProgress: Int = 0
-    @Published private(set) public var bootstrapSummary: String = ""
 
     // MARK: - Private state
 
@@ -146,11 +137,8 @@ public final class AirhopTorManager: ObservableObject {
 #endif
     private(set) public var allowAutoStart: Bool = false
 
-    /// Which start attempt is current.
-    ///
     /// A poll loop belonging to a superseded attempt can still be alive, and
-    /// would otherwise stomp the new attempt's flags and post a second stall. It
-    /// captures this and checks it before writing.
+    /// would otherwise stomp the new attempt's flags and post a second stall.
     private var attemptEpoch = 0
 
     /// How long a bootstrap may run without either completing or admitting it is
@@ -167,12 +155,9 @@ public final class AirhopTorManager: ObservableObject {
         allowAutoStart = true
     }
 
-    /// Start Arti if it is not already running. No-op when `allowAutoStart` is
-    /// false or the app is in the background.
-    ///
-    /// Whether a client already exists is asked of Arti rather than tracked
-    /// here. A second `start` while one is running is refused by the Rust under
-    /// its own lock, so this is safe to call from several places at once.
+    /// No-op when `allowAutoStart` is false or the app is backgrounded. Whether
+    /// a client exists is asked of Arti rather than tracked here, so this is
+    /// safe to call from several places at once.
     public func startIfNeeded() {
         guard allowAutoStart, isAppForeground else { return }
         guard !ArtiStatus.current.running else { return }
@@ -180,13 +165,10 @@ public final class AirhopTorManager: ObservableObject {
         attemptEpoch &+= 1
         let epoch = attemptEpoch
         isStarting = true
-        lastError = nil
-        bootstrapProgress = 0
-        bootstrapSummary = ""
         NotificationCenter.default.post(name: .AirhopTorWillStart, object: nil)
 
         guard let dir = dataDirectoryURL()?.path else {
-            failAttempt(epoch, code: -1, message: "Data directory unavailable")
+            failAttempt(epoch)
             return
         }
         try? FileManager.default.createDirectory(
@@ -200,12 +182,16 @@ public final class AirhopTorManager: ObservableObject {
             let rc = dir.withCString { airhop_tor_start($0, UInt16(AirhopTorEndpoint.socksPort)) }
             await MainActor.run {
                 guard let self, epoch == self.attemptEpoch else { return }
-                guard rc == 0 else {
+                // Already running is a success. startIfNeeded reads the
+                // status before dispatching, so the JS toggle and the path
+                // monitor arriving together both see a stopped client and both
+                // start; the second gets this code back.
+                guard rc == AirhopTorRC.ok || rc == AirhopTorRC.alreadyRunning else {
                     // Arti never started, so no bootstrap will run and no
                     // deadline will elapse. Without reporting it here the banner
                     // sits on "starting" for the whole session over a client
                     // that does not exist.
-                    self.failAttempt(epoch, code: Int(rc), message: "arti start failed (rc=\(rc))")
+                    self.failAttempt(epoch)
                     return
                 }
                 // The listener is bound by the time start returns, so there is
@@ -240,12 +226,11 @@ public final class AirhopTorManager: ObservableObject {
 
     /// Called when the app enters the background.
     ///
-    /// Puts Arti to sleep rather than stopping it. iOS suspends the process, so
-    /// circuits and guard connections do not survive a long background spell
-    /// either way, but dormancy lets Arti wind its own background work down and
-    /// pick it up again on resume. Stopping instead would drop the guards, cost
-    /// the user a fresh bootstrap on every return to the app, and make this
-    /// device look like a brand new client to a guard each time.
+    /// Sleeps Arti instead of stopping it. iOS suspends the process, so
+    /// circuits do not survive a long spell there either way, but dormancy lets
+    /// Arti wind down and pick up again on resume. A stop would drop the
+    /// guards: a fresh bootstrap on every return, and a device that looks new
+    /// to a guard each time.
     public func goDormantOnBackground() {
         _ = airhop_tor_set_dormant(true)
         // The claim comes down with it. Whether circuits survived the suspension
@@ -280,12 +265,11 @@ public final class AirhopTorManager: ObservableObject {
 
     /// Fully shut Arti down. Safe to call from any context.
     ///
-    /// Revokes auto-start consent, because a complete shutdown is only reached
-    /// by the user switching Tor off or by a panic wipe, and both are
-    /// withdrawals. Leaving the flag set keeps the path monitor eligible to
-    /// restart Arti behind someone who turned it off, burning battery and
-    /// repopulating the data directory a wipe exists to destroy. `startTor`
-    /// re-grants it.
+    /// Revokes auto-start consent: a full shutdown is only reached by the user
+    /// switching Tor off or by a panic wipe, and both are withdrawals. Leaving
+    /// the flag set would let the path monitor restart Arti behind someone who
+    /// turned it off, repopulating the directory a wipe exists to destroy.
+    /// `startTor` re-grants it.
     public func shutdownCompletely() {
         allowAutoStart = false
 #if canImport(Network)
@@ -296,8 +280,6 @@ public final class AirhopTorManager: ObservableObject {
         stopStatusPoll()
         isReady = false
         isStarting = false
-        bootstrapProgress = 0
-        bootstrapSummary = ""
         restarting = false
 
         // Off the main actor: stop waits for the runtime to wind down, bounded
@@ -322,15 +304,14 @@ public final class AirhopTorManager: ObservableObject {
 
     /// Stop Arti and destroy everything it has written to disk. Panic wipe only.
     ///
-    /// The data directory lives under Application Support rather than the cache,
-    /// so nothing the wipe already did reached it. What it holds is Tor client
-    /// state: a cached consensus, chosen guard nodes, directory information,
-    /// timestamps. Together that is on-disk evidence of the shape "this device
-    /// used Tor, from around here, at around this time". A gesture whose whole
-    /// promise is that local state is gone cannot leave it behind.
+    /// The data directory sits under Application Support, so nothing the wipe
+    /// already did reached it. It holds a cached consensus, chosen guards,
+    /// directory information and timestamps: on-disk evidence that this device
+    /// used Tor, from around here, at around this time. A gesture that promises
+    /// local state is gone cannot leave it behind.
     ///
-    /// Waits for Arti to actually be down before deleting, because a directory
-    /// removed under a running client is one the client is free to rewrite.
+    /// Waits for Arti to be down before deleting, because a directory removed
+    /// under a running client is one the client is free to rewrite.
     func wipeState() async {
         // Revoke auto-start consent FIRST, or the wipe does not stick. A live
         // NWPathMonitor calls ensureRunningOnForeground() on every satisfied
@@ -368,7 +349,7 @@ public final class AirhopTorManager: ObservableObject {
 
     /// Mirror Arti's status into the published properties.
     ///
-    /// Polling rather than a callback, because a callback from a Rust thread
+    /// Polling, not a callback, because a callback from a Rust thread
     /// into Swift would need its own lifetime rules and the thing being watched
     /// changes a handful of times a minute. The interval is what keeps it cheap:
     /// once a second while something is happening, once every ten seconds when
@@ -380,10 +361,8 @@ public final class AirhopTorManager: ObservableObject {
             while !Task.isCancelled {
                 guard let self else { return }
                 let status = ArtiStatus.current
-                let summary = ArtiStatus.summary
                 let stop = await MainActor.run { () -> Bool in
                     guard epoch == self.attemptEpoch else { return true }
-                    self.bootstrapSummary = summary
                     self.applyStatus(status)
 
                     if status.blocked {
@@ -391,22 +370,17 @@ public final class AirhopTorManager: ObservableObject {
                         // answer a censored network gives, and reporting it is
                         // the difference between "Airhop is broken" and "this
                         // network blocks Tor".
-                        self.reportStall(
-                            epoch,
-                            code: -15,
-                            message: summary.isEmpty ? "Tor cannot connect on this network" : summary
-                        )
+                        self.reportStall(epoch)
                         return true
                     }
                     if !status.running {
                         // Gone without anyone here asking for it.
-                        self.reportStall(epoch, code: -16, message: "Tor stopped unexpectedly")
+                        self.reportStall(epoch)
                         return true
                     }
                     if !status.ready, Date() >= deadline {
-                        self.reportStall(
-                            epoch, code: -15, message: "Tor did not connect within 75s"
-                        )
+                        // The backstop: neither progressing nor admitting it.
+                        self.reportStall(epoch)
                         return true
                     }
                     return false
@@ -427,7 +401,6 @@ public final class AirhopTorManager: ObservableObject {
     }
 
     private func applyStatus(_ status: ArtiStatus) {
-        bootstrapProgress = status.progress
         isStarting = status.running && !status.ready && !status.blocked
         if status.ready, !isReady {
             isReady = true
@@ -438,26 +411,18 @@ public final class AirhopTorManager: ObservableObject {
     }
 
     /// A start that never got as far as running.
-    private func failAttempt(_ epoch: Int, code: Int, message: String) {
+    private func failAttempt(_ epoch: Int) {
         guard epoch == attemptEpoch else { return }
         isStarting = false
-        lastError = NSError(
-            domain: "AirhopTorManager", code: code,
-            userInfo: [NSLocalizedDescriptionKey: message]
-        )
         NotificationCenter.default.post(name: .AirhopTorDidStall, object: nil)
     }
 
     /// A start that ran and then stopped going anywhere.
-    private func reportStall(_ epoch: Int, code: Int, message: String) {
+    private func reportStall(_ epoch: Int) {
         guard epoch == attemptEpoch else { return }
         isStarting = false
         isReady = false
         stopStatusPoll()
-        lastError = NSError(
-            domain: "AirhopTorManager", code: code,
-            userInfo: [NSLocalizedDescriptionKey: message]
-        )
         NotificationCenter.default.post(name: .AirhopTorDidStall, object: nil)
     }
 

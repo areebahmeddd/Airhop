@@ -1272,7 +1272,7 @@ export class SimDevice {
     return wallet.isMintNetworkBlocked?.() ?? false;
   }
 
-  // Raise or drop Tor, as the Tor service does when Orbot or Arti reports in.
+  // Raise or drop Tor, as the Tor service does when Arti reports in.
   setTorActive(active: boolean): void {
     call(this.inner.stores.meshStateStore, "setTorActive", active);
   }

@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Cada sesión usa el protocolo {noise} para un handshake autenticado. Los mensajes almacenados usan el algoritmo {ratchet}, es decir, aunque tu dispositivo se vea comprometido más adelante, tus mensajes anteriores siguen siendo ilegibles. El borrado de pánico destruye todas las claves y mensajes en menos de un segundo.",
   "home.about.body.internet":
-    "Cuando tú y un contacto estáis fuera del alcance de Bluetooth, los relés de {nostr} sirven de puente por internet, usando mensajes directos envueltos con el formato {nip17}, así que la red mesh se extiende globalmente siempre que ambos estéis en línea. También hay soporte de {tor} en iOS (mediante {arti}) y Android (mediante {orbot}).",
+    "Cuando tú y un contacto estáis fuera del alcance de Bluetooth, los relés de {nostr} sirven de puente por internet, usando mensajes directos envueltos con el formato {nip17}, así que la red mesh se extiende globalmente siempre que ambos estéis en línea. También hay soporte de {tor} en iOS y Android, mediante {arti}.",
   "home.about.optional.title": "Airhop tiene funciones opcionales que puedes activar:",
   "home.about.optional.payments.label": "Pagos sin conexión:",
   "home.about.optional.payments.body":

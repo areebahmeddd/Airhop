@@ -76,14 +76,10 @@ final class AirhopTorModule: RCTEventEmitter {
         }
     }
 
-    /// Report an app foreground transition, and recover Arti on the way back.
-    ///
-    /// iOS suspends the process in the background, so Arti's circuits and guard
-    /// connections do not survive it, while nothing in the manager re-probes
-    /// after the first successful bootstrap. Both edges are needed: the
-    /// background one clears the latched readiness, the foreground one restarts
-    /// against it. Both are no-ops when Tor was never started, since
-    /// ensureRunningOnForeground() gates on auto-start consent.
+    /// iOS suspends the process in the background, so circuits and guard
+    /// connections do not survive a long spell there. Both edges are needed: the
+    /// background one sleeps Arti, the foreground one wakes it. No-ops when Tor
+    /// was never started.
     @objc
     func setAppForeground(_ foreground: Bool,
                           resolver resolve: @escaping RCTPromiseResolveBlock,
@@ -100,20 +96,32 @@ final class AirhopTorModule: RCTEventEmitter {
         }
     }
 
-    /// Return the current Tor status synchronously as a JS object.
+    /// The status JS sees, read from the native client rather than from the
+    /// manager's published copy.
+    ///
+    /// The manager lowers its own `isReady` on the way to the background without
+    /// asking Arti, because whether circuits survived a suspension is not
+    /// knowable until it wakes. Reporting that copy lets an ordinary resume read
+    /// as a failure, since app-foreground and the JS status re-check fire
+    /// un-awaited on the same tick. Kotlin answers from the same source.
+    private static func statusPayload() -> [String: Any] {
+        let status = ArtiStatus.current
+        return [
+            "isReady": status.ready,
+            // Running, not yet carrying traffic, and not stuck. Blocked is
+            // not "starting": the banner has to be able to say the
+            // network refused rather than spinning forever.
+            "isStarting": status.running && !status.ready && !status.blocked,
+            "port": status.ready ? AirhopTorEndpoint.socksPort : 0,
+            "progress": status.progress,
+            "bootstrapSummary": ArtiStatus.summary,
+        ]
+    }
+
     @objc
     func getTorStatus(_ resolve: @escaping RCTPromiseResolveBlock,
                       rejecter reject: @escaping RCTPromiseRejectBlock) {
-        Task { @MainActor in
-            let m = AirhopTorManager.shared
-            resolve([
-                "isReady": m.isReady,
-                "isStarting": m.isStarting,
-                "port": m.isReady ? m.socksPort : 0,
-                "progress": m.bootstrapProgress,
-                "bootstrapSummary": m.bootstrapSummary,
-            ])
-        }
+        resolve(AirhopTorModule.statusPayload())
     }
 
     /// Block until Arti is bootstrapped and SOCKS-ready (or timeout expires).
@@ -132,15 +140,10 @@ final class AirhopTorModule: RCTEventEmitter {
 
     /// One observer per notification, never `forName: nil`.
     ///
-    /// A catch-all block is invoked for every notification posted anywhere in
-    /// the process - UIKit alone posts keyboard, scene, screen and locale
-    /// changes constantly - to filter four of them out. Naming them lets
-    /// NotificationCenter do the matching.
-    ///
-    /// The four are the transitions JS cannot infer. Ready and stall are the
-    /// load-bearing pair: without the stall, a bootstrap that ran out its
-    /// deadline emits nothing, and JS cannot tell "still forming" from "gave
-    /// up" so it keeps claiming onion routing indefinitely.
+    /// A catch-all is invoked for every notification posted anywhere in the
+    /// process, UIKit's keyboard and scene changes included, to filter four out.
+    /// Ready and stall are the load-bearing pair: without the stall, JS cannot
+    /// tell "still forming" from "gave up".
     private func subscribeToTorNotifications() {
         let nc = NotificationCenter.default
         let names: [Notification.Name] = [
@@ -158,19 +161,10 @@ final class AirhopTorModule: RCTEventEmitter {
 
     private func emitStatus() {
         guard hasListeners else { return }
-        Task { @MainActor in
-            let m = AirhopTorManager.shared
-            self.sendEvent(
-                withName: AirhopTorModule.torStatusEvent,
-                body: [
-                    "isReady": m.isReady,
-                    "isStarting": m.isStarting,
-                    "port": m.isReady ? m.socksPort : 0,
-                    "progress": m.bootstrapProgress,
-                    "bootstrapSummary": m.bootstrapSummary,
-                ]
-            )
-        }
+        sendEvent(
+            withName: AirhopTorModule.torStatusEvent,
+            body: AirhopTorModule.statusPayload()
+        )
     }
 
     deinit {

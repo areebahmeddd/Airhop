@@ -939,8 +939,8 @@ test("W13 Tor on iOS blocks mint traffic instead of leaking it", async () => {
   const radio = new RadioFabric(s.world);
   // iOS specifically. Arti wraps WebSockets, not fetch, so a mint request made
   // while Tor is up would leave the device in the clear while the user believes
-  // everything is routed. Android hands the whole socket to Orbot, so it does
-  // not have this problem and must NOT be blocked.
+  // everything is routed. Android routes every socket through the embedded
+  // proxy, so it does not have this problem and must NOT be blocked.
   const iphone = SimDevice.create(s.world, {
     id: "iphone",
     platform: "ios",

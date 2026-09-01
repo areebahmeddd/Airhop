@@ -1,8 +1,8 @@
 //! Airhop's embedded Tor client.
 //!
 //! One Rust crate, two FFI faces. iOS links it as a static library and calls the
-//! C ABI in `ffi`; Android loads it as a shared object and calls the JNI surface
-//! in `jni_api`. Everything above those two files is identical on both
+//! C ABI in `ffi_c`; Android loads it as a shared object and calls the JNI surface
+//! in `ffi_jni`. Everything above those two files is identical on both
 //! platforms, so "Tor is on" means the same thing on an iPhone and on a Pixel,
 //! and there is one place to fix when it does not.
 //!
@@ -10,7 +10,7 @@
 //! control port, no torrc, no configuration surface. The app points its sockets
 //! at the port and reads a status snapshot to draw a banner.
 //!
-//! Three properties are load-bearing, and each is a decision rather than an
+//! Three properties are load-bearing, and each is a decision, not an
 //! accident.
 //!
 //! **It cannot leak.** `arti_client` has no clearnet path. Every byte that
@@ -22,16 +22,15 @@
 //! **The listener binds before bootstrap.** `start` returns only once the port
 //! is accepting, so a caller that gets `AIRHOP_TOR_OK` may dial immediately. A dial made
 //! during bootstrap waits for a circuit; a dial made after a bootstrap that
-//! never completed fails. Binding after bootstrap instead, which is what the
-//! implementations this replaces did, leaves the app unable to tell "starting"
-//! from "broken" for the whole bootstrap, and leaves callers probing the port to
-//! find out.
+//! never completed fails. Binding after bootstrap instead would leave the app
+//! unable to tell "starting" from "broken" for the whole bootstrap, and leave
+//! callers probing the port to find out.
 //!
 //! **Progress is real.** `TorClient::bootstrap_events()` is the client's own
 //! view of how far along it is and why it is stuck. Nothing here infers state
 //! from log text.
 //!
-//! Panics abort rather than unwind (see `panic = "abort"` in Cargo.toml).
+//! Panics abort instead of unwinding (see `panic = "abort"` in Cargo.toml).
 //! Unwinding across an FFI boundary is undefined behaviour, and aborting is the
 //! one option that is sound without wrapping every entry point in
 //! `catch_unwind`. A panic in a Tor client is a bug worth a crash report, not
@@ -52,10 +51,10 @@ use tor_rtcompat::PreferredRuntime;
 
 mod socks;
 
-pub mod ffi;
+pub mod ffi_c;
 
 #[cfg(target_os = "android")]
-pub mod jni_api;
+pub mod ffi_jni;
 
 /// Return codes shared by both FFI surfaces.
 ///
@@ -79,7 +78,7 @@ pub const AIRHOP_TOR_ERR_NOT_RUNNING: i32 = -6;
 
 /// How far along Tor is, and whether it is going anywhere.
 ///
-/// One struct behind one lock rather than a handful of atomics, because the app
+/// One struct behind one lock, not a handful of atomics, because the app
 /// reads all of it at once to draw a single banner. Read piecemeal, a caller can
 /// catch `ready` from one instant beside `progress` from another and render
 /// "connected" next to 40%.
@@ -111,7 +110,7 @@ pub struct Status {
 ///   bits 8..15  progress, 0 to 100
 /// ```
 ///
-/// One integer rather than a struct, for two reasons. It is the only shape both
+/// One integer, not a struct, for two reasons. It is the only shape both
 /// a C ABI and a JNI `jint` express natively, so Swift needs no assumption about
 /// how a Rust struct is laid out and Kotlin needs no class lookup. And a single
 /// return value is a single consistent snapshot by construction, where a struct
@@ -160,11 +159,10 @@ fn update_status(f: impl FnOnce(&mut Status)) {
 /// Everything one running client owns.
 ///
 /// Held together so `stop` cannot half-tear-down. Dropping this drops the
-/// client, which is what actually ends Tor's background directory activity, and
-/// shuts the runtime down, which is what actually ends the accept loop. The
-/// implementation this replaces deliberately kept its client alive across a
-/// stop, so "Tor off" there left a Tor client fetching consensus documents. A
-/// user who switches Tor off has withdrawn consent and the process has to match.
+/// client, which is what ends Tor's background directory activity, and shuts the
+/// runtime down, which is what ends the accept loop. A user who switches Tor off
+/// has withdrawn consent, and keeping a client alive to fetch consensus
+/// documents behind that switch would not match it.
 struct Running {
     runtime: Runtime,
     client: Arc<TorClient<PreferredRuntime>>,
@@ -184,8 +182,8 @@ pub fn start(data_dir: &str, socks_port: u16) -> i32 {
     let mut guard = match state().lock() {
         Ok(g) => g,
         // A previous panic poisoned the lock. There is no safe way to reason
-        // about the client it was holding, so refuse rather than start a second
-        // one beside it.
+        // about the client it was holding, so refuse instead of starting a
+        // second one beside it.
         Err(_) => return AIRHOP_TOR_ERR_RUNTIME,
     };
     if guard.is_some() {
@@ -231,7 +229,9 @@ pub fn start(data_dir: &str, socks_port: u16) -> i32 {
             .create_unbootstrapped_async()
             .await
             .map_err(|_| AIRHOP_TOR_ERR_CLIENT)?;
-        let listener = TcpListener::bind(addr).await.map_err(|_| AIRHOP_TOR_ERR_BIND)?;
+        let listener = TcpListener::bind(addr)
+            .await
+            .map_err(|_| AIRHOP_TOR_ERR_BIND)?;
         Ok::<_, i32>((client, listener))
     });
     let (client, listener) = match built {
@@ -287,10 +287,9 @@ pub fn start(data_dir: &str, socks_port: u16) -> i32 {
 
 /// Mirror Arti's own view of the bootstrap into [`Status`].
 ///
-/// This is the whole reason to be on a current Arti. The alternative, and what
-/// the implementations this replaces do, is to print fixed strings from Rust and
-/// pattern match them from Kotlin, which reports 0 and then 100 with nothing in
-/// between and cannot report being stuck at all.
+/// The alternative is printing fixed strings from Rust and pattern matching
+/// them above, which reports 0 and then 100 with nothing in between and cannot
+/// report being stuck at all.
 async fn watch_bootstrap(client: Arc<TorClient<PreferredRuntime>>) {
     let mut events = client.bootstrap_events();
     while let Some(event) = events.next().await {
@@ -321,11 +320,22 @@ async fn watch_bootstrap(client: Arc<TorClient<PreferredRuntime>>) {
 /// hang the caller. Both platforms call this from a promise, so the bound
 /// matters.
 pub fn stop() -> i32 {
-    let taken = match state().lock() {
-        Ok(mut g) => g.take(),
+    // The guard is held for the whole function.
+    //
+    // Taking the value and releasing the lock first would let a start racing
+    // this one find an empty slot and bind the SOCKS port while the runtime
+    // being torn down still holds it, which fails with "address already in use"
+    // for no reason a user could act on. Toggling Tor off and straight back on
+    // is all it takes. Holding the lock makes that start wait for the teardown
+    // instead, bounded by the timeout below.
+    //
+    // Android serialises these calls on one thread anyway; iOS does not, which
+    // is exactly why the fix belongs here rather than in either app.
+    let mut guard = match state().lock() {
+        Ok(g) => g,
         Err(_) => return AIRHOP_TOR_ERR_RUNTIME,
     };
-    let Some(mut running) = taken else {
+    let Some(mut running) = guard.take() else {
         return AIRHOP_TOR_ERR_NOT_RUNNING;
     };
 
@@ -340,6 +350,14 @@ pub fn stop() -> i32 {
     running
         .runtime
         .shutdown_timeout(std::time::Duration::from_secs(2));
+
+    // A new session should not inherit the last one's circuit grouping. The
+    // tokens are only unique markers, so keeping them would not leak anything,
+    // but a panic wipe is meant to leave nothing of the old identity behind and
+    // this is part of it.
+    if let Ok(mut map) = isolation_map().lock() {
+        map.clear();
+    }
     AIRHOP_TOR_OK
 }
 

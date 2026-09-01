@@ -40,10 +40,3 @@ body:
         - Other
     validations:
       required: true
-
-  - type: checkboxes
-    id: constraints
-    attributes:
-      label: Constraints
-      options:
-        - label: This needs no account, no phone number, and no server we would have to run.

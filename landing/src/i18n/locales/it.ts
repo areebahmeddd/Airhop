@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Ogni sessione usa il protocollo {noise} per un handshake autenticato. I messaggi archiviati usano l'algoritmo {ratchet}: anche se il tuo dispositivo venisse compromesso in seguito, i messaggi passati resterebbero illeggibili. La cancellazione d'emergenza distrugge tutte le chiavi e i messaggi in meno di un secondo.",
   "home.about.body.internet":
-    "Quando tu e un contatto siete fuori dalla portata del Bluetooth, i relay {nostr} fanno da ponte via internet, con messaggi diretti incartati nel formato {nip17}, così la rete mesh si estende a tutto il mondo ogni volta che siete entrambi online. Il supporto {tor} è disponibile sia su iOS (tramite {arti}) sia su Android (tramite {orbot}).",
+    "Quando tu e un contatto siete fuori dalla portata del Bluetooth, i relay {nostr} fanno da ponte via internet, con messaggi diretti incartati nel formato {nip17}, così la rete mesh si estende a tutto il mondo ogni volta che siete entrambi online. Il supporto {tor} è disponibile su iOS e Android, tramite {arti}.",
   "home.about.optional.title": "Airhop ha funzioni opzionali che puoi attivare:",
   "home.about.optional.payments.label": "Pagamenti offline:",
   "home.about.optional.payments.body":

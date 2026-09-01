@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Elke sessie gebruikt het {noise}-protocol voor een geauthenticeerde handshake. Opgeslagen berichten gebruiken het {ratchet}-algoritme, oftewel zelfs als je apparaat later gecompromitteerd raakt, blijven je oude berichten onleesbaar. Noodwissen vernietigt alle sleutels en berichten in minder dan een seconde.",
   "home.about.body.internet":
-    "Als jij en een contact buiten Bluetooth-bereik zijn, dienen {nostr}-relays als brug via internet, met directe berichten ingepakt volgens {nip17}, zodat de mesh wereldwijd reikt zodra jullie allebei online zijn. Ondersteuning voor {tor} is er ook, op iOS (via {arti}) en op Android (via {orbot}).",
+    "Als jij en een contact buiten Bluetooth-bereik zijn, dienen {nostr}-relays als brug via internet, met directe berichten ingepakt volgens {nip17}, zodat de mesh wereldwijd reikt zodra jullie allebei online zijn. Ondersteuning voor {tor} is er op iOS en Android, via {arti}.",
   "home.about.optional.title": "Airhop heeft optionele functies die je kunt inschakelen:",
   "home.about.optional.payments.label": "Offline betalingen:",
   "home.about.optional.payments.body":

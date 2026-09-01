@@ -41,7 +41,7 @@ export type PresenceStatus = "online" | "away" | "invisible";
 export type BannerTone =
   "danger" | "caution" | "relay" | "tor" | "gateway" | "bridge" | "neutral";
 
-// How far along Airhop's own Tor bootstrap is. iOS only; see `torBootstrap`.
+// How far along Airhop's Tor bootstrap is; see `torBootstrap`.
 export type TorBootstrapPhase = "idle" | "starting" | "blocked";
 
 // State of the WiFi Aware fast path, the high-bandwidth transport that carries
@@ -240,12 +240,6 @@ interface MeshStateStore {
   // phone on a network that blocks Tor would otherwise spend the whole session
   // reconnecting a relay pool through a proxy that will never answer, which on a
   // censored network is exactly where battery is worth saving.
-  //
-  // It used to be Android-only, and it was a safety gate then: Orbot routed
-  // transparently at the OS level, so when its VPN went away the same sockets
-  // kept working in the clear, carrying geohash presence (a location), DM
-  // metadata and bridge events for someone who had asked for none of it. Owning
-  // the Tor client removed that failure mode and left the battery one.
   //
   // services/tor-routing.ts is the only writer.
   nostrBlockedByTor: boolean;

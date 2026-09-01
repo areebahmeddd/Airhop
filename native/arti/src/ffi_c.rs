@@ -1,6 +1,6 @@
 //! The C ABI, consumed by `ios/Airhop/AirhopTorManager.swift`.
 //!
-//! Deliberately tiny. Five functions and one plain struct, no callbacks, no
+//! Five functions and one plain struct: no callbacks, no
 //! allocation that crosses the boundary and therefore no free function to pair
 //! with one. Swift polls `airhop_tor_status`, which is a lock and a memcpy, and
 //! the manager decides everything else.
@@ -65,7 +65,7 @@ pub extern "C" fn airhop_tor_status() -> c_int {
 /// Copy Arti's current stage description into `buf` as a NUL-terminated string.
 ///
 /// Returns the number of bytes written excluding the terminator, or a negative
-/// error. Truncates on a short buffer rather than failing, and truncates on a
+/// error. Truncates on a short buffer instead of failing, and truncates on a
 /// character boundary so the result is always valid UTF-8: this is display text,
 /// and a clipped sentence beats no sentence.
 ///

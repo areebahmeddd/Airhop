@@ -1,41 +1,27 @@
-// Kotlin bindings for Airhop's embedded Tor client.
+// Kotlin bindings for the embedded Tor client in native/arti.
 //
-// The native side is native/arti, one Rust crate shared with iOS. Every method
-// here has an exact counterpart in the C ABI that AirhopTorManager.swift binds,
-// so "Tor is on" means the same thing on both platforms and there is one
-// implementation to fix when it does not.
-//
-// Nothing above this file knows about JNI, and nothing below it knows about
-// React Native.
+// One Rust crate backs both platforms, and every method here has a counterpart
+// in the C ABI that AirhopTorManager.swift binds, so "Tor is on" means the same
+// thing on either phone.
 package org.onemindlabs.airhop.tor
 
-/**
- * What Arti reports about itself.
- *
- * Decoded from the packed word `nativeStatus` returns. The native side owns
- * this state and nothing here caches it: asking is a lock and a few bit shifts,
- * which is cheaper than the bookkeeping a mirror would need to stay honest.
- */
+// Decoded from the packed word nativeStatus returns. The native side owns this
+// state and nothing here caches it: asking is a lock and a few bit shifts,
+// cheaper than the bookkeeping a mirror needs to stay honest.
 data class ArtiStatus(
-    /** A client exists and its SOCKS listener is accepting. */
     val running: Boolean,
-    /**
-     * Bootstrapped and carrying traffic. The only flag that may be used to claim
-     * the user's traffic is onion routed.
-     */
+    // Bootstrapped and carrying traffic. The only flag that may back a claim
+    // that the user's traffic is onion routed.
     val ready: Boolean,
-    /**
-     * Arti cannot make forward progress. This is what a network that blocks Tor
-     * produces, and it is deliberately distinct from "still at 30%": without it
-     * the app cannot tell a slow start from a dead one and says "starting"
-     * forever.
-     */
+    // Arti cannot make forward progress, which is what a network blocking Tor
+    // produces. Deliberately distinct from "still at 30%", or the app cannot
+    // tell a slow start from a dead one.
     val blocked: Boolean,
-    /** 0 to 100. Arti's own estimate. */
+    // 0 to 100, Arti's own estimate.
     val progress: Int,
 ) {
     companion object {
-        /** Mirrors AIRHOP_TOR_STATUS_* in native/arti/src/lib.rs. */
+        // Mirrors AIRHOP_TOR_STATUS_* in native/arti/src/lib.rs.
         private const val BIT_RUNNING = 1 shl 0
         private const val BIT_READY = 1 shl 1
         private const val BIT_BLOCKED = 1 shl 2
@@ -54,7 +40,7 @@ data class ArtiStatus(
 
 object ArtiNative {
 
-    /** Return codes, mirroring AIRHOP_TOR_* in native/arti/src/lib.rs. */
+    // Mirrors AIRHOP_TOR_* in native/arti/src/lib.rs.
     const val OK = 0
     const val ERR_ALREADY_RUNNING = -1
     const val ERR_DATA_DIR = -2
@@ -63,13 +49,8 @@ object ArtiNative {
     const val ERR_BIND = -5
     const val ERR_NOT_RUNNING = -6
 
-    /**
-     * Whether the native library loaded.
-     *
-     * An ABI without `libarti_airhop.so`, or a build where it was not packaged,
-     * must degrade to "Tor unavailable" rather than taking the process down with
-     * an UnsatisfiedLinkError the first time somebody opens Settings.
-     */
+    // An ABI the library was not packaged for must degrade to "Tor unavailable"
+    // rather than taking the process down the first time somebody opens Settings.
     @JvmStatic
     val isAvailable: Boolean = try {
         System.loadLibrary("arti_airhop")
@@ -80,39 +61,29 @@ object ArtiNative {
         false
     }
 
-    /**
-     * Start Tor and bind its SOCKS5 listener on `127.0.0.1:socksPort`.
-     *
-     * Returns [OK] once the listener is accepting, which is before the first
-     * circuit exists. Blocks while the client is constructed and the port is
-     * bound, so callers keep it off the main thread.
-     */
+    // Returns once the SOCKS listener is accepting, which is before the first
+    // circuit exists. Blocks while the client is built and the port bound, so
+    // callers keep it off the main thread.
     @JvmStatic
     fun start(dataDir: String, socksPort: Int): Int =
         if (isAvailable) nativeStart(dataDir, socksPort) else ERR_CLIENT
 
-    /** Stop Tor, drop the client and release the port. */
     @JvmStatic
     fun stop(): Int = if (isAvailable) nativeStop() else ERR_NOT_RUNNING
 
-    /**
-     * Put Tor to sleep or wake it, for the app leaving and re-entering the
-     * foreground.
-     *
-     * Not a stop. Android does not suspend the process the way iOS does, and the
-     * foreground service keeps it alive, so without this a backgrounded Airhop
-     * would keep a consensus fresh all day on a battery.
-     */
+    // Dormancy, not a stop, for the app leaving the foreground. Android
+    // keeps the process alive through the foreground service, so without this a
+    // backgrounded Airhop refreshes a consensus all day on a battery.
     @JvmStatic
     fun setDormant(dormant: Boolean): Int =
         if (isAvailable) nativeSetDormant(dormant) else ERR_NOT_RUNNING
 
-    /** Safe to call at any time, including before a start and after a stop. */
+    // Safe at any time, including before a start and after a stop.
     @JvmStatic
     fun status(): ArtiStatus =
         if (isAvailable) ArtiStatus.decode(nativeStatus()) else ArtiStatus.STOPPED
 
-    /** Arti's own description of the current stage. Display and logs only. */
+    // Arti's own description of the current stage. Display and logs only.
     @JvmStatic
     fun summary(): String = if (isAvailable) nativeSummary().orEmpty() else ""
 

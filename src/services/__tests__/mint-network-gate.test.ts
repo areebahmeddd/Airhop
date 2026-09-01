@@ -15,11 +15,8 @@
 // circuit exists yet. There is no state in which it can leak, so there is
 // nothing for a gate to catch.
 //
-// That distinction is the whole reason these tests exist. Under Orbot the gate
-// had to guess: the VPN covered every socket, but only while Orbot happened to
-// be running, and the app could not tell whether it was. So it refused mint
-// calls whenever it could not prove coverage. Owning the Tor client replaced
-// "probably covered" with "covered", and the guessing went with it.
+// That distinction is the whole reason these tests exist: the gate has to fire
+// on iOS and must not fire anywhere else.
 //
 // The branch is a few lines in `assertMintNetworkAllowed` and it cannot be
 // covered in the simulator, where `Platform.OS` is a single global shared by
@@ -91,14 +88,10 @@ describe("mint network gate", () => {
     expect(isMintNetworkBlocked()).toBe(false);
   });
 
-  // The state that used to be the dangerous one, and is now the safe one.
-  //
-  // Tor wanted but not carrying traffic is exactly when Orbot could leave a mint
-  // call uncovered, which is what the old Android gate existed to catch. With
-  // the proxy owned by the app, the same request is pointed at a port that is
-  // either tunnelling or not answering. It cannot reach the mint in the clear,
-  // so refusing it would only take the wallet away from someone whose Tor is
-  // slow to start.
+  // Tor wanted, no circuit yet. The request is pointed at a port that is either
+  // tunnelling or not answering, so it cannot reach the mint in the clear, and
+  // refusing it would only take the wallet away from someone whose Tor is slow
+  // to start.
   it("does not block on Android while Tor is on but not yet connected", () => {
     setPlatform("android");
     useSettingsStore.getState().setTorEnabled(true);

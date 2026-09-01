@@ -42,7 +42,6 @@ stopAdvertising(): Promise<void>
 startScanning(serviceUUIDs: string[]): Promise<void>
 stopScanning(): Promise<void>
 writeToLink(linkID: string, dataBase64: string): Promise<void>
-getTorProxyPort(): Promise<number>  // returns 9050 if Orbot/Arti reachable, 0 if not
 ```
 
 `writeToLink` takes base64-encoded bytes. The bridge transfers binary data as base64 strings for safety across the JS/native boundary. Encode before calling, decode on receipt.
@@ -71,7 +70,7 @@ The modules:
 | `NativeAirhopLAN.ts`         | `"AirhopLAN"`         | mDNS discovery and TCP links   |
 | `NativeAirhopWiFiPairing.ts` | `"AirhopWiFiPairing"` | iOS Wi-Fi Aware pairing sheet  |
 | `NativeAirhopVoice.ts`       | `"AirhopVoice"`       | AAC-LC capture and playback    |
-| `NativeAirhopTor.ts`         | `"AirhopTor"`         | Tor lifecycle (Arti / Orbot)   |
+| `NativeAirhopTor.ts`         | `"AirhopTorModule"`   | Tor lifecycle (embedded Arti)  |
 | `NativeAirhopTorSocket.ts`   | `"AirhopTorSocket"`   | The SOCKS socket Arti fronts   |
 
 ## BLE UUIDs

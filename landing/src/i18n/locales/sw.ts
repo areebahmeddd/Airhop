@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Kila kipindi hutumia itifaki ya {noise} kwa uthibitishaji wa awali. Ujumbe uliohifadhiwa hutumia algoriti ya {ratchet}, yaani hata kama kifaa chako kitavamiwa baadaye, ujumbe wako wa zamani hubaki usiosomeka. Ufutaji wa dharura huharibu funguo na ujumbe wote kwa chini ya sekunde moja.",
   "home.about.body.internet":
-    "Wewe na mwenzako mkiwa nje ya masafa ya Bluetooth, vipeperushi vya {nostr} hufanya kazi kama daraja kupitia intaneti, vikitumia ujumbe wa moja kwa moja uliofungashwa kwa muundo wa {nip17}, hivyo mesh hufika dunia nzima kila mnapokuwa mtandaoni nyote wawili. Msaada wa {tor} pia upo kwenye iOS (kupitia {arti}) na Android (kupitia {orbot}).",
+    "Wewe na mwenzako mkiwa nje ya masafa ya Bluetooth, vipeperushi vya {nostr} hufanya kazi kama daraja kupitia intaneti, vikitumia ujumbe wa moja kwa moja uliofungashwa kwa muundo wa {nip17}, hivyo mesh hufika dunia nzima kila mnapokuwa mtandaoni nyote wawili. Msaada wa {tor} upo kwenye iOS na Android, kupitia {arti}.",
   "home.about.optional.title": "Airhop ina vipengele vya hiari unavyoweza kuwasha:",
   "home.about.optional.payments.label": "Malipo nje ya mtandao:",
   "home.about.optional.payments.body":

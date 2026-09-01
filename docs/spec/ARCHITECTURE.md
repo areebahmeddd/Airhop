@@ -988,11 +988,8 @@ representation both runtimes agree on safely.
 6. `requestEnableBluetooth` / `openLocationSettings`: one-tap fixes for the Mesh banner
 7. `setBackgroundServiceEnabled`: hold the process up, independent of advertising
 
-It used to carry four more, for probing Orbot's SOCKS port and watching the VPN
-transport that carried it. Owning the Tor process removed the need to infer any
-of it: `AirhopTorModule` is asked directly instead. A radio module answering
-questions about Tor was always a boundary violation, and it went with the
-inference.
+Nothing about Tor is asked of it. `AirhopTorModule` owns that and answers
+directly; a radio module reporting on Tor would be a boundary violation.
 
 Native calls back with eight events: `packetReceived`, `linkConnected`,
 `linkDisconnected`, `rssiUpdated`, `adapterStateChanged`, `powerStateChanged`,

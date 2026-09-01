@@ -1066,8 +1066,8 @@ function AppContent(): React.JSX.Element {
       getMeshService()?.setAppForeground(next !== "background");
       // Arti needs the same signal, and needs it on the "background" boundary
       // rather than on "active": an app switcher or a permission dialog does not
-      // suspend the process, so treating those as a suspension would restart Tor
-      // for nothing. iOS only; a no-op everywhere else.
+      // suspend the process, so treating those as a suspension would put Tor to
+      // sleep for nothing. Both platforms, and a no-op when Tor is off.
       notifyTorAppForeground(next !== "background");
       if (next !== "active") {
         // Chat persistence is throttled, so leaving the foreground is the last

@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "모든 세션은 인증된 핸드셰이크에 {noise} 프로토콜을 사용합니다. 저장된 메시지는 {ratchet} 알고리즘을 사용하므로, 나중에 기기가 침해되더라도 지난 메시지는 읽을 수 없는 상태로 남습니다. 긴급 삭제는 모든 키와 메시지를 1초 안에 파기합니다.",
   "home.about.body.internet":
-    "당신과 상대가 Bluetooth 범위를 벗어나면 {nostr} 릴레이가 인터넷을 통한 다리 역할을 하며, {nip17} 형식으로 감싼 다이렉트 메시지를 사용합니다. 그래서 둘 다 온라인이면 메시는 전 세계로 넓어집니다. {tor} 지원도 iOS({arti} 사용)와 Android({orbot} 사용) 모두에서 제공됩니다.",
+    "당신과 상대가 Bluetooth 범위를 벗어나면 {nostr} 릴레이가 인터넷을 통한 다리 역할을 하며, {nip17} 형식으로 감싼 다이렉트 메시지를 사용합니다. 그래서 둘 다 온라인이면 메시는 전 세계로 넓어집니다. {tor} 지원은 iOS와 Android 모두에서 {arti}로 제공됩니다.",
   "home.about.optional.title": "Airhop에는 직접 켤 수 있는 선택 기능이 있습니다:",
   "home.about.optional.payments.label": "오프라인 결제:",
   "home.about.optional.payments.body":

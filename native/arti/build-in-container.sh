@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 #
 # Build the Android Tor libraries in the pinned container, then verify them.
-# This is the supported way to produce the binaries that ship.
 #
 #     native/arti/build-in-container.sh [--clean]
 #
-# A local build with your own Rust and your own NDK is fine while developing,
-# but it is not what CI checks: build-android.sh refuses to run outside this
-# container unless your toolchain happens to match TOOLCHAIN.env exactly.
+# Direct builds are allowed for development, but this is the supported path for
+# producing release artifacts.
 
 set -euo pipefail
 
@@ -24,14 +22,7 @@ command -v docker >/dev/null 2>&1 || {
   exit 1
 }
 
-# Docker on Windows is a Windows binary reached through a POSIX shell, so it
-# cannot resolve the `/c/Users/...` paths that shell hands out, and the shell in
-# turn rewrites anything that looks like a path, including the container-side
-# half of a volume mount. Both halves have to be handled, and neither matters
-# anywhere else.
-#
-# `cygpath -m` produces `C:/Users/...`, which Docker accepts. On Linux and macOS
-# there is no cygpath and this is the identity function.
+# Convert paths for Docker on Windows. On Linux and macOS this is a no-op.
 host_path() {
   if command -v cygpath >/dev/null 2>&1; then
     cygpath -m "$1"
@@ -40,13 +31,10 @@ host_path() {
   fi
 }
 
-# Stops the shell rewriting `/workspace` into a path inside the Git install.
+# Prevent MSYS from rewriting container paths such as /workspace.
 export MSYS_NO_PATHCONV=1
 
-# Ownership is a real concern on Linux, where a container writing as root leaves
-# root-owned libraries in the working tree. Windows bind mounts carry no Unix
-# ownership at all, and the UID the shell reports there is not one the image
-# knows, so mapping it only breaks the build.
+# Avoid root-owned files on Linux. Windows bind mounts do not use Unix ownership.
 USER_ARGS=()
 if [ "$(host_path /)" = "/" ]; then
   USER_ARGS=(--user "$(id -u):$(id -g)")
@@ -57,22 +45,18 @@ fi
   exit 1
 }
 
-# Cargo's registry and build cache live in the repository rather than in the
-# container, so a rebuild does not re-download the whole dependency graph. Kept
-# out of git by .gitignore.
+# Keep Cargo's registry and build cache in the repository for faster rebuilds.
 mkdir -p "$REPO_ROOT/.native-build/cargo-home"
 
-# Context is the crate directory, not the repository root. The image needs one
-# file; sending node_modules and the git history to the daemon on every run buys
-# nothing and costs minutes.
+# The image build context is only the native/arti directory. Dockerfile copies
+# TOOLCHAIN.env; the source tree is mounted when the container runs.
 docker build \
   --platform linux/amd64 \
   --file "$(host_path "$SCRIPT_DIR/Dockerfile")" \
   --tag "$IMAGE" \
   "$(host_path "$SCRIPT_DIR")"
 
-# Runs as the invoking user so the libraries it writes into android/ are owned
-# by that user rather than by root.
+# Mount the repository so the container can build and write the Android outputs.
 docker run --rm \
   --platform linux/amd64 \
   "${USER_ARGS[@]}" \
@@ -81,7 +65,7 @@ docker run --rm \
   --env SOURCE_DATE_EPOCH="$NATIVE_SOURCE_DATE_EPOCH" \
   --volume "$(host_path "$REPO_ROOT"):/workspace" \
   "$IMAGE" \
-  ${1:+"$1"}
+  "$@"
 
 echo
 echo "Next, in the same commit:"

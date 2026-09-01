@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Her oturum, kimliği doğrulanmış bir el sıkışma için {noise} protokolünü kullanır. Saklanan mesajlar {ratchet} algoritmasını kullanır; yani cihazınız daha sonra ele geçirilse bile geçmiş mesajlarınız okunamaz kalır. Acil silme, tüm anahtarları ve mesajları bir saniyeden kısa sürede yok eder.",
   "home.about.body.internet":
-    "Siz ve bir kişiniz Bluetooth menzilinin dışındayken {nostr} röleleri internet üzerinden köprü görevi görür; {nip17} biçiminde paketlenmiş doğrudan mesajlar kullanılır, böylece ikiniz de çevrimiçi olduğunuzda mesh ağı dünya geneline uzanır. {tor} desteği hem iOS'ta ({arti} ile) hem de Android'de ({orbot} ile) mevcuttur.",
+    "Siz ve bir kişiniz Bluetooth menzilinin dışındayken {nostr} röleleri internet üzerinden köprü görevi görür; {nip17} biçiminde paketlenmiş doğrudan mesajlar kullanılır, böylece ikiniz de çevrimiçi olduğunuzda mesh ağı dünya geneline uzanır. {tor} desteği hem iOS'ta hem de Android'de {arti} ile mevcuttur.",
   "home.about.optional.title": "Airhop'ta açabileceğiniz isteğe bağlı özellikler var:",
   "home.about.optional.payments.label": "Çevrimdışı ödemeler:",
   "home.about.optional.payments.body":

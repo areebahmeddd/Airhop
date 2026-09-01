@@ -70,7 +70,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Mampiasa ny fitsipika {noise} ho an'ny fifampifankahafantarana voamarina ny fivoriana tsirairay. Ny hafatra voatahiry dia mampiasa ny algoritma {ratchet}, ka na dia lasan'olona aza ny fitaovanao any aoriana, dia mijanona tsy voavaky ny hafatrao taloha. Mandrava ny lakile sy ny hafatra rehetra latsaky ny segondra iray ny famafana maika.",
   "home.about.body.internet":
-    "Rehefa lavitra ny fetran'ny Bluetooth ianao sy ny fifandraisanao, dia manjary tetezana amin'ny Internet ny mpanelanelana {nostr}, mampiasa hafatra mivantana voafono araka ny endrika {nip17}, ka miitatra manerantany ny harato rehefa samy an-tserasera ianareo. Misy koa ny fanohanana ny {tor} amin'ny iOS (amin'ny {arti}) sy ny Android (amin'ny {orbot}).",
+    "Rehefa lavitra ny fetran'ny Bluetooth ianao sy ny fifandraisanao, dia manjary tetezana amin'ny Internet ny mpanelanelana {nostr}, mampiasa hafatra mivantana voafono araka ny endrika {nip17}, ka miitatra manerantany ny harato rehefa samy an-tserasera ianareo. Misy ny fanohanana ny {tor} amin'ny iOS sy Android, amin'ny {arti}.",
   "home.about.optional.title": "Manana fiasa safidy azonao alefa ny Airhop:",
   "home.about.optional.payments.label": "Fandoavam-bola tsy misy Internet:",
   "home.about.optional.payments.body":

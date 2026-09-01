@@ -1,30 +1,21 @@
-# The pinned environment that builds Airhop's Android Tor libraries.
-#
-# Everything that can drift is nailed down: the base image by digest, the Debian
-# archive by snapshot timestamp, the NDK by checksum, and Rust and cargo-ndk by
-# version. Two runs of this container from the same commit produce byte-identical
-# libraries, which is what makes SHA256SUMS.android worth checking.
-#
-# Apple slices are not built here. See build-apple.sh for why.
-#
-# Driven by build-in-container.sh, never run directly.
-
 # syntax=docker/dockerfile:1
-FROM rust:1.98.0-slim-trixie
+# Pinned build environment for Airhop's Android Tor libraries.
+#
+# The base image, Debian packages, NDK, Rust, and cargo-ndk are all pinned.
+# Rebuilding from the same commit produces reproducible library outputs.
+#
+# Apple slices are built separately by build-apple.sh.
+# Built through build-in-container.sh.
+
+FROM rust:1.98.0-slim-trixie@sha256:17d1ba895198f9934c6314ec5346a0d5115372f3243390c3d731e242f35c2f27
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
-# The build context is native/arti, not the repository root, so this is the only
-# file the image needs at build time. The crate itself arrives on a volume mount
-# at run time, which is what lets an edit be rebuilt without rebuilding the
-# image. Keeping the context small also stops Docker shipping node_modules and
-# the whole git history to the daemon on every run.
+# Build configuration used to pin the toolchain and package versions.
 COPY TOOLCHAIN.env /tmp/TOOLCHAIN.env
 
-# An immutable Debian archive rather than the rolling mirror, so a rebuild six
-# months from now installs the same package versions rather than whatever is
-# current. Check-Valid-Until is off because a frozen snapshot is expired by
-# definition and that is the intent.
+# Use a fixed Debian snapshot so package versions do not change between builds.
+# Check-Valid-Until is disabled because the snapshot is intentionally frozen.
 RUN source /tmp/TOOLCHAIN.env \
     && printf '%s\n' \
         'Types: deb' \
@@ -50,8 +41,7 @@ RUN source /tmp/TOOLCHAIN.env \
         unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# The NDK is verified by checksum before it is trusted with anything. A download
-# over HTTPS proves who served it, not what it is.
+# Download the NDK and verify it before installation.
 RUN source /tmp/TOOLCHAIN.env \
     && curl -fsSL "https://dl.google.com/android/repository/${ANDROID_NDK_ARCHIVE}" \
         -o "/tmp/${ANDROID_NDK_ARCHIVE}" \
@@ -62,9 +52,7 @@ RUN source /tmp/TOOLCHAIN.env \
     && test "$(sed -n 's/^Pkg.Revision *= *//p' "$ndk_dir/source.properties" | tr -d '\r')" = "$ANDROID_NDK_VERSION" \
     && ln -s "$ndk_dir" /opt/android-ndk
 
-# The base image already carries the pinned Rust. Assert it rather than assume
-# it, so a base-image bump that changes the compiler fails here instead of
-# silently producing different bytes.
+# Verify the compiler version and install the pinned cargo-ndk version.
 RUN source /tmp/TOOLCHAIN.env \
     && test "$(rustc --version | awk '{print $2}')" = "$RUST_VERSION" \
     && cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked \

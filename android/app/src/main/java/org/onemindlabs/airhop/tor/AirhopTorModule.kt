@@ -1,10 +1,7 @@
 // React Native module exposing Airhop's embedded Tor client to TypeScript.
 //
 // Mirrors ios/Airhop/AirhopTorModule.swift method for method and event for
-// event, so src/services/tor-routing.ts has one code path rather than a branch
-// per platform. Where the two differ it is only in what the platform makes
-// possible, and there is now only one such difference: iOS wraps the Nostr
-// WebSocket by hand, while here AirhopTorProxy covers every socket at once.
+// event, so src/services/tor-routing.ts needs no platform branch.
 //
 // Protocol logic lives in TypeScript. This file knows about a proxy port and a
 // bootstrap percentage, and nothing about packets, relays or encryption.
@@ -31,27 +28,20 @@ class AirhopTorModule(
         private const val TAG = "AirhopTorModule"
         const val NAME = "AirhopTorModule"
 
-        /** The single JS event, matching the iOS module's name and payload. */
+        // The single JS event, matching the iOS module.
         private const val EVT_STATUS = "TorStatusChanged"
 
-        /**
-         * 39050, the same port iOS uses. Deliberately not 9050: that is Orbot's,
-         * and a user running Orbot for something else must not have it captured
-         * by us or captured from us.
-         */
+        // The same port iOS uses. Not 9050, the standard Tor port: a Tor client
+        // the user runs for something else must not be captured by us, or ours
+        // by it.
         private const val SOCKS_PORT = 39050
 
-        /** Where Arti keeps its cached consensus, chosen guards and state. */
+        // Where Arti keeps its cached consensus, chosen guards and state.
         private const val DATA_DIR = "arti"
 
-        /**
-         * How often the status is read while something is happening, and while
-         * nothing is.
-         *
-         * Ready is quiet but not final: circuits are lost and rebuilt, and a
-         * claim that stops being true has to be withdrawn rather than left
-         * standing until the user next opens the app.
-         */
+        // Ready is quiet but not final: circuits are lost and rebuilt, so a claim
+        // that stops being true has to be withdrawn rather than left standing
+        // until the user next opens the app.
         private const val POLL_ACTIVE_MS = 1_000L
         private const val POLL_IDLE_MS = 10_000L
     }
@@ -68,6 +58,16 @@ class AirhopTorModule(
         Thread(r, "airhop-tor-poll").apply { isDaemon = true }
     }
 
+    // awaitTorReady gets its own thread instead of sharing the scheduler.
+    //
+    // It blocks for the caller's whole timeout, up to a minute, and the
+    // scheduler has one thread: sharing them starved the status poll, so
+    // TorStatusChanged went quiet during the window the Mesh banner exists to
+    // narrate. Cached, not fixed, since waits are rare and overlap briefly.
+    private val waiters = Executors.newCachedThreadPool { r ->
+        Thread(r, "airhop-tor-await").apply { isDaemon = true }
+    }
+
     // Both cross threads. `pollTask` is written by the scheduler thread as it
     // reschedules itself and by the JS thread when a stop cancels it;
     // `listenerCount` is written by the JS thread and read by the scheduler
@@ -78,16 +78,11 @@ class AirhopTorModule(
     @Volatile
     private var listenerCount = 0
 
-    /**
-     * Which start attempt is current.
-     *
-     * A poll belonging to a superseded attempt can still be scheduled, and would
-     * otherwise report a stopped client as if it were the live one. It captures
-     * this and checks it before emitting.
-     */
+    // A poll belonging to a superseded attempt can still be scheduled, and
+    // would otherwise report a stopped client as if it were the live one.
     private val attemptEpoch = AtomicInteger(0)
 
-    /** The last payload sent to JS, so an unchanged status is not re-sent. */
+    // The last payload sent to JS, so an unchanged status is not re-sent.
     @Volatile
     private var lastEmitted: String? = null
 
@@ -95,15 +90,13 @@ class AirhopTorModule(
 
     // MARK: - JS-callable methods
 
-    /**
-     * Start Arti. Resolves once startup has been initiated, not once Tor is
-     * usable; use [awaitTorReady] for that.
-     *
-     * The proxy is pointed at Tor before the client is even built. A request
-     * made in that window fails because nothing is listening yet, which is the
-     * point: the alternative is a window in which traffic goes out in the clear
-     * after the user has asked for Tor.
-     */
+    // Resolves once startup has been initiated, not once Tor is usable; use
+    // awaitTorReady for that.
+    //
+    // The proxy is pointed at Tor before the client is built. A request made in
+    // that window fails because nothing is listening yet, which is the point:
+    // the alternative is traffic going out in the clear after the user asked
+    // for Tor.
     @ReactMethod
     fun startTor(promise: Promise) {
         AirhopTorProxy.route(SOCKS_PORT)
@@ -115,16 +108,14 @@ class AirhopTorModule(
             if (rc != ArtiNative.OK && rc != ArtiNative.ERR_ALREADY_RUNNING) {
                 Log.w(TAG, "arti start failed (rc=$rc)")
                 emitStatus()
-                // Rejected rather than resolved, so the caller learns now.
+                // Rejected, not resolved, so the caller learns now.
                 //
                 // A start that fails outright will not succeed by waiting: the
                 // library is missing for this ABI, or the state directory is
-                // unwritable. Resolving here would send the JS layer into its
-                // 60-second readiness wait to be told what this line already
-                // knows, and the user would watch a spinner for a minute for
-                // nothing. The caller's error path unwinds and puts traffic
-                // back on a direct route, which is the honest answer when Tor
-                // cannot run at all rather than merely not being ready yet.
+                // unwritable. Resolving would send JS into its 60-second
+                // readiness wait to learn what this line already knows, and the
+                // user would watch a spinner for a minute. The error path
+                // instead unwinds and puts traffic back on a direct route.
                 promise.reject("tor_start_failed", "arti start failed (rc=$rc)")
                 return@execute
             }
@@ -133,7 +124,7 @@ class AirhopTorModule(
         }
     }
 
-    /** Stop Arti and put traffic back on a direct connection. */
+    // Stop Arti and put traffic back on a direct connection.
     @ReactMethod
     fun stopTor(promise: Promise) {
         attemptEpoch.incrementAndGet()
@@ -148,17 +139,12 @@ class AirhopTorModule(
         }
     }
 
-    /**
-     * Stop Arti and destroy everything it has written to disk. Panic wipe only.
-     *
-     * Arti's data directory holds a cached consensus, chosen guard nodes and
-     * timestamps, which together are on-disk evidence of the shape "this device
-     * used Tor, from around here, at around this time". A gesture whose whole
-     * promise is that local state is gone cannot leave that behind.
-     *
-     * Stopping first, because a directory deleted under a running client is one
-     * the client is free to write again.
-     */
+    // Panic wipe only. The data directory holds a cached consensus, chosen
+    // guards and timestamps, which together are evidence of the shape "this
+    // device used Tor, from around here, at around this time".
+    //
+    // Stopping first, because a directory deleted under a running client is one
+    // the client is free to write again.
     @ReactMethod
     fun wipeTorState(promise: Promise) {
         attemptEpoch.incrementAndGet()
@@ -174,15 +160,10 @@ class AirhopTorModule(
         }
     }
 
-    /**
-     * Report an app foreground transition.
-     *
-     * Dormancy rather than a stop. Android keeps the process alive through the
-     * foreground service, so without this a backgrounded Airhop would keep a
-     * consensus fresh and guards warm all day on a battery. Stopping instead
-     * would drop the guards and cost a fresh bootstrap on every return, and make
-     * this device look like a new client to a guard each time.
-     */
+    // Dormancy, not a stop. The foreground service keeps the process
+    // alive, so without this a backgrounded Airhop refreshes a consensus all
+    // day on a battery. A stop would drop the guards and cost a fresh bootstrap
+    // on every return.
     @ReactMethod
     fun setAppForeground(foreground: Boolean, promise: Promise) {
         worker.execute {
@@ -191,22 +172,18 @@ class AirhopTorModule(
         }
     }
 
-    /** The current status, in the same shape the iOS module resolves. */
+    // The current status, in the same shape the iOS module resolves.
     @ReactMethod
     fun getTorStatus(promise: Promise) {
         promise.resolve(statusMap())
     }
 
-    /**
-     * Resolve true once Tor is ready, false on timeout.
-     *
-     * Polls rather than waits on a condition, because readiness lives in the
-     * native client and is not ours to signal.
-     */
+    // Polls instead of waiting on a condition, because readiness lives in the
+    // native client and is not ours to signal.
     @ReactMethod
     fun awaitTorReady(timeoutSeconds: Double, promise: Promise) {
         val deadline = System.nanoTime() + (timeoutSeconds * 1e9).toLong()
-        scheduler.execute {
+        waiters.execute {
             while (System.nanoTime() < deadline) {
                 if (ArtiNative.status().ready) {
                     promise.resolve(true)
@@ -241,7 +218,7 @@ class AirhopTorModule(
         return WritableNativeMap().apply {
             putBoolean("isReady", status.ready)
             // Running, not yet carrying traffic, and not stuck. Blocked is
-            // deliberately not "starting": the banner has to be able to say the
+            // not "starting": the banner has to be able to say the
             // network refused rather than spinning forever.
             putBoolean("isStarting", status.running && !status.ready && !status.blocked)
             // Matches iOS: the port is reported only once it is usable, so a
@@ -276,12 +253,8 @@ class AirhopTorModule(
         pollTask = null
     }
 
-    /**
-     * Send the status to JS, but only when it has actually moved.
-     *
-     * A poll every second that emits every second is a bridge crossing and a
-     * React render for an unchanged banner.
-     */
+    // Only when it has actually moved: a poll every second that emits every
+    // second is a bridge crossing and a React render for an unchanged banner.
     private fun emitStatus() {
         if (listenerCount == 0) return
         val map = statusMap()
@@ -307,6 +280,7 @@ class AirhopTorModule(
     override fun invalidate() {
         stopPolling()
         scheduler.shutdownNow()
+        waiters.shutdownNow()
         worker.shutdown()
         super.invalidate()
     }

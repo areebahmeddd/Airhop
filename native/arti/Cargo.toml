@@ -9,19 +9,15 @@ description = "Airhop's embedded Tor client. Wraps arti-client behind a SOCKS5 l
 
 [lib]
 name = "arti_airhop"
-# staticlib feeds the Apple xcframework, cdylib feeds Android's jniLibs.
-# Both are always built; each platform script keeps only the one it needs.
+# staticlib for the Apple xcframework; cdylib for Android jniLibs.
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
-# rustls rather than native-tls, so there is no OpenSSL and no dependency on the
-# platform trust store at the TLS-to-guard layer. `default-features = false` is
-# what rustls requires (it is nonadditive with native-tls), so the two upstream
-# defaults we want back, compression and flowctl-cc, are named explicitly.
+# Use rustls instead of native-tls to avoid OpenSSL and the platform trust store.
+# Disable arti-client defaults and enable only the features needed by Airhop.
 #
-# bridge-client and pt-client are compiled in but never configured. Bridges are
-# a later phase; having the code present means that phase is a config change
-# rather than another binary rebuild.
+# Bridge support is compiled in but not configured yet. This keeps enabling
+# bridges a configuration change rather than a separate binary rebuild.
 arti-client = { version = "0.45", default-features = false, features = [
     "tokio",
     "rustls",
@@ -58,26 +54,9 @@ codegen-units = 1
 panic = "abort"
 strip = "symbols"
 
-# Apple builds, and the one place they must differ from Android.
-#
-# Android links a cdylib, so rustc performs the fat LTO and emits a stripped 7.5
-# MiB shared object. Apple takes a staticlib, which rustc does not link: it
-# bundles every dependency's objects into an archive and leaves the real link to
-# Xcode. Fat LTO therefore never runs, and all it does is make cargo embed LLVM
-# bitcode in all 791 objects so that it could.
-#
-# Measured, not assumed. In one 11 MiB object from that archive:
-#
-#   __bitcode   8,773,456 bytes
-#   __text        479,652 bytes
-#
-# Four percent machine code, eighty percent bitcode for an optimization that
-# never happens. Three slices came to 645 MiB and GitHub refuses any file over
-# 100 MiB.
-#
-# Turning LTO off makes cargo pass `-C embed-bitcode=no`, which drops the
-# bitcode. Nothing is lost: Xcode still optimizes and dead-strips when it links
-# the app, which is where the only real link was happening anyway.
+# Apple uses a staticlib, so rustc does not perform the final link or run LTO.
+# Disable LTO to avoid embedding LLVM bitcode in the archive; Xcode performs
+# optimization and dead stripping when it links the app.
 [profile.apple]
 inherits = "release"
 lto = false

@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
     airhop_tor_stop, airhop_tor_set_dormant, airhop_tor_status,
     airhop_tor_summary) consumed by AirhopTorManager.swift through @_silgen_name.
 
-    The header beside the library is generated from native/arti/src/ffi.rs by
+    The header beside the library is generated from native/arti/src/ffi_c.rs by
     cbindgen, so it cannot disagree with the Rust it describes.
   DESC
   s.homepage         = 'https://gitlab.torproject.org/tpo/core/arti'

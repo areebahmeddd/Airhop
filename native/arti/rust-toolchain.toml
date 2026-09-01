@@ -1,0 +1,3 @@
+# Rust version used by local builds, matching the container and CI.
+[toolchain]
+channel = "1.98.0"

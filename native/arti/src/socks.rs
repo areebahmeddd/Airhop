@@ -2,19 +2,16 @@
 //!
 //! RFC 1928 for the protocol and RFC 1929 for the username/password
 //! subnegotiation. Only CONNECT is offered: BIND and UDP ASSOCIATE have no
-//! meaning over Tor and are refused rather than half-implemented.
+//! meaning over Tor and are refused, not half-implemented.
 //!
-//! Two things here are deliberately unlike the implementations this replaces.
-//!
-//! **Every field is read with `read_exact`.** TCP is a byte stream, so a
-//! greeting and a request may arrive in one segment, in two, or split down the
-//! middle of an address. Reading each phase with a single `read` into a fixed
-//! buffer works on a loopback socket on a developer's desk and fails under load
-//! or behind an unusual client, and it fails by hanging rather than by erroring.
+//! Every field is read with `read_exact`. TCP is a byte stream, so a greeting
+//! and a request may arrive in one segment, in two, or split down the middle of
+//! an address. Reading each phase with a single `read` into a fixed buffer works
+//! on a loopback socket and fails under load, by hanging rather than erroring.
 //!
 //! **Hostnames are never resolved here.** For `ATYP=DOMAINNAME` the name is
-//! handed to arti as a name, so the lookup happens at the exit rather than on
-//! this device. Resolving locally would send a plaintext DNS query for exactly
+//! handed to arti as a name, so the lookup happens at the exit, not on this
+//! device. Resolving locally would send a plaintext DNS query for exactly
 //! the host the user is trying to reach privately, which is the classic proxy
 //! leak. Both platform HTTP stacks cooperate: Foundation and OkHttp both pass an
 //! unresolved host to a SOCKS5 proxy.
@@ -138,10 +135,7 @@ async fn negotiate(stream: &mut TcpStream) -> io::Result<Request> {
     let mut head = [0u8; 2];
     stream.read_exact(&mut head).await?;
     if head[0] != VERSION_5 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "not SOCKS5",
-        ));
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "not SOCKS5"));
     }
     let mut methods = vec![0u8; head[1] as usize];
     stream.read_exact(&mut methods).await?;
@@ -244,7 +238,7 @@ async fn read_credentials(stream: &mut TcpStream) -> io::Result<(String, String)
     stream.write_all(&[0x01, 0x00]).await?;
 
     // Credentials are an opaque isolation label, so bytes that are not UTF-8 are
-    // still a perfectly good label. Lossy rather than an error.
+    // still a perfectly good label. Lossy, not an error.
     Ok((
         String::from_utf8_lossy(&user).into_owned(),
         String::from_utf8_lossy(&pass).into_owned(),
@@ -260,7 +254,7 @@ async fn reply(stream: &mut TcpStream, code: u8) -> io::Result<()> {
 
 /// Translate an arti failure into the nearest SOCKS reply code.
 ///
-/// Worth the match rather than answering `REPLY_GENERAL_FAILURE` to everything:
+/// Worth the match instead of answering `REPLY_GENERAL_FAILURE` to everything:
 /// the platform HTTP stacks surface these as distinguishable errors, so a
 /// refused connection and an unreachable relay reach the app as different
 /// things instead of one indistinguishable failure.

@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Setiap sesi menggunakan protokol {noise} untuk jabat tangan yang disahkan. Mesej yang disimpan menggunakan algoritma {ratchet}, iaitu walaupun peranti anda dikompromi kemudian, mesej lama anda kekal tidak boleh dibaca. Pemadaman kecemasan memusnahkan semua kunci dan mesej dalam masa kurang satu saat.",
   "home.about.body.internet":
-    "Apabila anda dan kenalan anda berada di luar jangkauan Bluetooth, geganti {nostr} bertindak sebagai jambatan melalui internet, menggunakan mesej terus yang dibalut mengikut format {nip17}, jadi rangkaian mesh meluas ke seluruh dunia setiap kali anda berdua dalam talian. Sokongan {tor} juga tersedia pada iOS (melalui {arti}) dan Android (melalui {orbot}).",
+    "Apabila anda dan kenalan anda berada di luar jangkauan Bluetooth, geganti {nostr} bertindak sebagai jambatan melalui internet, menggunakan mesej terus yang dibalut mengikut format {nip17}, jadi rangkaian mesh meluas ke seluruh dunia setiap kali anda berdua dalam talian. Sokongan {tor} tersedia pada iOS dan Android, melalui {arti}.",
   "home.about.optional.title": "Airhop mempunyai ciri pilihan yang boleh anda hidupkan:",
   "home.about.optional.payments.label": "Pembayaran luar talian:",
   "home.about.optional.payments.body":

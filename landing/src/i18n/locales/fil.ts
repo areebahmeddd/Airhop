@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Bawat sesyon ay gumagamit ng protokol na {noise} para sa napatunayang handshake. Ang mga nakaimbak na mensahe ay gumagamit ng algoritmong {ratchet}, ibig sabihin kahit makompromiso ang iyong device sa hinaharap, mananatiling hindi mabasa ang iyong mga lumang mensahe. Ang panic wipe ay sumisira sa lahat ng susi at mensahe sa wala pang isang segundo.",
   "home.about.body.internet":
-    "Kapag ikaw at ang iyong kontak ay wala na sa saklaw ng Bluetooth, ang mga relay ng {nostr} ang nagsisilbing tulay sa internet, gamit ang mga direktang mensaheng nakabalot sa anyong {nip17}, kaya umaabot sa buong mundo ang mesh tuwing pareho kayong online. Available din ang suporta sa {tor} sa iOS (sa pamamagitan ng {arti}) at sa Android (sa pamamagitan ng {orbot}).",
+    "Kapag ikaw at ang iyong kontak ay wala na sa saklaw ng Bluetooth, ang mga relay ng {nostr} ang nagsisilbing tulay sa internet, gamit ang mga direktang mensaheng nakabalot sa anyong {nip17}, kaya umaabot sa buong mundo ang mesh tuwing pareho kayong online. Available ang suporta sa {tor} sa iOS at Android, sa pamamagitan ng {arti}.",
   "home.about.optional.title": "May mga opsyonal na tampok ang Airhop na puwede mong buksan:",
   "home.about.optional.payments.label": "Offline na bayad:",
   "home.about.optional.payments.body":

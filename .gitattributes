@@ -1,4 +1,4 @@
-# Default: normalize all text files to LF
+# Normalize text files to LF by default.
 * text=auto eol=lf
 
 # JavaScript / TypeScript
@@ -28,6 +28,8 @@
 
 # iOS / Swift / Xcode
 *.swift text eol=lf
+*.mm text eol=lf
+*.h text eol=lf
 *.plist text eol=lf
 *.storyboard text eol=lf
 *.xib text eol=lf
@@ -36,10 +38,12 @@
 *.strings text eol=lf
 *.xcstrings text eol=lf
 *.entitlements text eol=lf
-# Intentionally not using merge=union. Unlike plain lists, pbxproj is a
-# structured, UUID-linked format, so union merges can silently produce invalid
-# projects. A visible conflict is safer than subtle Xcode corruption.
+# Keep pbxproj conflicts explicit; union merges can produce invalid projects.
 *.pbxproj text eol=lf
+
+# Rust
+*.rs text eol=lf
+*.lock text eol=lf
 
 # Ruby / CocoaPods
 Podfile text eol=lf
@@ -49,6 +53,9 @@ Gemfile text eol=lf
 
 # Unix shell scripts
 *.sh text eol=lf
+
+# Container builds
+Dockerfile text eol=lf
 
 # Windows scripts
 *.bat text eol=crlf

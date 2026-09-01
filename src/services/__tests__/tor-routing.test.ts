@@ -12,11 +12,6 @@
 // `fetch` and WebSocket are both built from, so every socket the app opens is
 // already covered. Asserting that here is what stops somebody "fixing" the
 // asymmetry by installing a shim that would do nothing but break relay traffic.
-//
-// This replaces the Orbot suite. Nothing here probes a SOCKS port, counts VPN
-// transports, or distinguishes an installed-but-idle Orbot from a running one,
-// because none of that exists any more: the app owns the Tor process and can
-// simply ask it.
 
 const mockGetTorStatus = jest.fn<
   Promise<{
@@ -67,9 +62,9 @@ jest.mock("nostr-tools/pool", () => ({
     mockUseWebSocketImplementation(impl),
 }));
 
-// Bare, and that is the assertion rather than a shortcut. The BLE module used to
-// carry Orbot detection and the VPN watch; nothing in the Tor path may reach for
-// it now, and a `default: {}` that never gets called is how this file proves it.
+// Bare, and that is the assertion, not a shortcut. Nothing in the Tor path may
+// reach for the BLE module, and a `default: {}` that never gets called is how
+// this file proves it.
 jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {},
@@ -130,6 +125,7 @@ jest.mock("@store/settings-store", () => ({
 }));
 
 import {
+  applyInternetAvailability,
   isTorRoutingActive,
   notifyTorAppForeground,
   primeTorRoutingOnStartup,
@@ -305,6 +301,22 @@ describe("startup priming on Android", () => {
 
     expect(mockSetTorActive).toHaveBeenCalledWith(true);
   });
+
+  test("a start that cannot run at all is reported, not left spinning", async () => {
+    // The native side rejects only when Tor cannot run rather than merely being
+    // slow: no library for this ABI, or an unwritable state directory. Neither
+    // improves by waiting, and swallowing it left the banner on "Starting Tor"
+    // for the whole session with nothing behind it.
+    mockTorEnabled = true;
+    mockStartTor.mockRejectedValue(new Error("no library"));
+
+    primeTorRoutingOnStartup();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockSetTorBootstrap).toHaveBeenLastCalledWith("blocked");
+    expect(isTorRoutingActive()).toBe(false);
+  });
 });
 
 describe("bootstrap reporting on Android", () => {
@@ -410,10 +422,57 @@ describe("revalidating on Android", () => {
   });
 
   test("never reaches for the BLE module", async () => {
-    // The old Android path probed a SOCKS port and counted VPN transports
-    // through AirhopBLE. If anything still did, the bare mock above would throw.
+    // Nothing in the Tor path may reach through AirhopBLE; the bare mock above throws if it does.
     mockTorEnabled = true;
     await expect(revalidateTorRouting()).resolves.toBeUndefined();
+  });
+});
+
+describe("the master internet switch", () => {
+  test("stops Tor when the internet is switched off, keeping the preference", () => {
+    // The confirm sheet tells the user that turning the internet off disables
+    // Tor. Leaving Arti running would make that untrue, and would hold guards
+    // and refresh a consensus for a relay pool that no longer exists.
+    mockTorEnabled = true;
+
+    applyInternetAvailability(false);
+
+    expect(mockStopTor).toHaveBeenCalledTimes(1);
+    expect(isTorRoutingActive()).toBe(false);
+    // Untouched: the user turned the internet off, not Tor.
+    expect(mockSetTorEnabled).not.toHaveBeenCalled();
+  });
+
+  test("starts Tor again when the internet comes back", () => {
+    mockTorEnabled = true;
+    applyInternetAvailability(false);
+    jest.clearAllMocks();
+
+    applyInternetAvailability(true);
+
+    expect(mockStartTor).toHaveBeenCalledTimes(1);
+    expect(mockSetTorBootstrap).toHaveBeenCalledWith("starting");
+  });
+
+  test("does nothing either way when Tor was never asked for", () => {
+    mockTorEnabled = false;
+
+    applyInternetAvailability(false);
+    applyInternetAvailability(true);
+
+    expect(mockStopTor).not.toHaveBeenCalled();
+    expect(mockStartTor).not.toHaveBeenCalled();
+  });
+
+  test("releases the gate, so the internet half is not held down by a stopped Tor", () => {
+    mockTorEnabled = true;
+    primeTorRoutingOnStartup();
+    emitStatus({ isReady: false, isStarting: false });
+    expect(mockNostrBlocked).toBe(true);
+
+    applyInternetAvailability(false);
+
+    expect(mockNostrBlocked).toBe(false);
   });
 });
 

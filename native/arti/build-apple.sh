@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 #
-# Build arti.xcframework for iOS device and iOS simulator, and install it
-# into ios/Frameworks/.
+# Build arti.xcframework for iOS device and simulator and install it into
+# ios/Frameworks/.
 #
-# macOS only: lipo and xcodebuild have no equivalent elsewhere, and Apple's
-# static libraries cannot be produced by a cross-compiler on another platform.
-# This is the one part of the native build that cannot run in the Linux
-# container, so it runs on a developer's Mac or on the macOS CI runner.
+# macOS only. Apple device and simulator static libraries are linked into the
+# app by Xcode, so this part of the native build cannot run in the Linux
+# container.
 #
 #     native/arti/build-apple.sh [--clean]
-#
-# Two slices, device and simulator. See the note beside SIM_TARGETS for why there
-# is no macOS one.
 
 set -euo pipefail
 
@@ -28,6 +24,8 @@ source "$SCRIPT_DIR/TOOLCHAIN.env"
 info() { printf '\033[0;36m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[0;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
+# ---- Preconditions --------------------------------------------------------
+
 [ "$(uname -s)" = "Darwin" ] || fail "build-apple.sh requires macOS"
 command -v cargo >/dev/null || fail "cargo is not on PATH"
 command -v cbindgen >/dev/null || fail "cbindgen is not installed: cargo install cbindgen --locked"
@@ -35,6 +33,10 @@ command -v xcodebuild >/dev/null || fail "xcodebuild is not on PATH"
 
 actual_rust="$(rustc --version | awk '{print $2}')"
 [ "$actual_rust" = "$RUST_VERSION" ] || fail "rustc is $actual_rust, TOOLCHAIN.env pins $RUST_VERSION"
+
+# ---- Reproducibility ------------------------------------------------------
+#
+# Keep build paths, timestamps, and locale stable across build machines.
 
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$NATIVE_SOURCE_DATE_EPOCH}"
 export CARGO_INCREMENTAL=0
@@ -55,20 +57,16 @@ fi
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
+# ---- Targets --------------------------------------------------------------
+
 DEVICE_TARGET=aarch64-apple-ios
 SIM_TARGETS=(aarch64-apple-ios-sim x86_64-apple-ios)
-# No macOS slice. Arti.podspec declares `s.platform = :ios` and the Xcode project
-# has a single iOS app target, so nothing could link one; it existed only because
-# the framework this replaces came from a project that does ship a Mac app.
-# Building it cost 87 MiB of committed binary and a third of the build. Restoring
-# it is this array, one merge_slice call and one -library line.
 
-# The header is generated from src/ffi.rs, never edited. See cbindgen.toml.
+# ---- Header ---------------------------------------------------------------
 #
-# Generated FIRST, before any compiling. It takes seconds and depends on nothing
-# the builds produce, so putting it here turns a cbindgen misconfiguration into
-# an immediate failure instead of one discovered after the better part of an hour
-# of cross-compiling.
+# Generate the C header before compiling so cbindgen failures stop the build
+# immediately.
+
 info "Generating arti.h"
 mkdir -p "$BUILD_DIR/include"
 cbindgen --config "$SCRIPT_DIR/cbindgen.toml" \
@@ -78,17 +76,10 @@ cbindgen --config "$SCRIPT_DIR/cbindgen.toml" \
 grep -q "airhop_tor_start" "$BUILD_DIR/include/arti.h" \
   || fail "cbindgen produced a header with no entry points"
 
-# The symbol reader, and why it is not Apple's.
-#
-# rustc embeds LLVM bitcode in the objects it emits, and that bitcode is written
-# by whichever LLVM the Rust toolchain was built against: 22.1.8 for Rust 1.98.
-# Xcode's nm is an older Apple LLVM and refuses it outright, with
-# "Unknown attribute kind (105)". The archive is fine and links fine; Apple's nm
-# simply cannot introspect it.
-#
-# The toolchain ships a matching llvm-nm, so read the bitcode with the thing that
-# wrote it. Falls back to Apple's nm where the component is not installed, which
-# still works for anything without embedded bitcode.
+# ---- Build ----------------------------------------------------------------
+
+# Rust's llvm-nm can read the LLVM bitcode embedded by the matching Rust toolchain.
+# Apple's nm may reject that bitcode when its LLVM version is older.
 find_llvm_nm() {
   local sysroot host candidate
   sysroot="$(rustc --print sysroot)"
@@ -102,10 +93,7 @@ find_llvm_nm() {
 }
 NM="$(find_llvm_nm)"
 
-# The C entry points AirhopTorManager.swift binds with @_silgen_name. A symbol
-# missing outright is a link error, so a rename cannot reach a user; what the
-# linker will not catch is one present in a device slice and absent from a
-# simulator slice, which is what a partial rebuild produces.
+# C entry points bound by AirhopTorManager.swift.
 EXPECTED_SYMBOLS=(
   _airhop_tor_start
   _airhop_tor_stop
@@ -114,13 +102,8 @@ EXPECTED_SYMBOLS=(
   _airhop_tor_summary
 )
 
-# Checked per target, before lipo, rather than on the merged slices.
-#
-# A merged slice is a universal archive, and reading one means telling nm which
-# architecture to look at or having it silently read only the host's. A
-# per-target archive has exactly one architecture and no such question, and
-# checking here is the stronger test anyway: it names the target that is wrong
-# rather than the slice it ended up in.
+# Verify each target before merging architectures so a missing symbol is tied
+# to the target that produced it.
 verify_target() {
   local target="$1" lib symbols
   lib="$SCRIPT_DIR/target/$target/apple/$LIB_NAME"
@@ -128,6 +111,7 @@ verify_target() {
     printf '%s\n' "$symbols" | head -5 >&2
     fail "$target: could not read $LIB_NAME with $NM"
   fi
+
   local symbol
   for symbol in "${EXPECTED_SYMBOLS[@]}"; do
     if ! grep -q "[[:space:]]$symbol\$" <<<"$symbols"; then
@@ -138,19 +122,7 @@ verify_target() {
   info "  $target: all ${#EXPECTED_SYMBOLS[@]} entry points present"
 }
 
-# Strip an archive and rewrite it deterministically.
-#
-# Neither half is the reason these archives are a sane size; the `apple` profile
-# in Cargo.toml is, by not embedding bitcode. Stripping on its own took 167 MB to
-# 157 MB, because `strip -x` removes local symbols and leaves the __bitcode
-# section untouched.
-#
-# They are still worth doing. `strip -x` drops symbols the app's linker will
-# never need and cannot touch the exported entry points, which are global.
-# `libtool -D` is not about size at all: it rewrites the archive with zeroed
-# timestamps and uids, so building the same source twice gives the same bytes.
-# Without it a rebuild always looks like a change and SHA256SUMS.apple is worth
-# nothing.
+# Strip local symbols and normalize archive metadata for reproducible output.
 normalize_archive() {
   local lib="$1"
   strip -x "$lib" 2>/dev/null || true
@@ -164,15 +136,16 @@ build_target() {
   info "Building $target"
   rustup target add "$target" >/dev/null 2>&1 || true
   cargo build --profile apple --locked --target "$target" --manifest-path "$SCRIPT_DIR/Cargo.toml"
+
   local produced="$SCRIPT_DIR/target/$target/apple/$LIB_NAME"
   [ -f "$produced" ] || fail "$target: no $LIB_NAME was produced"
+
   local before after
   before=$(du -m "$produced" | cut -f1)
   normalize_archive "$produced"
   after=$(du -m "$produced" | cut -f1)
   info "  $target: ${before} MB -> ${after} MB"
-  # Verified after stripping, so the check covers what actually ships rather
-  # than an intermediate nobody links.
+
   verify_target "$target"
 }
 
@@ -182,16 +155,15 @@ for target in "${SIM_TARGETS[@]}"; do
   build_target "$target"
 done
 
-# One universal archive per xcframework slice. A slice may hold several
-# architectures but only one per platform-variant, which is why device and
-# simulator cannot be merged even though both are arm64.
+# ---- Package --------------------------------------------------------------
+
+# Device and simulator are separate xcframework slices. Simulator targets can
+# share one universal archive because they use the same platform variant.
 info "Merging architectures"
 mkdir -p "$BUILD_DIR/ios" "$BUILD_DIR/ios-sim"
 
-# Where cargo leaves one target's static library.
 lib_for() { printf '%s/target/%s/apple/%s' "$SCRIPT_DIR" "$1" "$LIB_NAME"; }
 
-# Merge every target in an array into one universal archive.
 merge_slice() {
   local out="$1"
   shift
@@ -199,8 +171,6 @@ merge_slice() {
   local target
   for target in "$@"; do libs+=("$(lib_for "$target")"); done
   lipo -create -output "$out" "${libs[@]}"
-  # lipo writes a fresh archive with its own timestamps, so the determinism the
-  # per-target normalization bought has to be reapplied to the merged one.
   normalize_archive "$out"
 }
 
@@ -220,6 +190,7 @@ xcodebuild -create-xcframework \
   -library "$BUILD_DIR/ios-sim/$LIB_NAME" -headers "$BUILD_DIR/ios-sim/Headers" \
   -output "$XCFRAMEWORK"
 
+# ---- Record ---------------------------------------------------------------
 
 info "Recording hashes"
 (
@@ -231,8 +202,9 @@ cat <<MSG
 
 Built. Next steps, in the same commit:
 
-  node scripts/verify-vendored.js --write   # re-record the pinned binary hashes
-  npm run verify:vendored                   # confirm CI will agree
+  node scripts/verify-vendored.js --write
+  npm run verify:vendored
 
 MSG
+
 du -sh "$XCFRAMEWORK"

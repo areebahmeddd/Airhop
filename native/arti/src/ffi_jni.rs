@@ -5,10 +5,9 @@
 //! platform-specific happens above this file, so a behaviour difference between
 //! the two phones can only come from the app layer, never from Tor.
 //!
-//! There is no log callback. The implementation this replaces registered a Java
-//! callback so Kotlin could pattern match on log lines and infer a state machine
-//! from them; `status` reports the same thing as data, so there is nothing for a
-//! log listener to do and no `GlobalRef` to keep alive across threads.
+//! There is no log callback: `status` reports the same thing as data, so
+//! nothing has to pattern match log lines and no `GlobalRef` has to stay alive
+//! across threads.
 
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jstring, JNI_TRUE};
@@ -25,8 +24,8 @@ pub extern "system" fn Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStart(
         return crate::AIRHOP_TOR_ERR_DATA_DIR;
     };
     let dir: String = dir.into();
-    // A port outside the u16 range is a caller bug rather than something to
-    // clamp into a port nobody asked for.
+    // A port outside the u16 range is a caller bug, not something to clamp
+    // into a port nobody asked for.
     if !(1..=65535).contains(&socks_port) {
         return crate::AIRHOP_TOR_ERR_BIND;
     }
@@ -56,7 +55,7 @@ pub extern "system" fn Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStatus(
     _class: JClass,
 ) -> jint {
     // The same packing the C ABI returns, so the Swift and Kotlin decoders are
-    // reading one format rather than two that have to be kept in step.
+    // reading one format, not two that have to be kept in step.
     crate::packed_status()
 }
 
