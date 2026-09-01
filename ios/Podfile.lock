@@ -2643,7 +2643,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  Arti: a7face21346bcc3bcacce583acd01ab628dcd976
+  Arti: 33ba8afb8f5fcd0ce740d2eabd86a920ea308a4a
   EXApplication: bbd517d50878ca1d121fb3843392beb210181e28
   EXConstants: 736b7f1ed7235956785cb81e0ce37ab6a4f33fb4
   Expo: b3509245f68fe53664ff17b31bb1eda11c24e684
