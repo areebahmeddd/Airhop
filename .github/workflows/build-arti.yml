@@ -153,6 +153,14 @@ jobs:
       - name: Place rebuilt libraries
         run: |
           set -euo pipefail
+          # Cleared first, so what the build produced is what gets committed.
+          #
+          # Copying over the checkout merges rather than replaces, which leaves
+          # anything the build has stopped producing sitting in the tree looking
+          # current. Dropping the macOS slice is exactly that case: two fresh
+          # slices landed beside a third nobody had built, and the count check
+          # below is what noticed.
+          rm -rf ios/Frameworks/arti.xcframework android/app/src/main/jniLibs
           cp -R "$RUNNER_TEMP/arti/arti-android/." .
           cp -R "$RUNNER_TEMP/arti/arti-apple/." .
 
