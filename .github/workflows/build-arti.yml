@@ -47,7 +47,7 @@ jobs:
       # KiB page alignment on the 64-bit ABIs, and that no build-machine path
       # survived into a shipped library.
       - name: Build in the pinned container
-        run: native/arti/build-in-container.sh --clean
+        run: bash native/arti/build-in-container.sh --clean
 
       - name: Upload Android libraries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -114,7 +114,7 @@ jobs:
       # seconds rather than after an hour of cross-compiling. Verifies the
       # exported symbols in every slice before it finishes.
       - name: Build the xcframework
-        run: native/arti/build-apple.sh --clean
+        run: bash native/arti/build-apple.sh --clean
 
       - name: Upload Apple xcframework
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
