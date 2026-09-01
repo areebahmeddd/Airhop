@@ -5,17 +5,23 @@
 //   node scripts/verify-vendored.js            check the tree against the lock
 //   node scripts/verify-vendored.js --write     record the current tree as the lock
 //
-// Why this exists. `ios/Frameworks/arti.xcframework` is roughly 35 MB of
-// prebuilt static library not compiled here, committed straight into the
-// repository and shipped inside the iOS app. Nobody reviews a binary diff, and
-// git alone will not tell you that the bytes changed for a reason: a swapped
-// blob looks exactly like a legitimate update in a pull request summary.
+// Why this exists. The embedded Tor client ships as compiled binaries committed
+// straight into the repository: a static library inside the iOS app, and one
+// shared object per ABI inside the Android app. Nobody reviews a binary diff,
+// and git alone will not tell you the bytes changed for a reason. A swapped blob
+// looks exactly like a legitimate update in a pull request summary.
 //
-// This does NOT prove the binary is trustworthy. It proves it has not changed
-// without someone deliberately re-recording it, which is the failure mode that
-// can otherwise pass unnoticed. Building Arti from pinned upstream source is
-// the real fix and is tracked in docs/dev/PROGRESS.md; this is the cheap half
-// that closes the silent-swap gap today.
+// These are no longer third-party artifacts. `native/arti/` builds them from
+// pinned Arti source under a pinned toolchain, so what this guards has changed
+// shape: not "did somebody swap a blob we cannot reproduce" but "does the
+// committed binary still correspond to the source and toolchain that claim to
+// produce it". A binary that moves without `native/arti/` moving is either a
+// rebuild nobody recorded or a substitution, and both should stop a pull
+// request.
+//
+// This still does not prove a binary is trustworthy. Reproducing it does, and
+// that is what native/arti/build-in-container.sh is for. This is the cheap
+// check that runs on every pull request.
 
 const { createHash } = require("crypto");
 const { execFileSync } = require("child_process");
@@ -28,7 +34,7 @@ const LOCK_FILE = "vendor.lock.json";
 // tracked file underneath is hashed, so a new file appearing is caught too:
 // adding a file is as effective an attack as modifying one, and a manifest that
 // only lists what it already knows about would miss it.
-const VENDORED_PATHS = ["ios/Frameworks"];
+const VENDORED_PATHS = ["ios/Frameworks", "android/app/src/main/jniLibs"];
 
 function trackedFiles(prefix) {
   const out = execFileSync("git", ["ls-files", "-z", "--", prefix], {
@@ -44,11 +50,28 @@ function sha256(file) {
 
 function currentTree() {
   const entries = {};
+  const missing = [];
   for (const prefix of VENDORED_PATHS) {
     for (const file of trackedFiles(prefix)) {
+      // Git still lists a file that has been deleted from the working tree but
+      // whose deletion has not been staged, which is the ordinary state after
+      // removing a binary by hand. Reading it throws a bare ENOENT and a stack
+      // trace that says nothing about what to do, so collect these and say it
+      // properly below.
+      if (!fs.existsSync(file)) {
+        missing.push(file);
+        continue;
+      }
       // Posix separators so the lock file is identical on every platform.
       entries[file.split(path.sep).join("/")] = sha256(file);
     }
+  }
+  if (missing.length > 0) {
+    console.error("Tracked binaries are missing from the working tree.\n");
+    for (const file of missing) console.error(`  ${file}`);
+    fail(
+      "Stage the deletions (git add -A) if this is deliberate, or restore the files.",
+    );
   }
   return entries;
 }

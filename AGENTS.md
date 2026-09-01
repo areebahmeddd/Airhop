@@ -50,6 +50,7 @@ You must read these four documents before making any code suggestions:
 | Whole-app lifecycle and simulation suites                     | `src/__tests__/`                  |
 | iOS native                                                    | `ios/`                            |
 | Android native                                                | `android/`                        |
+| Embedded Tor client (Rust, both platforms)                    | `native/arti/`                    |
 | All protocol constants                                        | `docs/spec/PROTOCOLS.md`          |
 
 ## Rules Every Agent Must Follow
@@ -78,7 +79,8 @@ You must read these four documents before making any code suggestions:
 
 - Swift lives in `ios/`. Kotlin lives in `android/`. They expose **raw bytes** to TypeScript.
 - **No protocol logic in native code.** No routing decisions. No crypto in Swift or Kotlin.
-- Native modules: `AirhopBLEModule`, `AirhopVoiceModule` and `AirhopWiFiModule` (Swift + Kotlin), `AirhopForegroundService` (Kotlin), `AirhopTorModule`, `AirhopTorSocket` and `AirhopWiFiPairing` (Swift).
+- Native modules: `AirhopBLEModule`, `AirhopVoiceModule`, `AirhopWiFiModule`, `AirhopLANModule` and `AirhopTorModule` (Swift + Kotlin), `AirhopForegroundService` (Kotlin), `AirhopTorSocket` and `AirhopWiFiPairing` (Swift).
+- Rust lives in `native/arti/`, and it is the one exception to "native code exposes raw bytes": it is a Tor client, so it owns a SOCKS5 listener and its own lifecycle. It still knows nothing about packets, routing or encryption, and both platforms compile the same crate.
 
 ### Build Order
 
@@ -93,7 +95,7 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 Two things in the tree are pinned by hash and checked in CI. Both fail the build
 rather than drifting quietly, so a change to either has to be deliberate.
 
-- **Vendored binaries** (`ios/Frameworks/`, the Arti xcframework). Prebuilt, not compiled here, and nobody reviews a binary diff. If you genuinely need to update one, re-record it in the same commit: `node scripts/verify-vendored.js --write`. CI runs `npm run verify:vendored`.
+- **Native binaries** (`ios/Frameworks/` and `android/app/src/main/jniLibs/`, the embedded Tor client). Built here from `native/arti/`, not vendored, but committed rather than compiled on every CI run, and nobody reviews a binary diff. Rebuild with `native/arti/build-in-container.sh` (Android, Docker) or `native/arti/build-apple.sh` (iOS, macOS only), then re-record in the same commit: `node scripts/verify-vendored.js --write`. CI runs `npm run verify:vendored`. Never hand-edit a binary or a hash.
 - **Gradle dependencies** (`android/app/gradle.lockfile`). Adding or bumping an npm package with an Android side can change what Gradle resolves. Regenerate in the same commit: `./gradlew dependencies --write-locks` then `./gradlew :app:dependencies --write-locks`.
 
 ### User-Facing Copy

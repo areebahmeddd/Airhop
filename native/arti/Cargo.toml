@@ -1,0 +1,59 @@
+[package]
+name = "arti-airhop"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.98"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Airhop's embedded Tor client. Wraps arti-client behind a SOCKS5 listener and one FFI surface shared by iOS and Android."
+
+[lib]
+name = "arti_airhop"
+# staticlib feeds the Apple xcframework, cdylib feeds Android's jniLibs.
+# Both are always built; each platform script keeps only the one it needs.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+# rustls rather than native-tls, so there is no OpenSSL and no dependency on the
+# platform trust store at the TLS-to-guard layer. `default-features = false` is
+# what rustls requires (it is nonadditive with native-tls), so the two upstream
+# defaults we want back, compression and flowctl-cc, are named explicitly.
+#
+# bridge-client and pt-client are compiled in but never configured. Bridges are
+# a later phase; having the code present means that phase is a config change
+# rather than another binary rebuild.
+arti-client = { version = "0.45", default-features = false, features = [
+    "tokio",
+    "rustls",
+    "compression",
+    "flowctl-cc",
+    "bridge-client",
+    "pt-client",
+    "onion-service-client",
+    "vanguards",
+    "static-sqlite",
+] }
+tor-rtcompat = { version = "0.45", default-features = false, features = [
+    "tokio",
+    "rustls",
+] }
+
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+    "net",
+    "sync",
+    "time",
+    "io-util",
+    "macros",
+] }
+futures = "0.3"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

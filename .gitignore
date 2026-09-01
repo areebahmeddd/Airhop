@@ -93,3 +93,14 @@ $RECYCLE.BIN/
 *.swo
 *.sublime-project
 *.sublime-workspace
+
+# Rust build output for the embedded Tor client. The libraries it produces are
+# committed (android/app/src/main/jniLibs, ios/Frameworks); the intermediates
+# are not.
+native/arti/target/
+.native-build/
+
+# The bitchat reference checkout. Read freely, never committed: it is two
+# separate upstream repositories, and AGENTS.md treats a bitchat/ path as a
+# dangling reference for anyone who has not cloned it themselves.
+bitchat/

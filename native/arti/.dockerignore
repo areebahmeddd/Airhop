@@ -1,0 +1,4 @@
+# The image needs only TOOLCHAIN.env. Everything else reaches the container on a
+# volume mount at run time.
+target/
+SHA256SUMS*

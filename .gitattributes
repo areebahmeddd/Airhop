@@ -84,3 +84,6 @@ Gemfile text eol=lf
 *.aar binary
 *.jar binary
 *.keystore binary
+
+# Native libraries
+*.so binary
