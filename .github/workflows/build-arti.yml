@@ -89,6 +89,10 @@ jobs:
           set -euo pipefail
           rustup toolchain install "$RUST_VERSION" --profile minimal
           rustup default "$RUST_VERSION"
+          # llvm-nm from the same toolchain. Apple's nm cannot read the LLVM
+          # bitcode rustc embeds, so symbol verification uses the LLVM that
+          # wrote it. See find_llvm_nm in build-apple.sh.
+          rustup component add llvm-tools
           rustup target add \
             aarch64-apple-ios \
             aarch64-apple-ios-sim \

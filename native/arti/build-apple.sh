@@ -75,6 +75,66 @@ cbindgen --config "$SCRIPT_DIR/cbindgen.toml" \
 grep -q "airhop_tor_start" "$BUILD_DIR/include/arti.h" \
   || fail "cbindgen produced a header with no entry points"
 
+# The symbol reader, and why it is not Apple's.
+#
+# rustc embeds LLVM bitcode in the objects it emits, and that bitcode is written
+# by whichever LLVM the Rust toolchain was built against: 22.1.8 for Rust 1.98.
+# Xcode's nm is an older Apple LLVM and refuses it outright, with
+# "Unknown attribute kind (105)". The archive is fine and links fine; Apple's nm
+# simply cannot introspect it.
+#
+# The toolchain ships a matching llvm-nm, so read the bitcode with the thing that
+# wrote it. Falls back to Apple's nm where the component is not installed, which
+# still works for anything without embedded bitcode.
+find_llvm_nm() {
+  local sysroot host candidate
+  sysroot="$(rustc --print sysroot)"
+  host="$(rustc -vV | awk '/^host: /{ print $2 }')"
+  candidate="$sysroot/lib/rustlib/$host/bin/llvm-nm"
+  if [ -x "$candidate" ]; then
+    printf '%s' "$candidate"
+  else
+    printf 'nm'
+  fi
+}
+NM="$(find_llvm_nm)"
+
+# The C entry points AirhopTorManager.swift binds with @_silgen_name. A symbol
+# missing outright is a link error, so a rename cannot reach a user; what the
+# linker will not catch is one present in a device slice and absent from a
+# simulator slice, which is what a partial rebuild produces.
+EXPECTED_SYMBOLS=(
+  _airhop_tor_start
+  _airhop_tor_stop
+  _airhop_tor_set_dormant
+  _airhop_tor_status
+  _airhop_tor_summary
+)
+
+# Checked per target, before lipo, rather than on the merged slices.
+#
+# A merged slice is a universal archive, and reading one means telling nm which
+# architecture to look at or having it silently read only the host's. A
+# per-target archive has exactly one architecture and no such question, and
+# checking here is the stronger test anyway: it names the target that is wrong
+# rather than the slice it ended up in.
+verify_target() {
+  local target="$1" lib symbols
+  lib="$SCRIPT_DIR/target/$target/release/$LIB_NAME"
+  if ! symbols="$("$NM" --defined-only -g "$lib" 2>&1)"; then
+    printf '%s\n' "$symbols" | head -5 >&2
+    fail "$target: could not read $LIB_NAME with $NM"
+  fi
+  local symbol
+  for symbol in "${EXPECTED_SYMBOLS[@]}"; do
+    if ! grep -q "[[:space:]]$symbol\$" <<<"$symbols"; then
+      grep "airhop_tor" <<<"$symbols" | head -10 >&2 || echo "  (no airhop symbols at all)" >&2
+      fail "$target: missing $symbol"
+    fi
+  done
+  info "  $target: all ${#EXPECTED_SYMBOLS[@]} entry points present"
+}
+
 build_target() {
   local target="$1"
   info "Building $target"
@@ -82,8 +142,10 @@ build_target() {
   cargo build --release --locked --target "$target" --manifest-path "$SCRIPT_DIR/Cargo.toml"
   local produced="$SCRIPT_DIR/target/$target/release/$LIB_NAME"
   [ -f "$produced" ] || fail "$target: no $LIB_NAME was produced"
+  verify_target "$target"
 }
 
+info "Reading symbols with $NM"
 build_target "$DEVICE_TARGET"
 for target in "${SIM_TARGETS[@]}" "${MAC_TARGETS[@]}"; do
   build_target "$target"
@@ -126,47 +188,6 @@ xcodebuild -create-xcframework \
   -library "$BUILD_DIR/macos/$LIB_NAME" -headers "$BUILD_DIR/macos/Headers" \
   -output "$XCFRAMEWORK"
 
-# ---- Verify ---------------------------------------------------------------
-
-# The C entry points AirhopTorManager.swift binds with @_silgen_name. A missing
-# one links fine and traps the first time Tor is switched on.
-EXPECTED_SYMBOLS=(
-  _airhop_tor_start
-  _airhop_tor_stop
-  _airhop_tor_set_dormant
-  _airhop_tor_status
-  _airhop_tor_summary
-)
-
-info "Verifying exported symbols"
-
-# `-arch all` matters here and its absence is why this check first failed on the
-# macOS slice. Two of the three slices are universal archives, and Apple's nm
-# reads only the host architecture out of a fat file unless told otherwise, so on
-# an arm64 runner an x86_64 member is simply not looked at. Asking for every
-# architecture is both the honest check and the portable one.
-#
-# Errors are no longer sent to /dev/null. An nm that fails outright used to
-# produce an empty symbol list, which reads exactly like a missing symbol and
-# sends you looking for a compiler problem that is not there.
-while IFS= read -r -d '' lib; do
-  slice="$(basename "$(dirname "$lib")")"
-  if ! symbols="$(nm -gU -arch all "$lib" 2>&1)"; then
-    printf '%s\n' "$symbols" | head -5 >&2
-    fail "$slice: nm could not read the archive"
-  fi
-  for symbol in "${EXPECTED_SYMBOLS[@]}"; do
-    if ! grep -q "[[:space:]]$symbol\$" <<<"$symbols"; then
-      # Say what was actually found. A bare "missing X" gives a reader no way to
-      # tell a renamed symbol from an unreadable file.
-      printf 'Found %s exported symbol(s); airhop ones:\n' \
-        "$(grep -c . <<<"$symbols")" >&2
-      grep "airhop" <<<"$symbols" | head -10 >&2 || echo "  (none)" >&2
-      fail "$slice: missing $symbol"
-    fi
-  done
-  info "  $slice: all ${#EXPECTED_SYMBOLS[@]} entry points present"
-done < <(find "$XCFRAMEWORK" -name "$LIB_NAME" -print0)
 
 info "Recording hashes"
 (
