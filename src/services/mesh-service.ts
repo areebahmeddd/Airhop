@@ -6033,9 +6033,9 @@ export class MeshService {
   // Whether the Nostr transport is allowed to exist right now.
   //
   // Two gates, both of which must be open. `internetEnabled` is the user asking
-  // for the internet at all; `nostrBlockedByTor` is Android refusing to use it
-  // in the clear while Tor is on and Orbot is not carrying it (see the field in
-  // mesh-state-store).
+  // for the internet at all; `nostrBlockedByTor` is Tor being wanted while no
+  // circuit can carry it, so retrying a relay pool through a dead proxy is
+  // futile (see the field in mesh-state-store).
   //
   // A function rather than a cached flag, consulted at every build site, because
   // both move while the mesh is up and all three sites must agree. A flag set at
@@ -6140,9 +6140,9 @@ export class MeshService {
     if (!this.running) return;
     if (enabled) {
       // `enabled` is the user's half; the Tor gate is the other half and it
-      // outranks this one, so switching the internet on while Android holds it
-      // down for a stopped Orbot must not open clear-net sockets. The Tor path
-      // reopens them through restartNostr once Orbot is back.
+      // outranks this one, so switching the internet on while the Tor gate holds
+      // it down must not open sockets that will only fail. The Tor path reopens
+      // them through restartNostr once a circuit exists.
       //
       // Checked here rather than in the branch condition so this stays a no-op:
       // nothing was switched off, and the teardown below drops parked uplinks

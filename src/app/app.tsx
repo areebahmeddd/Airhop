@@ -1084,9 +1084,9 @@ function AppContent(): React.JSX.Element {
         // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
         // stale the moment the app is open.
         void dismissNearbyNotification();
-        // A trip away from Airhop is how Orbot gets stopped, so returning is
-        // when a "Tor on" claim is most likely to have gone stale. Cheap and
-        // Android-only; iOS owns Arti and hears about it directly.
+        // A resume is when a "Tor on" claim is most likely to have gone stale:
+        // the process may have been suspended, and the network may have changed
+        // under it. Cheap, and it corrects the claim rather than the routing.
         void revalidateTorRouting();
         // Leaving the app is also how a Lightning invoice gets paid: the user
         // switches to their Lightning wallet, pays, and comes back. Until this,

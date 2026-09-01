@@ -4,9 +4,8 @@
 // hub itself, so the whole group is one scroll from opening Settings.
 //
 // It stays its own component rather than being inlined into the hub: the Tor
-// toggle owns an async start and an Orbot install sheet, all four toggles
-// share a confirm sheet, and none of that belongs in a screen whose job is
-// navigation.
+// toggle owns an async start, all four toggles share a confirm sheet, and none
+// of that belongs in a screen whose job is navigation.
 //
 // Every one of the four confirms in both directions, through the same sheet.
 // Before, live voice and Tor flipped silently while the gateway and the bridge
@@ -26,7 +25,7 @@ import { useSettingsStore } from "@store/settings-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import { HIT_SLOP, useThemeColors } from "@ui/theme";
 import React, { useState } from "react";
-import { Linking, Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import {
   GroupDivider,
   SettingRow,
@@ -152,7 +151,6 @@ export default function ConnectivityGroup(): React.JSX.Element {
     (s) => s.setAllowMintOverClearnet,
   );
   const [torStarting, setTorStarting] = useState(false);
-  const [showOrbotModal, setShowOrbotModal] = useState(false);
   // What the sheet is asking about, and whether it is up. Two pieces of state
   // rather than one nullable: the sheet slides out over ~200ms, and it still
   // has to draw its own words on the way down. `pending` is therefore never
@@ -188,44 +186,28 @@ export default function ConnectivityGroup(): React.JSX.Element {
     }
   }
 
-  function handleGetOrbot(): void {
-    setShowOrbotModal(false);
-    void Linking.openURL(
-      "https://play.google.com/store/apps/details?id=org.torproject.android",
-    );
-  }
-
   // Route the Tor toggle through tor-routing.setTorRouting, the single place
-  // that starts/stops Arti (iOS), swaps nostr-tools' WebSocket for the Tor
-  // socket, persists the preference, and rebuilds the Nostr transport. The
-  // switch itself is driven by the persisted preference, so it always reflects
-  // the real routing state rather than a copy that can drift.
+  // that starts and stops the embedded Tor client, points the app's sockets at
+  // it, persists the preference and rebuilds the Nostr transport. The switch
+  // itself is driven by the persisted preference, so it always reflects the real
+  // routing state rather than a copy that can drift.
+  //
+  // One message per outcome, and none of them is "try again": a bootstrap that
+  // ran out its deadline may still land, and the Mesh banner carries that. What
+  // the sheet says is what happened.
   async function handleTorToggle(value: boolean): Promise<void> {
-    // Android routes through Orbot's VPN, which the app cannot start.
-    // setTorRouting probes Orbot's SOCKS port and requires a VPN transport
-    // before enabling; if either is missing, we surface the install guide
-    // (orbot-missing) or a "start Orbot" hint (orbot-inactive) from the result
-    // below rather than assuming it worked.
     try {
       setTorStarting(true);
       const result = await setTorRouting(value);
       if (value && !result.ok) {
-        if (result.reason === "orbot-missing") {
-          // Orbot isn't installed, so nothing can route. Re-open the install
-          // guide rather than a dead-end alert.
-          setShowOrbotModal(true);
-        } else {
-          showAlert(
-            T("settings.conn.tor_short"),
-            result.reason === "orbot-inactive"
-              ? T("settings.conn.tor_orbot_idle")
-              : result.reason === "unavailable"
-                ? T("settings.conn.tor_unavailable")
-                : result.reason === "timeout"
-                  ? T("settings.conn.tor_timeout")
-                  : T("settings.conn.tor_failed"),
-          );
-        }
+        showAlert(
+          T("settings.conn.tor_short"),
+          result.reason === "unavailable"
+            ? T("settings.conn.tor_unavailable")
+            : result.reason === "timeout"
+              ? T("settings.conn.tor_timeout")
+              : T("settings.conn.tor_failed"),
+        );
       }
     } finally {
       setTorStarting(false);
@@ -337,13 +319,16 @@ export default function ConnectivityGroup(): React.JSX.Element {
             />
           }
         />
-        {/* Only meaningful on iOS. Arti is a per-socket SOCKS shim that we
-            wire into the Nostr WebSocket, so a Cashu mint request (plain
-            fetch) would bypass Tor entirely and hand the mint this device's
-            IP alongside the proofs being swapped. Rather than leak
-            silently, mint calls are refused while Tor is on unless the user
-            opts in here. Android needs no such switch: Orbot's VPN captures
-            every socket, so mint traffic is already covered.
+        {/* iOS only, and the reason is a platform limit rather than a policy.
+            There, Tor is wired into the Nostr WebSocket alone, so a Cashu mint
+            request is a plain fetch that would bypass it entirely and hand the
+            mint this device's IP alongside the proofs being swapped. Rather
+            than leak silently, mint calls are refused while Tor is on unless
+            the user opts in here.
+
+            Android needs no such switch. The proxy is installed into the HTTP
+            client every socket is built from, so mint traffic is already
+            covered by the Tor toggle itself and there is nothing to opt into.
 
             No confirm sheet on this one: it only appears while Tor is on, it
             is a qualifier on the row above rather than a feature of its own,
@@ -463,45 +448,6 @@ export default function ConnectivityGroup(): React.JSX.Element {
           </View>
         </BottomSheet>
       )}
-
-      {/* Orbot modal: shown when enabling Tor on Android finds no Orbot. Same
-          shape as the confirm sheet above, so the whole group speaks one way. */}
-      <BottomSheet
-        visible={showOrbotModal}
-        onClose={() => setShowOrbotModal(false)}
-        sheetStyle={styles.sheet}
-      >
-        <Text style={styles.sheetTitle}>{T("settings.conn.orbot_title")}</Text>
-        <Text style={styles.sheetSubtitle}>
-          {T("settings.conn.orbot_body")}
-        </Text>
-        <View style={styles.sheetActions}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.sheetBtnPrimary,
-              pressed && styles.sheetBtnPrimaryPressed,
-            ]}
-            onPress={handleGetOrbot}
-            accessibilityRole="button"
-            accessibilityLabel={T("settings.conn.get_orbot")}
-          >
-            <Text style={styles.sheetBtnTextPrimary}>
-              {T("settings.conn.get_orbot")}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.sheetBtn,
-              pressed && styles.sheetBtnPressed,
-            ]}
-            onPress={() => setShowOrbotModal(false)}
-            accessibilityRole="button"
-            accessibilityLabel={T("settings.conn.later")}
-          >
-            <Text style={styles.sheetBtnText}>{T("settings.conn.later")}</Text>
-          </Pressable>
-        </View>
-      </BottomSheet>
     </View>
   );
 }

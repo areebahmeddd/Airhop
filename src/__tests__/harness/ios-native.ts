@@ -362,17 +362,6 @@ export class IosBleModule implements BleNativeModule {
     return rejectWith("UNKNOWN_LINK", `No active link with ID ${linkID}`);
   }
 
-  async getTorProxyPort(): Promise<number> {
-    return 0;
-  }
-
-  async getTorAvailability(): Promise<{
-    orbotInstalled: boolean;
-    vpnActive: boolean;
-  }> {
-    return { orbotInstalled: false, vpnActive: false };
-  }
-
   addListener(): void {
     /* RCTEventEmitter contract */
   }

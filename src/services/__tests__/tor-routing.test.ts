@@ -1,42 +1,60 @@
-// The Android Tor decision, which is a privacy claim rather than a convenience,
-// and the gate that backs it.
+// The Android half of the Tor decision, now that Airhop owns Arti there too.
 //
-// Two things have to hold. The claim is only true when Orbot's daemon answers
-// AND a VPN transport is capturing traffic: an installed-but-idle Orbot beside
-// an unrelated corporate VPN satisfies either test alone and routes nothing.
-// And the response to losing it has to be a teardown, because lowering the
-// claim while the relay pool stays connected keeps geohash presence, DM
-// metadata and bridge events leaving the phone in the clear. Android has no
-// per-socket SOCKS shim to fail at, so it fails closed one layer up: no Nostr
-// transport at all while Tor is wanted and not routing.
+// A separate file from tor-routing-ios.test.ts because `Platform.OS` is read at
+// module import time, so one registry cannot hold both platforms. The model
+// under test is the same on both: start the embedded client, point the app's
+// sockets at it, report honestly, fail closed. What this file exists to pin
+// down is the one place they still differ.
 //
-// Overstating protection is worse than offering none, so these assert the
-// refusals and the teardowns, not just the happy path.
+// **Android installs no WebSocket shim.** iOS swaps nostr-tools' WebSocket for
+// TorWebSocket, because React Native's own cannot speak SOCKS5. Android needs no
+// such swap: the proxy is installed one layer lower, into the OkHttp client that
+// `fetch` and WebSocket are both built from, so every socket the app opens is
+// already covered. Asserting that here is what stops somebody "fixing" the
+// asymmetry by installing a shim that would do nothing but break relay traffic.
+//
+// This replaces the Orbot suite. Nothing here probes a SOCKS port, counts VPN
+// transports, or distinguishes an installed-but-idle Orbot from a running one,
+// because none of that exists any more: the app owns the Tor process and can
+// simply ask it.
 
-const mockGetTorProxyPort = jest.fn<Promise<number>, []>();
-const mockGetTorAvailability = jest.fn<
-  Promise<{ orbotInstalled: boolean; vpnActive: boolean }>,
+const mockGetTorStatus = jest.fn<
+  Promise<{
+    isReady: boolean;
+    isStarting: boolean;
+    port: number;
+    progress: number;
+    bootstrapSummary: string;
+  }>,
   []
 >();
-const mockStartVpnWatch = jest.fn<Promise<void>, []>();
-const mockStopVpnWatch = jest.fn<Promise<void>, []>();
-const mockRestartNostr = jest.fn();
+const mockStartTor = jest.fn<Promise<void>, []>();
+const mockStopTor = jest.fn<Promise<void>, []>();
+const mockAwaitTorReady = jest.fn<Promise<boolean>, [number]>();
+const mockSetAppForeground = jest.fn<Promise<void>, [boolean]>();
 const mockSetTorActive = jest.fn();
 const mockSetTorBootstrap = jest.fn();
-const mockSetTorEnabled = jest.fn();
-
+// Tracks the value, so the real "skip when nothing moves" guard in
+// setNostrBlocked is exercised rather than bypassed by a mock that always
+// reports undefined and therefore always looks like a change.
+let mockNostrBlocked = false;
+const mockSetNostrBlockedByTor = jest.fn((next: boolean) => {
+  mockNostrBlocked = next;
+});
+const mockRestartNostr = jest.fn();
+const mockUseWebSocketImplementation = jest.fn();
 let mockTorEnabled = false;
-// The gate, as the store would hold it. Read back by writeTorGate, so a
-// re-assert is a no-op here exactly as it is on a device.
-let mockNostrBlockedByTor = false;
-const mockSetNostrBlockedByTor = jest.fn((blocked: boolean) => {
-  mockNostrBlockedByTor = blocked;
+
+// Writes back, the way the real store does. A mock that lets code persist a
+// preference and then read the old value hides exactly the bug this suite is
+// meant to catch: the enable path sets torEnabled before awaiting the bootstrap
+// and re-reads it afterwards to confirm the user still wants Tor.
+const mockSetTorEnabled = jest.fn((next: boolean) => {
+  mockTorEnabled = next;
 });
 
-// The two VPN listeners the module registers, so a test can fire the edges the
-// framework would.
-let vpnLostListener: (() => void) | null = null;
-let vpnAvailableListener: (() => void) | null = null;
+let torStatusListener: ((s: unknown) => void) | null = null;
+const mockRemoveListener = jest.fn();
 
 jest.mock("react-native", () => ({
   Platform: { OS: "android" },
@@ -45,44 +63,37 @@ jest.mock("react-native", () => ({
 }));
 
 jest.mock("nostr-tools/pool", () => ({
-  useWebSocketImplementation: jest.fn(),
+  useWebSocketImplementation: (impl: unknown) =>
+    mockUseWebSocketImplementation(impl),
 }));
 
-// Delegating wrappers rather than the mocks themselves: this factory runs when
-// tor-routing is first imported, and imports are hoisted above the `const`
-// declarations above, so referencing them directly would capture `undefined`.
+// Bare, and that is the assertion rather than a shortcut. The BLE module used to
+// carry Orbot detection and the VPN watch; nothing in the Tor path may reach for
+// it now, and a `default: {}` that never gets called is how this file proves it.
 jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
-  default: {
-    getTorProxyPort: () => mockGetTorProxyPort(),
-    getTorAvailability: () => mockGetTorAvailability(),
-    startVpnWatch: () => mockStartVpnWatch(),
-    stopVpnWatch: () => mockStopVpnWatch(),
-  },
-  subscribeVpnLost: (fn: () => void) => {
-    vpnLostListener = fn;
-    return {
-      remove: () => {
-        vpnLostListener = null;
-      },
-    };
-  },
-  subscribeVpnAvailable: (fn: () => void) => {
-    vpnAvailableListener = fn;
-    return {
-      remove: () => {
-        vpnAvailableListener = null;
-      },
-    };
-  },
+  default: {},
 }));
 
-// Android has no embedded Arti yet, which is what this module must cope with.
 jest.mock("@bridge/NativeAirhopTor", () => ({
   __esModule: true,
-  default: null,
+  default: {
+    startTor: () => mockStartTor(),
+    stopTor: () => mockStopTor(),
+    getTorStatus: () => mockGetTorStatus(),
+    awaitTorReady: (s: number) => mockAwaitTorReady(s),
+    setAppForeground: (f: boolean) => mockSetAppForeground(f),
+    addListener: jest.fn(),
+    removeListeners: jest.fn(),
+  },
+  subscribeTorStatus: (fn: (s: unknown) => void) => {
+    torStatusListener = fn;
+    return { remove: mockRemoveListener };
+  },
 }));
 
+// Absent, as it is in every Android build. The per-socket shim is an iOS
+// workaround and there is nothing here for it to attach to.
 jest.mock("@bridge/NativeAirhopTorSocket", () => ({
   __esModule: true,
   isTorSocketNativeAvailable: () => false,
@@ -99,10 +110,10 @@ jest.mock("@store/mesh-state-store", () => ({
     getState: () => ({
       setTorActive: mockSetTorActive,
       setTorBootstrap: mockSetTorBootstrap,
-      get nostrBlockedByTor() {
-        return mockNostrBlockedByTor;
-      },
       setNostrBlockedByTor: mockSetNostrBlockedByTor,
+      get nostrBlockedByTor() {
+        return mockNostrBlocked;
+      },
     }),
   },
 }));
@@ -113,491 +124,313 @@ jest.mock("@store/settings-store", () => ({
       get torEnabled() {
         return mockTorEnabled;
       },
-      // Writes through, unlike a bare spy: the watch is bound to this
-      // preference and every probe re-checks it before writing, so a setter
-      // that only records calls would leave the module reasoning about a state
-      // no device is ever in.
-      setTorEnabled: (next: boolean) => {
-        mockTorEnabled = next;
-        mockSetTorEnabled(next);
-      },
+      setTorEnabled: mockSetTorEnabled,
     }),
   },
 }));
 
-// Imported after the jest.mock calls on purpose: the module under test reads
-// Platform.OS and the bridge modules at import time, so the mocks have to be
-// registered first.
-
 import {
   isTorRoutingActive,
+  notifyTorAppForeground,
   primeTorRoutingOnStartup,
   revalidateTorRouting,
   setTorRouting,
 } from "../tor-routing";
 
-// primeTorRoutingOnStartup is deliberately fire-and-forget: the mesh has not
-// started yet, so it kicks the probe and returns. Give the chain a full turn of
-// the event loop rather than counting microtasks, which is brittle. The VPN
-// edges are the same shape, since the listener void-s an async probe.
-function settle(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-// Put the device in a named state. `port` is what a real TCP probe of Orbot's
-// SOCKS port would return: 9050 when Orbot's Tor daemon is listening, 0 when
-// nothing answers.
-function device(options: {
-  port: number;
-  orbotInstalled: boolean;
-  vpnActive: boolean;
-}): void {
-  mockStartVpnWatch.mockResolvedValue(undefined);
-  mockStopVpnWatch.mockResolvedValue(undefined);
-  mockGetTorProxyPort.mockResolvedValue(options.port);
-  mockGetTorAvailability.mockResolvedValue({
-    orbotInstalled: options.orbotInstalled,
-    vpnActive: options.vpnActive,
-  });
-}
-
-const ORBOT_ROUTING = { port: 9050, orbotInstalled: true, vpnActive: true };
-const ORBOT_STOPPED = { port: 0, orbotInstalled: true, vpnActive: false };
-
-// Whether the transport is allowed to exist, as mesh-service would read it.
-function transportBlocked(): boolean {
-  return mockNostrBlockedByTor;
+function status(over: Partial<{ isReady: boolean; isStarting: boolean }> = {}) {
+  return {
+    isReady: false,
+    isStarting: false,
+    port: 0,
+    progress: 0,
+    bootstrapSummary: "",
+    ...over,
+  };
 }
 
 beforeEach(async () => {
   jest.clearAllMocks();
   mockTorEnabled = false;
-  mockNostrBlockedByTor = false;
-  vpnLostListener = null;
-  vpnAvailableListener = null;
-  // Land on a known-off state without asserting on the teardown itself.
-  device({ port: 0, orbotInstalled: false, vpnActive: false });
+  mockNostrBlocked = false;
+  mockStartTor.mockResolvedValue(undefined);
+  mockStopTor.mockResolvedValue(undefined);
+  mockAwaitTorReady.mockResolvedValue(true);
+  // Resolves rather than returning undefined, because a @ReactMethod taking a
+  // Promise always hands JS a promise back. A mock that returns undefined would
+  // make the caller's `.catch` look unsafe when it is not.
+  mockSetAppForeground.mockResolvedValue(undefined);
+  mockGetTorStatus.mockResolvedValue(status({ isReady: true }));
+  // Land every test on a known-off baseline.
   await setTorRouting(false);
+  torStatusListener = null;
   jest.clearAllMocks();
 });
 
+function emitStatus(over: Partial<{ isReady: boolean; isStarting: boolean }>) {
+  torStatusListener?.(status(over));
+}
+
 describe("enabling Tor on Android", () => {
-  // The reported bug, verbatim.
-  it("refuses when Orbot is installed but idle beside an unrelated VPN", async () => {
-    device({ port: 0, orbotInstalled: true, vpnActive: true });
-
-    const result = await setTorRouting(true);
-
-    expect(result).toEqual({ ok: false, reason: "orbot-inactive" });
-    expect(isTorRoutingActive()).toBe(false);
-    expect(mockSetTorEnabled).not.toHaveBeenCalledWith(true);
-    expect(mockRestartNostr).not.toHaveBeenCalled();
-  });
-
-  it("refuses when Orbot is not installed at all", async () => {
-    device({ port: 0, orbotInstalled: false, vpnActive: false });
-
-    const result = await setTorRouting(true);
-
-    expect(result).toEqual({ ok: false, reason: "orbot-missing" });
-    expect(isTorRoutingActive()).toBe(false);
-  });
-
-  // Tor running but nothing captured is just as much a false claim: Orbot's
-  // daemon is up, but without the VPN transport no app traffic reaches it.
-  it("refuses when Tor is listening but no VPN is capturing traffic", async () => {
-    device({ port: 9050, orbotInstalled: true, vpnActive: false });
-
-    const result = await setTorRouting(true);
-
-    expect(result).toEqual({ ok: false, reason: "orbot-inactive" });
-    expect(isTorRoutingActive()).toBe(false);
-  });
-
-  // A refusal is not the blocked state. Nothing the user was relying on stops:
-  // the sheet offers the install or the nudge to start Orbot, and the internet
-  // half keeps working meanwhile, because they never got the protection to lose.
-  it("leaves the transport alone when it refuses", async () => {
-    device({ port: 0, orbotInstalled: true, vpnActive: true });
-
-    await setTorRouting(true);
-
-    expect(transportBlocked()).toBe(false);
-    expect(mockRestartNostr).not.toHaveBeenCalled();
-  });
-
-  it("enables only when the proxy answers and a VPN is up", async () => {
-    device(ORBOT_ROUTING);
-
+  test("starts the embedded client and claims only once it is ready", async () => {
     const result = await setTorRouting(true);
 
     expect(result).toEqual({ ok: true });
-    expect(isTorRoutingActive()).toBe(true);
-    expect(mockSetTorActive).toHaveBeenCalledWith(true);
+    expect(mockStartTor).toHaveBeenCalledTimes(1);
     expect(mockSetTorEnabled).toHaveBeenCalledWith(true);
-    expect(transportBlocked()).toBe(false);
+    expect(mockSetTorActive).toHaveBeenLastCalledWith(true);
+    expect(isTorRoutingActive()).toBe(true);
+  });
+
+  test("rebuilds the Nostr transport so relays reconnect over Tor", async () => {
+    await setTorRouting(true);
     expect(mockRestartNostr).toHaveBeenCalled();
   });
 
-  // Enabling rebuilds once, not twice. The gate writer and the toggle both used
-  // to reach for restartNostr, and the second call dropped every relay socket
-  // the first had just re-opened.
-  it("rebuilds the transport exactly once", async () => {
-    device(ORBOT_ROUTING);
+  test("never swaps the WebSocket implementation", async () => {
+    // The whole point of the Android design. A shim here would replace working
+    // relay sockets with ones dialling a native module that does not exist.
+    await setTorRouting(true);
+    expect(mockUseWebSocketImplementation).not.toHaveBeenCalled();
+  });
+
+  test("persists the preference before awaiting the circuit", async () => {
+    // A relaunch during a slow bootstrap has to come back on Tor, not on the
+    // clear net, so the preference cannot wait for readiness.
+    let enabledWhenAwaited = false;
+    mockAwaitTorReady.mockImplementation(async () => {
+      enabledWhenAwaited = mockTorEnabled;
+      return true;
+    });
 
     await setTorRouting(true);
 
-    expect(mockRestartNostr).toHaveBeenCalledTimes(1);
+    expect(enabledWhenAwaited).toBe(true);
   });
 
-  // A rejecting native module must read as "not routing", never as "routing".
-  it("treats a native failure as not routing", async () => {
-    mockGetTorProxyPort.mockRejectedValue(new Error("bridge is gone"));
-    mockGetTorAvailability.mockRejectedValue(new Error("bridge is gone"));
+  test("a bootstrap that runs out its deadline is reported, not undone", async () => {
+    mockAwaitTorReady.mockResolvedValue(false);
 
     const result = await setTorRouting(true);
 
-    expect(result.ok).toBe(false);
-    expect(isTorRoutingActive()).toBe(false);
-  });
-});
-
-describe("Orbot going away mid-session", () => {
-  async function enableThenLoseOrbot(): Promise<void> {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    jest.clearAllMocks();
-    device(ORBOT_STOPPED);
-    vpnLostListener?.();
-    await settle();
-  }
-
-  it("stands the claim down", async () => {
-    await enableThenLoseOrbot();
-
-    expect(isTorRoutingActive()).toBe(false);
-    expect(mockSetTorActive).toHaveBeenCalledWith(false);
-  });
-
-  // The whole point: with the sockets left open, the traffic a user turned Tor
-  // on to protect keeps leaving the phone, just without an indicator saying so.
-  it("takes the Nostr transport down with it", async () => {
-    await enableThenLoseOrbot();
-
-    expect(transportBlocked()).toBe(true);
-    expect(mockRestartNostr).toHaveBeenCalled();
-  });
-
-  it("says why, rather than going quiet", async () => {
-    await enableThenLoseOrbot();
-
-    expect(mockSetTorBootstrap).toHaveBeenLastCalledWith("blocked");
-  });
-
-  // The preference is the user's intent; Orbot stopping is a fact about the
-  // world, not a decision they made. Clearing it reverts them to the clear net
-  // and leaves them to notice.
-  it("keeps the preference on, so the next launch retries", async () => {
-    await enableThenLoseOrbot();
-
+    expect(result).toEqual({ ok: false, reason: "timeout" });
+    // Deliberately still running and still routed. The circuit may yet land, and
+    // reverting would put the user back on the clear net they just left.
+    expect(mockStopTor).not.toHaveBeenCalled();
     expect(mockSetTorEnabled).not.toHaveBeenCalledWith(false);
-    expect(mockTorEnabled).toBe(true);
+    expect(isTorRoutingActive()).toBe(false);
   });
 
-  // Bound to the claim, the watch is torn down at the moment it becomes
-  // load-bearing and nothing can report Orbot coming back.
-  it("keeps watching the VPN through the blocked state", async () => {
-    await enableThenLoseOrbot();
+  test("a client that fails to start unwinds completely", async () => {
+    mockStartTor.mockRejectedValue(new Error("no"));
 
-    expect(mockStopVpnWatch).not.toHaveBeenCalled();
-    expect(vpnAvailableListener).not.toBeNull();
+    const result = await setTorRouting(true);
+
+    expect(result).toEqual({ ok: false, reason: "error" });
+    expect(mockStopTor).toHaveBeenCalled();
+    expect(mockSetTorEnabled).toHaveBeenLastCalledWith(false);
+    expect(isTorRoutingActive()).toBe(false);
   });
 
-  // A corporate or commercial VPN dropping is not Orbot dropping. The event is
-  // a prompt to re-probe, never a conclusion.
-  it("ignores an unrelated VPN dropping while Orbot still routes", async () => {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    jest.clearAllMocks();
+  test("consent withdrawn during the bootstrap is not overridden", async () => {
+    // Sixty seconds is long enough to toggle Tor back off, or to panic wipe. An
+    // enable resolving afterwards must not assert routing over sockets that are
+    // back on the clear net.
+    mockAwaitTorReady.mockImplementation(async () => {
+      mockTorEnabled = false;
+      return true;
+    });
 
-    vpnLostListener?.();
-    await settle();
+    const result = await setTorRouting(true);
 
-    expect(isTorRoutingActive()).toBe(true);
-    expect(transportBlocked()).toBe(false);
-    expect(mockRestartNostr).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false, reason: "error" });
+    expect(isTorRoutingActive()).toBe(false);
   });
 });
 
-describe("Orbot coming back", () => {
-  async function blocked(): Promise<void> {
-    device(ORBOT_ROUTING);
+describe("disabling Tor on Android", () => {
+  test("stops the client, clears the claim and rebuilds the transport", async () => {
     await setTorRouting(true);
-    device(ORBOT_STOPPED);
-    vpnLostListener?.();
-    await settle();
     jest.clearAllMocks();
-  }
-
-  // The recovery a user gets without leaving Airhop: Orbot is stopped and
-  // started again from its own notification shade, so app foreground never
-  // fires and the arrival edge is the only signal there is.
-  it("restores the claim and the transport on the VPN arrival edge", async () => {
-    await blocked();
-    device(ORBOT_ROUTING);
-
-    vpnAvailableListener?.();
-    await settle();
-
-    expect(isTorRoutingActive()).toBe(true);
-    expect(transportBlocked()).toBe(false);
-    expect(mockRestartNostr).toHaveBeenCalled();
-    expect(mockSetTorBootstrap).toHaveBeenLastCalledWith("idle");
-  });
-
-  // Any VPN raises the edge. One that is not Orbot must leave the gate shut.
-  it("stays blocked when the VPN that arrived is not Orbot", async () => {
-    await blocked();
-    device({ port: 0, orbotInstalled: true, vpnActive: true });
-
-    vpnAvailableListener?.();
-    await settle();
-
-    expect(isTorRoutingActive()).toBe(false);
-    expect(transportBlocked()).toBe(true);
-    expect(mockRestartNostr).not.toHaveBeenCalled();
-  });
-
-  // The other way out, and the one that matters when Orbot has been
-  // uninstalled for good: turning Tor off releases the transport at once rather
-  // than leaving the user with a permanently paused internet half.
-  it("releases the transport when the user turns Tor off instead", async () => {
-    await blocked();
-    device({ port: 0, orbotInstalled: false, vpnActive: false });
 
     await setTorRouting(false);
 
-    expect(transportBlocked()).toBe(false);
-    expect(isTorRoutingActive()).toBe(false);
+    expect(mockStopTor).toHaveBeenCalledTimes(1);
+    expect(mockSetTorEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetTorActive).toHaveBeenLastCalledWith(false);
     expect(mockRestartNostr).toHaveBeenCalled();
-    expect(mockStopVpnWatch).toHaveBeenCalled();
-  });
-
-  // App foreground has to work as well as the edges, because a native binary
-  // older than the arrival event emits nothing and this is all it has.
-  it("recovers on an app foreground even with no edge", async () => {
-    await blocked();
-    device(ORBOT_ROUTING);
-
-    await revalidateTorRouting();
-
-    expect(isTorRoutingActive()).toBe(true);
-    expect(transportBlocked()).toBe(false);
-  });
-});
-
-describe("revalidating mid-session", () => {
-  it("blocks when the proxy disappears", async () => {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    expect(isTorRoutingActive()).toBe(true);
-    jest.clearAllMocks();
-
-    // The user switched to Orbot and stopped it, then came back.
-    device({ port: 0, orbotInstalled: true, vpnActive: true });
-    await revalidateTorRouting();
-
     expect(isTorRoutingActive()).toBe(false);
-    expect(mockSetTorActive).toHaveBeenCalledWith(false);
-    expect(transportBlocked()).toBe(true);
   });
 
-  it("leaves a healthy session alone", async () => {
-    device(ORBOT_ROUTING);
+  test("lowers the preference before stopping the client", async () => {
+    // Anything still racing has to see consent withdrawn and stand down rather
+    // than writing over the disable.
     await setTorRouting(true);
-    jest.clearAllMocks();
+    let enabledWhenStopped = true;
+    mockStopTor.mockImplementation(async () => {
+      enabledWhenStopped = mockTorEnabled;
+    });
 
-    await revalidateTorRouting();
+    await setTorRouting(false);
 
-    expect(isTorRoutingActive()).toBe(true);
-    expect(transportBlocked()).toBe(false);
-    expect(mockRestartNostr).not.toHaveBeenCalled();
-  });
-
-  it("does nothing when Tor was never on, without probing", async () => {
-    await revalidateTorRouting();
-
-    expect(mockGetTorProxyPort).not.toHaveBeenCalled();
-    expect(mockSetTorActive).not.toHaveBeenCalled();
-    expect(transportBlocked()).toBe(false);
+    expect(enabledWhenStopped).toBe(false);
   });
 });
 
-describe("priming the persisted preference at startup", () => {
-  // The window this closes: the probe takes up to half a second, and assuming
-  // Tor is routing for that half second is a clear-net window in the one state
-  // that must not have one. The mesh has not started yet, so a shut gate simply
-  // means it builds no transport until the probe says it may.
-  it("shuts the gate synchronously, before the probe answers", () => {
-    mockTorEnabled = true;
-    device(ORBOT_ROUTING);
-
+describe("startup priming on Android", () => {
+  test("does nothing when the preference is off", () => {
+    mockTorEnabled = false;
     primeTorRoutingOnStartup();
-
-    expect(transportBlocked()).toBe(true);
-    expect(mockSetTorBootstrap).toHaveBeenCalledWith("starting");
+    expect(mockStartTor).not.toHaveBeenCalled();
   });
 
-  it("opens it once the probe confirms Orbot is routing", async () => {
+  test("starts the client but does not claim routing yet", () => {
     mockTorEnabled = true;
-    device(ORBOT_ROUTING);
 
     primeTorRoutingOnStartup();
-    await settle();
+
+    expect(mockStartTor).toHaveBeenCalledTimes(1);
+    expect(mockSetTorBootstrap).toHaveBeenCalledWith("starting");
+    // The claim drives the "internet traffic onion routed" banner. Asserting it
+    // here would assert it before a single circuit existed, and on a network
+    // that blocks Tor it would stay green for the whole session.
+    expect(mockSetTorActive).not.toHaveBeenCalledWith(true);
+    expect(isTorRoutingActive()).toBe(false);
+  });
+
+  test("raises the claim only when Arti reports it is ready", () => {
+    mockTorEnabled = true;
+    primeTorRoutingOnStartup();
+
+    emitStatus({ isReady: true });
+
+    expect(mockSetTorActive).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("bootstrap reporting on Android", () => {
+  test("a network that blocks Tor is reported as blocked, not as starting", () => {
+    mockTorEnabled = true;
+    primeTorRoutingOnStartup();
+    jest.clearAllMocks();
+
+    // Neither ready nor starting, with the preference on, is Arti saying it has
+    // given up. Without this the banner says "starting" forever and the user
+    // cannot tell a slow network from a censoring one.
+    emitStatus({ isReady: false, isStarting: false });
+
+    expect(mockSetTorBootstrap).toHaveBeenCalledWith("blocked");
+    expect(mockSetTorActive).toHaveBeenCalledWith(false);
+  });
+
+  test("a bootstrap still in progress stays starting", () => {
+    mockTorEnabled = true;
+    primeTorRoutingOnStartup();
+    jest.clearAllMocks();
+
+    emitStatus({ isStarting: true });
+
+    expect(mockSetTorBootstrap).toHaveBeenCalledWith("starting");
+    expect(mockSetTorActive).not.toHaveBeenCalledWith(true);
+  });
+
+  test("a stall that resolves itself raises the claim", () => {
+    mockTorEnabled = true;
+    primeTorRoutingOnStartup();
+    emitStatus({ isReady: false, isStarting: false });
+    jest.clearAllMocks();
+
+    emitStatus({ isReady: true });
+
+    expect(mockSetTorActive).toHaveBeenCalledWith(true);
+    expect(mockSetTorBootstrap).toHaveBeenCalledWith("idle");
+  });
+
+  test("a status arriving after Tor is switched off claims nothing", () => {
+    mockTorEnabled = true;
+    primeTorRoutingOnStartup();
+    mockTorEnabled = false;
+    jest.clearAllMocks();
+
+    emitStatus({ isReady: true });
+
+    expect(mockSetTorActive).not.toHaveBeenCalledWith(true);
+  });
+});
+
+describe("revalidating on Android", () => {
+  test("does nothing while the preference is off", async () => {
+    mockTorEnabled = false;
+    await revalidateTorRouting();
+    expect(mockGetTorStatus).not.toHaveBeenCalled();
+  });
+
+  test("a client that is still ready keeps the claim", async () => {
+    mockTorEnabled = true;
+    mockGetTorStatus.mockResolvedValue(status({ isReady: true }));
+
+    await revalidateTorRouting();
 
     expect(mockSetTorActive).toHaveBeenLastCalledWith(true);
-    expect(transportBlocked()).toBe(false);
   });
 
-  // Relaunching after Orbot was uninstalled: the claim stays down and so does
-  // the transport. Clearing the preference here would reopen the internet half
-  // on the clear net without saying so.
-  it("stays blocked when nothing is routing, keeping the preference", async () => {
+  test("a client that stopped being ready stands the claim down", async () => {
+    // Guarded on the preference rather than the claim, so this still runs while
+    // the claim is already false. Otherwise foreground becomes the one trigger
+    // that can never recover a session.
     mockTorEnabled = true;
-    device({ port: 0, orbotInstalled: false, vpnActive: false });
+    mockGetTorStatus.mockResolvedValue(
+      status({ isReady: false, isStarting: false }),
+    );
 
-    primeTorRoutingOnStartup();
-    await settle();
+    await revalidateTorRouting();
 
     expect(mockSetTorActive).toHaveBeenLastCalledWith(false);
     expect(mockSetTorBootstrap).toHaveBeenLastCalledWith("blocked");
-    expect(transportBlocked()).toBe(true);
-    expect(mockSetTorEnabled).not.toHaveBeenCalledWith(false);
   });
 
-  // Orbot finishing its own start during ours: a phone that launches both at
-  // once. The watch goes up before the probe precisely so this lands as a
-  // recovery rather than a wait for the next foreground.
-  it("recovers when Orbot finishes starting after the probe", async () => {
+  test("a bootstrap in progress is left alone", async () => {
+    // Normal for the first seconds after a cold start. Standing the claim down
+    // here would flicker the banner on every launch.
     mockTorEnabled = true;
-    device({ port: 0, orbotInstalled: true, vpnActive: false });
+    mockGetTorStatus.mockResolvedValue(status({ isStarting: true }));
 
-    primeTorRoutingOnStartup();
-    await settle();
-    expect(transportBlocked()).toBe(true);
-
-    device(ORBOT_ROUTING);
-    vpnAvailableListener?.();
-    await settle();
-
-    expect(isTorRoutingActive()).toBe(true);
-    expect(transportBlocked()).toBe(false);
-  });
-
-  it("does nothing at all when Tor is off", () => {
-    mockTorEnabled = false;
-
-    primeTorRoutingOnStartup();
-
-    expect(transportBlocked()).toBe(false);
-    expect(mockStartVpnWatch).not.toHaveBeenCalled();
-  });
-});
-
-// A drop, an arrival and a foreground can land inside one another, and each
-// probe takes up to the native 500 ms connect timeout, so answers can come back
-// out of order. A stale "not routing" must never close the gate over a session
-// that has already recovered.
-describe("overlapping probes", () => {
-  it("lets the newest answer win, whichever resolves first", async () => {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    jest.clearAllMocks();
-
-    // A slow probe that will report Orbot gone...
-    let releaseStale: (port: number) => void = () => {};
-    mockGetTorProxyPort.mockReturnValueOnce(
-      new Promise<number>((resolve) => {
-        releaseStale = resolve;
-      }),
-    );
-    mockGetTorAvailability.mockResolvedValue({
-      orbotInstalled: true,
-      vpnActive: true,
-    });
-    vpnLostListener?.();
-
-    // ...overtaken by a fresh one that finds it routing.
-    device(ORBOT_ROUTING);
-    vpnAvailableListener?.();
-    await settle();
-
-    // The stale probe now answers "gone". It must not be believed.
-    releaseStale(0);
-    await settle();
-
-    expect(isTorRoutingActive()).toBe(true);
-    expect(transportBlocked()).toBe(false);
-  });
-
-  // Consent can move while a probe is in flight - a toggle off, or a panic
-  // wipe. An answer about a question nobody is asking any more must not hold
-  // the transport down.
-  it("does not block on an answer that lands after Tor is switched off", async () => {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    jest.clearAllMocks();
-
-    let releaseProbe: (port: number) => void = () => {};
-    mockGetTorProxyPort.mockReturnValueOnce(
-      new Promise<number>((resolve) => {
-        releaseProbe = resolve;
-      }),
-    );
-    vpnLostListener?.();
-
-    await setTorRouting(false);
-    releaseProbe(0);
-    await settle();
-
-    expect(transportBlocked()).toBe(false);
-  });
-});
-
-// The watch has to be live for exactly as long as the user is ASKING for Tor,
-// which is a longer window than the claim: it spans the blocked state, where
-// the arrival edge is the only thing that can recover the session.
-describe("the VPN watch tracks the preference", () => {
-  it("starts watching when Tor actually comes on", async () => {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    expect(mockStartVpnWatch).toHaveBeenCalled();
-  });
-
-  it("does not watch when Tor was refused", async () => {
-    device({ port: 0, orbotInstalled: true, vpnActive: true });
-    await setTorRouting(true);
-    expect(mockStartVpnWatch).not.toHaveBeenCalled();
-  });
-
-  it("stops watching when Tor is turned off", async () => {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    jest.clearAllMocks();
-    device({ port: 0, orbotInstalled: false, vpnActive: false });
-    await setTorRouting(false);
-    expect(mockStopVpnWatch).toHaveBeenCalled();
-    expect(vpnLostListener).toBeNull();
-    expect(vpnAvailableListener).toBeNull();
-  });
-
-  it("keeps watching when a revalidation finds Tor gone", async () => {
-    device(ORBOT_ROUTING);
-    await setTorRouting(true);
-    jest.clearAllMocks();
-    device(ORBOT_STOPPED);
     await revalidateTorRouting();
-    expect(mockStopVpnWatch).not.toHaveBeenCalled();
-    expect(mockSetTorActive).toHaveBeenCalledWith(false);
+
+    expect(mockSetTorBootstrap).toHaveBeenLastCalledWith("starting");
+    expect(mockSetTorActive).not.toHaveBeenCalledWith(false);
+  });
+
+  test("a module that errors is treated as not routing", async () => {
+    mockTorEnabled = true;
+    mockGetTorStatus.mockRejectedValue(new Error("gone"));
+
+    await revalidateTorRouting();
+
+    expect(mockSetTorActive).toHaveBeenLastCalledWith(false);
+  });
+
+  test("never reaches for the BLE module", async () => {
+    // The old Android path probed a SOCKS port and counted VPN transports
+    // through AirhopBLE. If anything still did, the bare mock above would throw.
+    mockTorEnabled = true;
+    await expect(revalidateTorRouting()).resolves.toBeUndefined();
+  });
+});
+
+describe("app foreground on Android", () => {
+  test("both edges reach the native client", () => {
+    // Dormancy, not a stop. Android keeps the process alive through the
+    // foreground service, so without this a backgrounded Airhop keeps a
+    // consensus fresh all day on a battery.
+    notifyTorAppForeground(false);
+    expect(mockSetAppForeground).toHaveBeenCalledWith(false);
+
+    notifyTorAppForeground(true);
+    expect(mockSetAppForeground).toHaveBeenCalledWith(true);
+  });
+
+  test("is safe to call with Tor off", () => {
+    mockTorEnabled = false;
+    expect(() => notifyTorAppForeground(false)).not.toThrow();
   });
 });

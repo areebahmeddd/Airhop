@@ -34,6 +34,13 @@ const mockStopTor = jest.fn<Promise<void>, []>();
 const mockAwaitTorReady = jest.fn<Promise<boolean>, [number]>();
 const mockSetTorActive = jest.fn();
 const mockSetTorBootstrap = jest.fn();
+// Tracks the value, so the real "skip when nothing moves" guard in
+// setNostrBlocked is exercised rather than bypassed by a mock that always
+// reports undefined and therefore always looks like a change.
+let mockNostrBlocked = false;
+const mockSetNostrBlockedByTor = jest.fn((next: boolean) => {
+  mockNostrBlocked = next;
+});
 let mockTorEnabled = false;
 
 // Writes back, the way the real store does. A mock that lets code persist a
@@ -106,6 +113,10 @@ jest.mock("@store/mesh-state-store", () => ({
     getState: () => ({
       setTorActive: mockSetTorActive,
       setTorBootstrap: mockSetTorBootstrap,
+      setNostrBlockedByTor: mockSetNostrBlockedByTor,
+      get nostrBlockedByTor() {
+        return mockNostrBlocked;
+      },
     }),
   },
 }));
@@ -143,6 +154,7 @@ function status(over: Partial<{ isReady: boolean; isStarting: boolean }> = {}) {
 beforeEach(async () => {
   jest.clearAllMocks();
   mockTorEnabled = false;
+  mockNostrBlocked = false;
   mockStartTor.mockResolvedValue(undefined);
   mockStopTor.mockResolvedValue(undefined);
   mockGetTorStatus.mockResolvedValue(status({ isReady: true }));

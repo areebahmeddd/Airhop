@@ -80,11 +80,6 @@ export interface BleNativeModule {
   openLocationSettings(): Promise<boolean>;
   setBackgroundServiceEnabled(enabled: boolean): Promise<void>;
   setPowerMode(mode: string): Promise<void>;
-  getTorProxyPort(): Promise<number>;
-  getTorAvailability(): Promise<{
-    orbotInstalled: boolean;
-    vpnActive: boolean;
-  }>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }
@@ -426,17 +421,6 @@ export class AndroidBleModule implements BleNativeModule {
       return;
     }
     return rejectWith("UNKNOWN_LINK", `No active link with ID ${linkID}`);
-  }
-
-  async getTorProxyPort(): Promise<number> {
-    return 0;
-  }
-
-  async getTorAvailability(): Promise<{
-    orbotInstalled: boolean;
-    vpnActive: boolean;
-  }> {
-    return { orbotInstalled: false, vpnActive: false };
   }
 
   addListener(): void {
