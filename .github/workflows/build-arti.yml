@@ -1,0 +1,216 @@
+name: Build Arti Libraries
+
+# Rebuilds the embedded Tor client for every platform and commits the result.
+#
+# The binaries in `android/app/src/main/jniLibs/` and `ios/Frameworks/` are
+# compiled from `native/arti/`, not vendored from anyone. They are committed
+# rather than built on every CI run, because a full Arti build takes the better
+# part of an hour per platform and the source changes a few times a year.
+#
+# This workflow is how they get rebuilt without owning both a Linux machine and
+# a Mac. Neither half can produce the other's: Apple static libraries need
+# `lipo` and `xcodebuild`, which exist only on macOS, and the Android build runs
+# in a pinned Linux container so its output does not depend on whose machine it
+# was made on.
+#
+# Manual only. Run it after changing anything under `native/arti/`, which in
+# practice means bumping Arti.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    name: Build Android libraries
+    runs-on: ubuntu-24.04
+    # The container build downloads the NDK and compiles Arti three times.
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Everything that decides these bytes is pinned inside the container: the
+      # base image by digest, Debian by snapshot, the NDK by checksum, and Rust
+      # and cargo-ndk by version. The runner contributes only Docker.
+      #
+      # Verifies its own output before returning: the exported JNI symbols, 16
+      # KiB page alignment on the 64-bit ABIs, and that no build-machine path
+      # survived into a shipped library.
+      - name: Build in the pinned container
+        run: native/arti/build-in-container.sh --clean
+
+      - name: Upload Android libraries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: arti-android
+          # Two trees, so the artifact is rooted at the workspace and mirrors the
+          # repository layout. The commit job can then copy it back verbatim.
+          path: |
+            android/app/src/main/jniLibs/*/libarti_airhop.so
+            native/arti/SHA256SUMS.android
+          if-no-files-found: error
+
+  apple:
+    name: Build Apple xcframework
+    runs-on: macos-26
+    # Five architecture slices, each a full Arti build under fat LTO.
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read pinned toolchain
+        id: toolchain
+        run: |
+          set -euo pipefail
+          source native/arti/TOOLCHAIN.env
+          echo "rust=$RUST_VERSION" >> "$GITHUB_OUTPUT"
+
+      # The exact compiler TOOLCHAIN.env names, not whatever the image ships.
+      # build-apple.sh refuses to run against any other, which is the point of
+      # recording it.
+      - name: Set up Rust and Apple targets
+        env:
+          RUST_VERSION: ${{ steps.toolchain.outputs.rust }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup default "$RUST_VERSION"
+          rustup target add \
+            aarch64-apple-ios \
+            aarch64-apple-ios-sim \
+            x86_64-apple-ios \
+            aarch64-apple-darwin \
+            x86_64-apple-darwin
+          cargo install cbindgen --locked
+
+      # Xcode is the one build input this workflow cannot pin, since it comes
+      # with the runner image. Recorded so a binary can be traced to the
+      # toolchain that made it.
+      - name: Record the Xcode version
+        run: |
+          set -euo pipefail
+          {
+            echo "### Apple build environment"
+            echo
+            echo "- $(xcodebuild -version | head -1)"
+            echo "- Rust: \`$(rustc --version)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Generates the header first, so a cbindgen misconfiguration fails in
+      # seconds rather than after an hour of cross-compiling. Verifies the
+      # exported symbols in every slice before it finishes.
+      - name: Build the xcframework
+        run: native/arti/build-apple.sh --clean
+
+      - name: Upload Apple xcframework
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: arti-apple
+          path: |
+            ios/Frameworks/arti.xcframework/**
+            native/arti/SHA256SUMS.apple
+          if-no-files-found: error
+
+  commit:
+    name: Commit rebuilt libraries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [android, apple]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download rebuilt libraries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/arti
+
+      # Both artifacts are rooted at the workspace, so this is a copy rather than
+      # a mapping. Asserted afterwards rather than trusted: an artifact whose
+      # shape changed would otherwise commit a tree with the old binaries still
+      # in it and nothing would say so.
+      - name: Place rebuilt libraries
+        run: |
+          set -euo pipefail
+          cp -R "$RUNNER_TEMP/arti/arti-android/." .
+          cp -R "$RUNNER_TEMP/arti/arti-apple/." .
+
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            lib="android/app/src/main/jniLibs/$abi/libarti_airhop.so"
+            [ -s "$lib" ] || { echo "::error::missing $lib"; exit 1; }
+          done
+          slices=$(find ios/Frameworks/arti.xcframework -name '*.a' | wc -l)
+          [ "$slices" -eq 3 ] || { echo "::error::expected 3 xcframework slices, found $slices"; exit 1; }
+
+      # Staged before hashing, because verify-vendored.js reads the files git
+      # knows about. A freshly built binary that has never been added is
+      # invisible to it, and the manifest would silently omit it.
+      - name: Record hashes
+        run: |
+          set -euo pipefail
+          git add android/app/src/main/jniLibs ios/Frameworks
+          node scripts/verify-vendored.js --write
+          git add vendor.lock.json native/arti/SHA256SUMS.android native/arti/SHA256SUMS.apple
+          node scripts/verify-vendored.js
+
+      - name: Check for changes
+        id: changes
+        run: |
+          set -euo pipefail
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The committed libraries already match this source." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(arti): rebuild the embedded Tor client" \
+            -m "Android in the pinned container on ubuntu, Apple on macOS. Versions and toolchain: native/arti/TOOLCHAIN.env."
+          git push origin "HEAD:$TARGET_REF"
+
+          {
+            echo "### Committed to \`$TARGET_REF\`"
+            echo
+            echo '```'
+            find android/app/src/main/jniLibs -name '*.so' -exec ls -lh {} \; | awk '{ print $5, $9 }'
+            find ios/Frameworks/arti.xcframework -name '*.a' -exec ls -lh {} \; | awk '{ print $5, $9 }'
+            echo '```'
+            echo
+            echo "Pull before continuing locally, and re-run CI on this branch:"
+            echo "a token-pushed commit does not start one."
+            echo
+            echo '```bash'
+            echo "git pull origin $TARGET_REF"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
