@@ -139,11 +139,33 @@ EXPECTED_SYMBOLS=(
 )
 
 info "Verifying exported symbols"
+
+# `-arch all` matters here and its absence is why this check first failed on the
+# macOS slice. Two of the three slices are universal archives, and Apple's nm
+# reads only the host architecture out of a fat file unless told otherwise, so on
+# an arm64 runner an x86_64 member is simply not looked at. Asking for every
+# architecture is both the honest check and the portable one.
+#
+# Errors are no longer sent to /dev/null. An nm that fails outright used to
+# produce an empty symbol list, which reads exactly like a missing symbol and
+# sends you looking for a compiler problem that is not there.
 while IFS= read -r -d '' lib; do
-  symbols="$(nm -gU "$lib" 2>/dev/null || true)"
+  slice="$(basename "$(dirname "$lib")")"
+  if ! symbols="$(nm -gU -arch all "$lib" 2>&1)"; then
+    printf '%s\n' "$symbols" | head -5 >&2
+    fail "$slice: nm could not read the archive"
+  fi
   for symbol in "${EXPECTED_SYMBOLS[@]}"; do
-    grep -q " $symbol\$" <<<"$symbols" || fail "$(basename "$(dirname "$lib")"): missing $symbol"
+    if ! grep -q "[[:space:]]$symbol\$" <<<"$symbols"; then
+      # Say what was actually found. A bare "missing X" gives a reader no way to
+      # tell a renamed symbol from an unreadable file.
+      printf 'Found %s exported symbol(s); airhop ones:\n' \
+        "$(grep -c . <<<"$symbols")" >&2
+      grep "airhop" <<<"$symbols" | head -10 >&2 || echo "  (none)" >&2
+      fail "$slice: missing $symbol"
+    fi
   done
+  info "  $slice: all ${#EXPECTED_SYMBOLS[@]} entry points present"
 done < <(find "$XCFRAMEWORK" -name "$LIB_NAME" -print0)
 
 info "Recording hashes"
