@@ -2,6 +2,13 @@
   "files": {
     "android/app/src/main/jniLibs/arm64-v8a/libarti_airhop.so": "7d307fd1d93d11e931ec96e3061103d83016f0bae3b3f18449c949f800d29cc9",
     "android/app/src/main/jniLibs/armeabi-v7a/libarti_airhop.so": "6dadada0d897873ee09008eb25cb396d2b635a3de6e247b95104af93a507ba32",
-    "android/app/src/main/jniLibs/x86_64/libarti_airhop.so": "c7ae7909b9ae0966d19647e46b0603912e268eaa6fcb64f2490e5a89041353f3"
+    "android/app/src/main/jniLibs/x86_64/libarti_airhop.so": "c7ae7909b9ae0966d19647e46b0603912e268eaa6fcb64f2490e5a89041353f3",
+    "ios/Frameworks/arti.xcframework/Info.plist": "96e68ba592f3e0f2b74671453bdc8536f8ad0be80f7024b213bcfbfca8fec30c",
+    "ios/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h": "fe71f22095dd849f01ab7f22bf9f67ab3e6b21ed3f083e4213b51bcc08dbd536",
+    "ios/Frameworks/arti.xcframework/ios-arm64/libarti_airhop.a": "ded7bffb0a82481a4532c40bff1c03ff99fa011157c579b113b1ce2d79e3a278",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h": "fe71f22095dd849f01ab7f22bf9f67ab3e6b21ed3f083e4213b51bcc08dbd536",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_airhop.a": "a12017d5cecd068db447db577886dc4e555b6f2c637012291b0dea813236ceff",
+    "ios/Frameworks/arti.xcframework/macos-arm64_x86_64/Headers/arti.h": "fe71f22095dd849f01ab7f22bf9f67ab3e6b21ed3f083e4213b51bcc08dbd536",
+    "ios/Frameworks/arti.xcframework/macos-arm64_x86_64/libarti_airhop.a": "9a02f9ffd34b9b8f5edc64d1b136f207c2cb00da381311c6d751dde094b5a71a"
   }
 }
