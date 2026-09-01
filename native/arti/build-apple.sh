@@ -135,6 +135,26 @@ verify_target() {
   info "  $target: all ${#EXPECTED_SYMBOLS[@]} entry points present"
 }
 
+# Strip an archive and rewrite it deterministically.
+#
+# Both halves are load-bearing, and leaving them out is what produced a 259 MB
+# slice where the implementation this replaces produced 15 MB. rustc emits one
+# object per crate carrying its LLVM bitcode and local symbols; nothing links
+# them here, so a staticlib keeps all 791 of them at full size. `strip -x` drops
+# what the app's linker will never need, and it cannot touch the exported entry
+# points because those are global.
+#
+# `libtool -D` is not about size. It rewrites the archive with zeroed timestamps
+# and uids, so building the same source twice gives the same bytes. Without it a
+# rebuild always looks like a change, and SHA256SUMS.apple is worth nothing.
+normalize_archive() {
+  local lib="$1"
+  strip -x "$lib" 2>/dev/null || true
+  local tmp="$lib.normalized"
+  xcrun libtool -static -D -no_warning_for_no_symbols "$lib" -o "$tmp"
+  mv "$tmp" "$lib"
+}
+
 build_target() {
   local target="$1"
   info "Building $target"
@@ -142,6 +162,13 @@ build_target() {
   cargo build --release --locked --target "$target" --manifest-path "$SCRIPT_DIR/Cargo.toml"
   local produced="$SCRIPT_DIR/target/$target/release/$LIB_NAME"
   [ -f "$produced" ] || fail "$target: no $LIB_NAME was produced"
+  local before after
+  before=$(du -m "$produced" | cut -f1)
+  normalize_archive "$produced"
+  after=$(du -m "$produced" | cut -f1)
+  info "  $target: ${before} MB -> ${after} MB"
+  # Verified after stripping, so the check covers what actually ships rather
+  # than an intermediate nobody links.
   verify_target "$target"
 }
 
@@ -168,6 +195,9 @@ merge_slice() {
   local target
   for target in "$@"; do libs+=("$(lib_for "$target")"); done
   lipo -create -output "$out" "${libs[@]}"
+  # lipo writes a fresh archive with its own timestamps, so the determinism the
+  # per-target normalization bought has to be reapplied to the merged one.
+  normalize_archive "$out"
 }
 
 cp "$(lib_for "$DEVICE_TARGET")" "$BUILD_DIR/ios/$LIB_NAME"
