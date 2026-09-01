@@ -7,7 +7,7 @@
 // (a deanonymisation vector, especially under Tor), and works offline, which is
 // exactly when this app matters most.
 //
-// Freshness comes from a daily CI sync (.github/workflows/relays.yaml) that
+// Freshness comes from a daily CI sync (.github/workflows/sync-relays.yml) that
 // pulls permissionlesstech/georelays, validates it, and opens a pull request:
 // the directory ships inside the bundle, so a human approves what lands.
 //

@@ -168,7 +168,7 @@ android {
             //
             //   ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
             //
-            // See .github/workflows/release.yaml and ci.yaml. A release built
+            // See .github/workflows/release.yml and ci.yml. A release built
             // locally without that flag is correct, just larger.
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()

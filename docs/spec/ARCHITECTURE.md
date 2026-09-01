@@ -908,15 +908,15 @@ together.
 Gradle builds `android/` into an `.aab` and Xcode builds `ios/` into an `.ipa`,
 and the stores treat the result as a fully native app.
 
-Android is automated end to end. `ci.yaml` builds a full R8-minified release on
+Android is automated end to end. `ci.yml` builds a full R8-minified release on
 every change, so a broken keep rule or a dependency that stops being 16 KB
-aligned fails a pull request rather than a tagged release, and `release.yaml`
+aligned fails a pull request rather than a tagged release, and `release.yml`
 builds and signs the shipped APK and AAB.
 
-iOS is automated up to signing. `ci.yaml` compiles an unsigned Release build on a
+iOS is automated up to signing. `ci.yml` compiles an unsigned Release build on a
 macOS runner, so native and release-only breakage fails the same pull request
 Android does. Distribution credentials do not exist yet, so the `ios-release` job
-in `release.yaml` is a placeholder and the shipped `.ipa` is still produced by
+in `release.yml` is a placeholder and the shipped `.ipa` is still produced by
 hand from Xcode.
 
 Neither platform uses EAS, and likely never will: its main draws are prebuild

@@ -1,0 +1,82 @@
+name: Bug report
+description: Report something in the app that does not work
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a security vulnerability? Do not file it here. Report it privately via a [security advisory](https://github.com/areebahmeddd/airhop/security/advisories/new).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - iOS
+        - Android
+        - Both
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: iPhone 15, iOS 26.0
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Airhop version
+      description: Find it under Settings, then Version.
+      placeholder: 1.0.0 (albatross)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport involved
+      options:
+        - Bluetooth mesh
+        - LAN (mDNS + TCP)
+        - WiFi Aware
+        - Nostr relays
+        - Courier (store-and-forward)
+        - None or not sure
+    validations:
+      required: true
+
+  - type: input
+    id: peer
+    attributes:
+      label: Other device
+      description: What the second device runs, if one is involved.
+      placeholder: bitchat on Android 16
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or logs
+      description: Redact keys, geohashes, and anything that identifies you.

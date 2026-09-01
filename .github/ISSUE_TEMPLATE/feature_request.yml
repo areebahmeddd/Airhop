@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a change or a new capability
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [roadmap](https://github.com/areebahmeddd/airhop/blob/main/docs/design/ROADMAP.md) first to avoid duplicates.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you want instead
+      description: Say how it behaves with no internet.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Messaging
+        - Sharing (files, media, voice)
+        - Identity and encryption
+        - Networking (mesh, transports)
+        - Internet (Nostr, Tor, bridges)
+        - Payments (Cashu)
+        - AI
+        - Settings and UI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: This needs no account, no phone number, and no server we would have to run.

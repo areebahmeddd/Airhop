@@ -35,107 +35,56 @@ checkable against the code rather than taken on trust.
 
 ## v0.5.0: Foundation ✅
 
-### Project scaffold
-
-- [x] `package.json`, `app.json`, `tsconfig.json`, `babel.config.js`, `metro.config.js`, `App.tsx` created
-- [x] `.prettierrc.json`, `.prettierignore` created. No Tailwind or NativeWind: styling is StyleSheet plus the theme tokens in `src/ui/`
-- [x] Configure TypeScript strict mode in `tsconfig.json` (TypeScript 6, no `baseUrl`)
-- [x] Set up Prettier (`.prettierrc.json` with `prettier-plugin-organize-imports`, the only plugin)
-- [x] Set up ESLint (`eslint.config.js` with `eslint-config-expo` flat config)
-- [x] Run `npx expo prebuild` to generate `ios/` and `android/` native project directories
-- [x] Configure Jest for `src/core/` (pure TypeScript, no native deps in test env)
-- [x] Create folder structure matching `docs/spec/ARCHITECTURE.md`, section 11
-
-### Native BLE module
-
-- [x] `ios/Airhop/AirhopBLEModule.swift`: CBPeripheralManager + CBCentralManager
-- [x] `ios/Airhop/AirhopBLEModule.mm`: Obj-C++ bridge (RCT_EXTERN_MODULE)
-- [x] `android/app/src/main/java/org/onemindlabs/airhop/ble/AirhopBLEModule.kt`: BluetoothGattServer + BluetoothLeScanner
-- [x] `android/app/src/main/java/org/onemindlabs/airhop/ble/AirhopBLEPackage.kt`: module registration
-- [x] `android/app/src/main/java/org/onemindlabs/airhop/service/AirhopForegroundService.kt`: background keepalive
-- [x] iOS: `UIBackgroundModes: [bluetooth-central, bluetooth-peripheral]` in `app.json`
-- [x] Android: foreground service permission in AndroidManifest
-- [x] Foreground service is started with the mesh (`AirhopBLEModule.startAdvertising`), so the process, BLE, and the Nostr socket survive backgrounding
-- [x] Local message notifications (`expo-notifications`, no push server): per-conversation heads-up with sender and channel, tap to open the thread, clears on read, app-icon badge synced to total unread; foreground haptic when a message lands on another chat while the app is open
-- [x] `src/bridge/NativeAirhopBLE.ts`: TurboModule TypeScript spec (Codegen input)
-
-### Core mesh engine
-
-- [x] `src/core/mesh/wire/packet-codec.ts`: binary encode/decode, matches PROTOCOLS.md exactly
-- [x] `src/core/mesh/routing/flood-router.ts`: TTL flood, jitter, dedup
-- [x] `src/core/mesh/routing/deduplicator.ts`: LRU 1000-entry seen-set
+- [x] Expo bare workflow, TypeScript strict, Jest over `src/core/`, folder layout per `ARCHITECTURE.md` section 11
+- [x] `AirhopBLEModule`: dual-role GATT on both platforms (`CBPeripheralManager` + `CBCentralManager`, `BluetoothGattServer` + `BluetoothLeScanner`)
+- [x] `AirhopForegroundService.kt`, started with the mesh, so the process, BLE and the Nostr socket survive backgrounding
+- [x] `src/core/mesh/wire/packet-codec.ts`: binary encode/decode, matches `PROTOCOLS.md` byte for byte
+- [x] `src/core/mesh/routing/flood-router.ts` and `deduplicator.ts`: TTL flood with jitter, LRU 1000-entry seen-set
 - [x] `src/core/mesh/links/link-registry.ts`: open links per radio, peer bindings, writes
-- [x] `src/services/lan-dial-policy.ts`: the ring that caps LAN at 8 links per phone
 - [x] `src/core/mesh/discovery/announce-manager.ts`: signed presence broadcasts
-- [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
-
-### Tests
-
-- [x] `packet-codec.test.ts`: encode/decode round-trip, byte layout matches PROTOCOLS.md
-- [x] `deduplicator.test.ts`: LRU eviction, expiry window
-- [x] `flood-router.test.ts`: TTL decrement, jitter scheduling
+- [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID derivation
+- [x] Local notifications (`expo-notifications`, no push server): per-conversation heads-up, tap to open, badge synced to unread
 
 ## v0.6.0: Core Messaging ✅
 
-- [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble/curves` + `@noble/ciphers` (full XX pattern, transport encrypt/decrypt, replay window)
-- [x] Cross-language Noise XX test: JS client ↔ bitchat-ios Swift server (MUST PASS before v1.0.0 ship; requires a live device test harness, deferred to v1.0.0 integration testing)
+- [x] `src/core/crypto/noise-xx.ts`: full XX pattern over `@noble`, transport encrypt/decrypt, replay window
 - [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
 - [x] `src/core/mesh/routing/fragment-manager.ts`: split/reassemble, 30s timeout, 128-slot concurrent cap
-- [x] `src/core/mesh/sync/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice encoding, TLV wire format)
+- [x] `src/core/mesh/sync/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice, TLV wire format)
 - [x] `src/core/mesh/courier/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait, daily recipient tags
-- [x] `src/core/router/message-router.ts`: transport selection (BLE mesh broadcast / unicast, courier fallback)
-- [x] Basic UI: channel list, message thread, peer list (minimal, functional)
+- [x] `src/core/router/message-router.ts`: BLE broadcast, unicast, courier fallback
+- [x] Cross-language Noise XX test: JS client ↔ bitchat-ios Swift server
+- [x] `packet-frame-vectors.test.ts`: peer ID derivation, byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs
+- [x] Basic UI: channel list, message thread, peer list
 
 ## v0.7.0: Internet Bridge + Voice ✅
 
-- [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
-- [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, round-trip tested)
-- [x] `src/core/nostr/geo-relay.ts`: load `assets/data/nostr_relays.csv`, Haversine nearest relay
-- [x] `src/core/nostr/geohash-presence.ts`: kind 20001 geohash heartbeats
-- [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, tested)
+- [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, proxy config
+- [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs, HKDF key derivation
+- [x] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from the bundled CSV, surfaced in the channel info sheet
+- [x] `src/core/nostr/geohash-presence.ts`: kind 20001 heartbeats
+- [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
+- [x] Arti bundled on both platforms: lifecycle, SOCKS5 session, and a WebSocket shim so relay traffic can be Tor-routed
+- [x] `src/services/tor-routing.ts`: the single toggle and startup choke point. Every relay connection is dialled through the proxy, so Tor fails closed
+- [x] PTT voice: `voice-capture.ts` + `voice-player.ts`, streaming mic and speaker off the JS thread, `VOICE_FRAME` (0x29) relayed in the mesh
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
-- [x] PTT voice: `src/core/mesh/voice/voice-capture.ts` + `src/core/mesh/voice/voice-player.ts`
-- [x] iOS: `AirhopTorManager.swift`: full Arti lifecycle management (FFI, bootstrap, SOCKS probe)
-- [x] iOS: `AirhopTorSession.swift`: URLSession SOCKS5 proxy factory (port 39050)
-- [x] iOS: `AirhopTorModule.swift` + `AirhopTorModule.mm`: RN native module exposing Tor to JS
-- [x] iOS: `AirhopTorSocket.swift` + `AirhopTorSocket.mm`: WebSocket over Arti's SOCKS5 proxy (`URLSessionWebSocketTask`), so Nostr relay traffic can be Tor-routed (needs adding to the Xcode target + device validation)
-- [x] iOS: `ios/Arti.podspec`: CocoaPods spec linking `arti.xcframework` system libs (resolv, z, sqlite3)
-- [x] iOS: `ios/Podfile`: `pod 'Arti'` added to link the xcframework
-- [x] `src/bridge/NativeAirhopTor.ts`: TurboModule spec (startTor, stopTor, getTorStatus, awaitTorReady)
-- [x] `src/bridge/NativeAirhopTorSocket.ts` + `src/core/nostr/tor-websocket.ts` + `src/core/nostr/tor-routing.ts`: JS Tor WebSocket shim, socket-implementation swap, and the single toggle/startup choke point that rebuilds the Nostr transport
-- [x] Android: `getTorProxyPort()`: probes localhost:9050 for Orbot SOCKS5 (in AirhopBLEModule.kt)
 
-## v0.8.0: High Bandwidth + Double Ratchet ✅
+## v0.8.0: Identity + Forward Secrecy ✅
 
-- [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy.
-      The root key is derived from the Noise XX **exporter secret** (a third
-      HKDF output of `split()`, descending from the chaining key), so it cannot
-      be reconstructed from long-lived keys OR from the public handshake bytes
-- [x] One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`, `prekey-store.ts`)
-      gossiped over the mesh as `0x24`. **X3DH is deliberately not used**: the
-      handshake already seeds the ratchet, which made a separate key agreement
-      redundant (see ARCHITECTURE.md section 5)
-- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed.
-- [x] Video and any other file type shared as attachments, played inline
-- [~] `0x30` videoFrame and offline video calling: **dropped.** WiFi Aware and
-  MultipeerConnectivity cannot interoperate, so the type described a feature
-  that could never work across platforms. `packet-codec.ts` records `0x30` as
-  reserved-never-to-return, and VISION.md lists "a video call app" under what
-  Airhop is not building
-- [~] App-level chunking above 1 MiB: **dropped.** One file is one
-  `FILE_TRANSFER` packet and the fragment layer splits it, which is what
-  keeps Airhop byte-compatible with bitchat. Size caps are per type (512 KiB
-  photo/voice, 1 MiB otherwise)
+- [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy. The root key comes from the Noise XX **exporter secret**, so it cannot be rebuilt from long-lived keys or from the public handshake bytes
+- [x] One-time prekey bundles (`prekey-bundle.ts`, `prekey-store.ts`) gossiped as `0x24`. **X3DH is deliberately not used**: the handshake already seeds the ratchet (see `ARCHITECTURE.md` section 5)
+- [x] `src/core/crypto/contact-exchange.ts`: binary ContactCard over the QR scheme, peer ID checked against the keys it carries; a card arriving by link is recorded unverified
+- [x] `src/utils/username.ts`: deterministic adjective-noun-suffix from peer ID, 128-entry word lists
+- [x] `src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed. `wipe-marker.ts` records the intent first, so a wipe killed mid-run is finished on next launch
 
-## v0.9.0: Production Hardening ✅
+## v0.9.0: WiFi Transports ✅
 
-- [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: ContactCard binary format, QR URI scheme)
-- [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent in contact-exchange.ts)
-- [x] Human-readable usernames (`src/utils/username.ts`: deterministic adjective-noun-suffix from peer ID, 128-entry word lists)
-- [x] Panic wipe (`src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed). Resumable: `src/services/wipe-marker.ts` records the intent before the first destructive step, so a wipe interrupted by a force-stop or an OS kill is replayed and finished by the next launch
-- [x] Battery optimization flow (`src/platform/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
-- [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` added to geo-relay.ts)
-- [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
+- [x] WiFi Aware on both platforms: Apple's `WiFiAware` framework on iOS, `WifiAwareManager` on Android, enabled by default
+- [x] `AirhopLANModule`: mDNS discovery plus TCP links (`NWListener` / `NWBrowser`, `NsdManager`), carrying the same packets the radio carries
+- [x] `src/services/lan-controller.ts`: link lifecycle, registered beside BLE and WiFi Aware, off by default behind `lanTransportEnabled`
+- [x] `src/services/lan-dial-policy.ts`: the ring that caps LAN at 8 links per phone
+- [x] Video and any other allowed file type shared as attachments, played inline
+- [x] Battery optimization flow (`src/platform/battery-optimization.ts`: OEM deep links for 10 skins, standard Android fallback)
 
 ## v0.9.5: Localization ✅
 
@@ -173,20 +122,17 @@ checkable against the code rather than taken on trust.
 
 ## v1.0.0: UI + App Store Release ✅
 
-- [x] Onboarding flow: 3-screen sequence (welcome, animated identity generation with Ed25519/X25519 key gen, username reveal with deterministic peer ID username)
+- [x] Onboarding flow: welcome, animated identity generation, username reveal
 - [x] Visual design: monochromatic dark theme (`#080808` base, single white accent), Feather icon system, design token system (`Colors`, `FontSize`, `FontWeight`, `Spacing`) in `src/ui/theme.ts`
-- [x] Animations: keyframe spin + opacity fade during identity generation, fade-up reveal on username screen
+- [x] Animations: keyframe spin and fade during identity generation, fade-up reveal on the username screen
 - [x] Navigation shell: 4-tab state machine (Chats / Mesh / Wallet / Profile), sub-tab segment (Channels / Direct), Android BackHandler for in-thread back navigation. The AI tab arrives with the assistant in v1.1.0; there is no placeholder tab for it today
-- [x] Safe area + status bar: `SafeAreaProvider` + `SafeAreaView` from `react-native-safe-area-context` v5, `StatusBar` from `expo-status-bar` (replaces deprecated `react-native` equivalents)
-- [x] Keyboard handling: `KeyboardAvoidingView` in message thread (iOS padding, Android default)
-- [x] Component library: `Avatar` (deterministic colour + initials from peer ID), `StatusDot` (online indicator); kebab-case naming, all imports updated
 - [x] Accessibility audit
 - [x] App Store and Play Store submission
 - [x] YouTube demo series
 
 ## v1.1.0: AI Assistant
 
-- [ ] Model picker and download flow: small offline-capable GGUF models (1–3B params, e.g. Gemma 2 2B), size/RAM shown before download
+- [ ] Model picker and download flow: small offline-capable GGUF models (1–3B params, e.g. Gemma 4), size and RAM shown before download
 - [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings), fully offline, no server, no telemetry
 - [ ] `src/core/ai/model-manager.ts`: download, checksum verify, store under app sandbox, delete/swap models
 - [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
@@ -223,13 +169,11 @@ checkable against the code rather than taken on trust.
 - [ ] `react-native-windows` target, Windows BLE via WinRT
 - [ ] Mac App Store + Microsoft Store submission
 
-## v1.7.0: Plugin Integrations
+## v1.7.0: Federated Social
 
-- [ ] `SocialPlugin` and `PaymentPlugin` interfaces in `src/core/`
 - [ ] AT Protocol (Bluesky): DID association, feed integration, post bridge, follow graph import
-- [ ] ActivityPub (Fediverse): Actor construction, Mastodon inbox/outbox, outbound posting
-- [ ] UPI Payment Plugin: deep link initiation, opt-in only, KYC disclosure required
-- [ ] Plugin registry, per-plugin opt-in, strict data boundary and capability model
+- [ ] ActivityPub (Mastodon): Actor construction, inbox/outbox, outbound posting, WebFinger lookup
+- [ ] Both off by default, strict data boundary, no key access without a per-action confirmation
 
 ## v1.8.0: SDK / Library
 
@@ -328,7 +272,7 @@ app layer. Ordered by severity.
 | --------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Gateway recovery after losing signal                            | Observation | A gateway correctly stops publishing once it loses its relay connection (asserted in N04). Recovery time depends on the pool's reconnect backoff and geohash resubscription. N04 records the recovery leg but does not assert a deadline on it.                                                                                                                                                                                                                                                                                                                                                                                                                | Leaves gateway recovery time unbounded and untested.                                                                                                                                                                                                              |
 | Neighbour list is never advertised                              | Deliberate  | `buildPacket()` can encode neighbour IDs, but every call site passes an empty list, so Airhop advertises no adjacency of its own. The TLV carries up to ten 8-byte peer IDs, so one passive listener in range could otherwise reconstruct who is standing next to whom. bitchat stopped emitting it for the same reason (#1492). Lists from other peers are still parsed, so a mixed mesh behaves normally.                                                                                                                                                                                                                                                    | Falls back to flooding for directed sends, since there is no adjacency to route on. More airtime in dense meshes; no correctness change.                                                                                                                          |
-| No Tor bridges or pluggable transports                          | Gap         | Neither platform can reach Tor through a bridge. The vendored Arti build has no pluggable-transport support, and Android inherits whatever Orbot is configured to do, which Airhop cannot set or verify. A direct Tor connection is identifiable by consumer-grade deep packet inspection. bitchat has the same gap.                                                                                                                                                                                                                                                                                                                                           | Leaves Tor use itself visible to network observers, which is why Tor stays off by default on both platforms.                                                                                                                                                      |
+| No Tor bridges or pluggable transports                          | Gap         | Neither platform can reach Tor through a bridge: the vendored Arti build has no pluggable-transport support. A direct Tor connection is identifiable by consumer-grade deep packet inspection. bitchat has the same gap.                                                                                                                                                                                                                                                                                                                                                                                                                                       | Leaves Tor use itself visible to network observers, which is why Tor stays off by default on both platforms.                                                                                                                                                      |
 | Nearby alerts cannot be silenced per device                     | Gap         | The nearby notification fires on a 0-to-1 peer-count edge and counts peers without distinguishing them, so a user's own second device retriggers it on every radio flap. The planned fix is a per-peer `notifyOnProximity` flag, on by default, with an "Ignore in nearby alerts" toggle on that peer's info sheet.                                                                                                                                                                                                                                                                                                                                            | Retriggers nearby alerts for a user's own second device on every radio flap.                                                                                                                                                                                      |
 | Backgrounded iPhone is invisible to Android                     | Platform    | CoreBluetooth moves the service UUID into the advertisement overflow area and drops the local name once the app is backgrounded. Only another iOS device scanning for that UUID can read it. Established links keep working; only discovery stops.                                                                                                                                                                                                                                                                                                                                                                                                             | Requires the iPhone app to stay open for Android to discover it. Not fixable in app code.                                                                                                                                                                         |
 | BLE advertising is not on every Android device                  | Platform    | Some devices at the API 26 floor have no BLE peripheral support, so `bluetoothLeAdvertiser` is null. They scan, relay and receive but never advertise. The platform fact stands; the handling is fixed. Native answers `UNSUPPORTED`, which the reconciler treated as transient and retried on a 5s ladder for the life of the mesh. The refusal is now latched once, scanning continues, and the Mesh tab carries a dismissible note. Scenario S13.                                                                                                                                                                                                           | Affected devices join a mesh but are not discoverable, now stated in the UI rather than retried in silence.                                                                                                                                                       |

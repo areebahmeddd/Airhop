@@ -6,28 +6,33 @@
 
 ### Gap 1: Unified Codebase
 
-**bitchat problem:** iOS and Android are separate native codebases that drift. The Android v0.7 fragment size mismatch (500B vs 150B) broke iOS-Android compatibility for months with no one noticing.  
+**bitchat:** iOS and Android are separate native codebases that drift. The Android v0.7 fragment size mismatch (500B vs 150B) broke iOS-Android compatibility for months with no one noticing.  
 **Airhop:** Single TypeScript protocol stack. A protocol bug surfaces on both platforms simultaneously, and fixes apply simultaneously.
 
 ### Gap 2: Transports Beyond Bluetooth
 
-**bitchat problem:** Bluetooth only in practice, around 18 KiB/s. Android has WiFi Aware behind a debug flag that is off by default, iOS has none, and neither platform can use an ordinary WiFi network.  
-**Airhop:** Two transports beside Bluetooth, picked per link with Bluetooth as the fallback. WiFi Aware is the fast path between two Androids or two iPhones, and runs on both platforms. The LAN transport is mDNS discovery plus plain TCP links carrying the same packets the radio carries, so an iPhone and an Android on the same WiFi reach each other directly. It stays off until the user turns it on, because announcing yourself on a network is visible to everyone on it.
+**bitchat:** Bluetooth only in practice, around 18 KiB/s. Android has WiFi Aware behind a debug flag that is off by default, iOS has none, and neither platform can use an ordinary WiFi network.  
+**Airhop:** Two transports beside Bluetooth, picked per link, with Bluetooth as the fallback that always works. WiFi Aware ships enabled on both platforms as the fast path between two Androids or two iPhones; Apple requires a paired data path Android cannot complete, so it never crosses platforms. LAN closes that gap with mDNS discovery and plain TCP links, carrying the same packets the radio carries. It stays off until the user turns it on, since announcing yourself on a network is visible to everyone on it.
 
 ### Gap 3: Double Ratchet for Offline Mail
 
-**bitchat problem:** Courier envelopes use Noise X, which is one-way. If the recipient's long-term key is ever compromised, every piece of mail still waiting for them is readable.  
-**Airhop:** Signal's Double Ratchet for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Prekey bundles travel signed over the mesh and never touch Nostr, and an envelope seals to a one-time prekey, never the long-term key, so waiting mail survives that key being compromised later.
+**bitchat:** Courier envelopes use Noise X, which is one-way. If the recipient's long-term key is ever compromised, every piece of mail still waiting for them is readable.  
+**Airhop:** Signal's Double Ratchet for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Bundles travel signed over the mesh and never touch Nostr, and an envelope seals to a one-time prekey, never the long-term key, so waiting mail survives that key leaking later.
 
 ### Gap 4: Files and Video
 
-**bitchat position:** Size caps per file type, checked as a packet is decoded: 1 MiB for files, 512 KiB for photos and voice notes. Video crosses the wire but neither platform plays it. Android shows a type badge, iOS shows nothing useful at all.  
-**Airhop:** Matches the caps and does not raise them. An earlier plan for chunked streaming with no ceiling was dropped, because bitchat rejects an oversized packet while decoding it, so raising the limit breaks interop in both directions. One packet per file, a MIME allow-list, magic bytes checked against the extension, and the fragment layer splits it for the radio. Video rides that same path and plays inline on both platforms, which a bitchat peer accepts and shows as an ordinary file. Live video calling was dropped: the fast WiFi path cannot cross platforms, so a call could never connect an iPhone to an Android.
+**bitchat:** Size caps per file type, checked as a packet is decoded: 1 MiB for files, 512 KiB for photos and voice notes. Video crosses the wire but neither platform plays it. Android shows a type badge, iOS shows nothing useful at all.  
+**Airhop:** Matches the caps and does not raise them. bitchat rejects an oversized packet while decoding it, so a higher ceiling breaks interop in both directions. One packet per file, a MIME allow-list, magic bytes checked against the extension, and the fragment layer splits it for the radio. Video rides that path and plays inline on both platforms; a bitchat peer sees an ordinary file. There is no live video: Bluetooth is too slow, WiFi Aware cannot cross platforms, and LAN needs both peers on one network with it switched on.
 
-### Gap 5: Non-Technical UX
+### Gap 5: Cashu Wallet
 
-**bitchat problem:** The protocol work is excellent. The app around it is hard to use.  
-**Airhop:** This is priority one, and something we focused on from day 0. The interface follows the laws of UI/UX and the conventions Apple's Human Interface Guidelines and Material Design agree on, so it behaves the way people already expect a messaging app to.
+**bitchat:** A Cashu token decoder. It recognises a token in a message and shows what it is worth. There is no balance, no mint, no way to spend it.  
+**Airhop:** A full wallet in its own tab: encrypted proof storage, per-mint accounts, Lightning in and out, Nutzaps, and a BIP-39 recovery phrase. Tokens are plain strings, so value moves device to device over Bluetooth with no server in the middle, and a bitchat peer still sees an ordinary token.
+
+### Gap 6: Non-Technical UX
+
+**bitchat:** The protocol work is excellent. The app around it is hard to use.  
+**Airhop:** This is priority one, and something we focused on from day 0. It follows the conventions Apple's Human Interface Guidelines and Material Design agree on, so it behaves the way people expect a messaging app to, and it reads in 35 languages.
 
 ## 2. System Architecture
 
@@ -60,8 +65,9 @@
 │             │ JSI TurboModule                                               │
 │  ┌──────────▼──────────────────────────────────────────────────────────┐    │
 │  │           AIRHOP NATIVE TRANSPORT MODULES                           │    │
-│  │  BLE: CBCentral/CBPeripheral (Swift), BluetoothGatt (Kotlin)        │    │
-│  │  LAN: NWListener/NWBrowser (Swift), NsdManager (Kotlin)             │    │
+│  │  BLE:  CBCentral/CBPeripheral (Swift), BluetoothGatt (Kotlin)       │    │
+│  │  WiFi: WiFiAware framework (Swift), WifiAwareManager (Kotlin)       │    │
+│  │  LAN:  NWListener/NWBrowser (Swift), NsdManager (Kotlin)            │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -95,6 +101,7 @@
 - [x] `src/core/mesh/courier/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait
 - [x] `src/core/router/message-router.ts`: BLE-only routing (broadcast + unicast + courier fallback)
 - [x] Cross-language Noise XX test: JS ↔ bitchat-ios Swift server (required before device testing)
+- [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID, byte offsets, relay TTL compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 - [x] Basic React Native UI: channel list, message thread, peer list (minimal, functional)
 
 **Milestone:** Full offline BLE mesh chat. Airhop ↔ bitchat message delivery verified.
@@ -108,8 +115,9 @@
 - [x] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from bundled relays.csv
 - [x] `src/core/nostr/geohash-presence.ts`: kind 20001 geohash heartbeats (40–80s jitter, precision-5)
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
-- [x] iOS: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule`: full Arti integration (SOCKS5 port 39050), bundled `ios/Frameworks/arti.xcframework`
-- [x] Android: Orbot SOCKS5 detection via `getTorProxyPort()` (probes localhost:9050)
+- [x] Georelay visibility: the channel info sheet lists the relays carrying a cell and marks the ones the user added (`GeoRelayDirectory.closestRelaysToGeohash()` via `MeshService.getGeohashRelays()`)
+- [x] Arti bundled on both platforms, no separate app to install: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule` over a SOCKS5 proxy
+- [x] `src/services/tor-routing.ts`: the single choke point for the Tor decision. Every relay connection is dialled through the proxy, so Tor fails closed and never falls back to the clear. Bluetooth is untouched, so only the internet half pauses
 - [x] `src/core/mesh/voice/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
 - [x] `src/core/mesh/voice/voice-player.ts`: 350ms jitter buffer, ordered frame delivery
 - [x] `src/bridge/NativeAirhopVoice.ts` + `AirhopVoiceModule.kt` / `.swift`: streaming mic and speaker (AAC-LC 16 kHz mono, off the JS thread)
@@ -118,33 +126,30 @@
 - [x] `src/bridge/NativeAirhopTor.ts`: TurboModule spec for Tor module
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
 
-**Milestone:** Cross-city DMs via Nostr. Tor routing on iOS via Arti. Live PTT over BLE, in public rooms and DMs, interoperating with bitchat.
+**Milestone:** Cross-city DMs via Nostr, routed through bundled Arti on both platforms. Live PTT over BLE, in public rooms and DMs, interoperating with bitchat.
 
-### v0.8.0: High Bandwidth + Double Ratchet ✅
+### v0.8.0: Identity + Forward Secrecy ✅
 
-**Goal:** High-bandwidth transport and per-message forward secrecy.
+**Goal:** Who you are, how you prove it, and how you destroy it.
 
 - [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
-- [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr
-- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed; iOS got Apple's standards-based `WiFiAware` framework instead
-- [~] Chunked file transfer >1 MiB: **dropped, see Gap 4.** bitchat enforces the 1 MiB cap when it _decodes_ a packet, so anything larger is rejected outright and interop breaks in both directions. Airhop sends one `BitchatFilePacket` per file and lets the fragment layer split it
-- [~] Video frame capture (`react-native-vision-camera` was removed from `package.json` entirely) and `0x30: videoFrame`: **dropped, see Gap 4.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
+- [x] `src/core/mesh/wire/prekey-bundle.ts`: one-time prekey bundles gossiped as `0x24`, never published to Nostr
+- [x] `src/core/crypto/contact-exchange.ts`: binary ContactCard over the `airhop:v1/<base64url>` QR scheme, peer ID checked against the keys it carries
+- [x] `src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID, so a name cannot be taken
+- [x] `src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache and Tor state, and resumes if killed mid-wipe
 
-**Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for attachments. Offline video calling was **dropped**: the WiFi fast path does not cross platforms, so it could never work iOS to Android.
+**Milestone:** Double Ratchet passing test vectors. Mail left with a courier survives the recipient's long-term key leaking. A scanned card is trusted, a linked one is not.
 
-### v0.9.0: Production Hardening ✅
+### v0.9.0: WiFi Transports ✅
 
-**Goal:** All features complete, hardened, and cross-platform verified.
+**Goal:** Two transports beside Bluetooth, one fast, one cross-platform.
 
-- [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: binary ContactCard, QR URI scheme `airhop:v1/<base64url>`)
-- [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent, deep-link format)
-- [x] Human-readable usernames (`src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID)
-- [x] Panic wipe (`src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache and Tor state)
+- [x] WiFi Aware native modules: `WiFiAware` framework on iOS, `WifiAwareManager` on Android, enabled by default on both
+- [x] `AirhopLANModule`: mDNS discovery plus TCP links (`NWListener` / `NWBrowser` on iOS, `NsdManager` on Android), carrying the same packets the radio carries
+- [x] `src/services/lan-controller.ts`: link lifecycle, registered with the router beside BLE and WiFi Aware, off by default behind `lanTransportEnabled`
 - [x] Battery optimization flow (`src/platform/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
-- [x] Georelay visibility: the channel info sheet lists the relays carrying a cell and marks the ones the user added (`GeoRelayDirectory.closestRelaysToGeohash()` via `MeshService.getGeohashRelays()`)
-- [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID, byte offsets, relay TTL compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
-**Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
+**Milestone:** Attachments over same-platform WiFi Aware, and an iPhone and an Android carrying the mesh over shared WiFi with the Bluetooth radio idle.
 
 ### v0.9.5: Localization ✅
 
@@ -297,11 +302,11 @@ macOS is the priority: CoreBluetooth has the same API surface as iOS, so the exi
 
 **Milestone:** A macOS node joins the BLE mesh alongside iOS and Android peers. Windows target scoped and in progress.
 
-### v1.7.0: Plugin Integrations
+### v1.7.0: Federated Social
 
-**Goal:** Opt-in plugins for social federation and regional payments, without touching the core protocol.
+**Goal:** Opt-in bridges to the open social networks, without touching the core protocol.
 
-Airhop's identity model (Ed25519 keypairs, no accounts) maps onto both the [AT Protocol](https://atproto.com) used by Bluesky and [ActivityPub](https://w3.org/TR/activitypub/) used by the Fediverse, so bridging is an integration rather than a redesign. Every plugin is opt-in and separately auditable: users who enable none are unaffected, the mesh protocol and wire format are unchanged, and no plugin reaches private keys or relay traffic without a per-action confirmation. UPI is included as an online-only convenience, not a private rail. Every UPI transaction is KYC-linked and visible to NPCI, so Cashu remains the offline payment system.
+Airhop's identity model (Ed25519 keypairs, no accounts) maps onto both the [AT Protocol](https://atproto.com) used by Bluesky and [ActivityPub](https://w3.org/TR/activitypub/) used by Mastodon, so bridging is an integration and not a redesign. Both are off unless the user turns them on: enable neither and nothing changes, the mesh protocol and wire format are untouched, and neither reaches private keys or relay traffic without a per-action confirmation.
 
 #### AT Protocol (Bluesky)
 
@@ -311,29 +316,14 @@ Airhop's identity model (Ed25519 keypairs, no accounts) maps onto both the [AT P
 - [ ] Follow graph import: find which Bluesky contacts are also Airhop users via DID cross-referencing
 - [ ] PDS (Personal Data Server) self-hosting option for full data sovereignty
 
-#### ActivityPub / Fediverse
+#### ActivityPub (Mastodon)
 
 - [ ] Actor construction from Airhop's Ed25519 identity
 - [ ] Mastodon-compatible inbox and outbox: mentions and DMs from any compliant server
 - [ ] Outbound posting: optionally broadcast public channel messages as Notes
 - [ ] WebFinger lookup for contact discovery
 
-#### UPI Payments (India)
-
-- [ ] `UPIPaymentPlugin` implementing the `PaymentPlugin` interface
-- [ ] Deep link initiation (`upi://pay?pa=...&am=...&cu=INR`), Android only, handled by any UPI-registered app
-- [ ] Opt-in, disabled by default, online only
-- [ ] Disclosure on enable: transactions are linked to a verified identity and visible to NPCI
-- [ ] Shares the UPI ID as contact info only; no bank details transmitted
-
-#### Plugin Architecture
-
-- [ ] Generic `Plugin` interface in `src/core/` with typed subtypes per integration category
-- [ ] Plugin registry with per-plugin opt-in and explicit permission prompts
-- [ ] Strict data boundary: plugins see only what the user marks shareable, never mesh traffic
-- [ ] Capability model: no key access or network call on the user's behalf without a per-action confirmation
-
-**Milestone:** An Airhop identity linked to a Bluesky DID and a Mastodon actor, cross-posting to both. Indian users initiate UPI payments from a contact's profile when online.
+**Milestone:** An Airhop identity linked to a Bluesky DID and a Mastodon actor, cross-posting to both.
 
 ### v1.8.0: SDK / Library
 

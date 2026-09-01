@@ -121,12 +121,12 @@ This certifies that you agree to the [Developer Certificate of Origin](https://d
 Before opening any pull request:
 
 - [ ] `npm run verify:invisibles` passes (no literal control, bidirectional, or zero-width characters in source)
-- [ ] `npm run verify:vendored` passes (only if you changed a vendored binary)
+- [ ] `npm run verify:vendored` passes (vendored binaries match their recorded hashes)
 - [ ] `npm run i18n:audit -- --max 0` passes (no hardcoded user-facing strings)
-- [ ] `npm run i18n:native` passes (only if you changed a language, a permission string, or the service notice)
+- [ ] `npm run i18n:native` passes (native language, permission, and service notice strings are in sync)
 - [ ] `npm run deadcode` reports nothing new (unused exports, files, and dependencies)
 - [ ] `npm run typecheck` passes with zero errors
-- [ ] `npm run format` run (no uncommitted format changes)
+- [ ] `npm run format:check` passes (no uncommitted format changes)
 - [ ] `npm run lint` passes with zero errors
 - [ ] `npm run coverage` passes with zero failures
 - [ ] `docs/dev/PROGRESS.md` updated if a milestone was completed or a decision was made
