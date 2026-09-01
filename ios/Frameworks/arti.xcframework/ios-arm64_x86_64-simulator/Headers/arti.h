@@ -57,7 +57,7 @@
  *   bits 8..15  progress, 0 to 100
  * ```
  *
- * One integer rather than a struct, for two reasons. It is the only shape both
+ * One integer, not a struct, for two reasons. It is the only shape both
  * a C ABI and a JNI `jint` express natively, so Swift needs no assumption about
  * how a Rust struct is laid out and Kotlin needs no class lookup. And a single
  * return value is a single consistent snapshot by construction, where a struct
@@ -124,7 +124,7 @@ int airhop_tor_status(void);
  * Copy Arti's current stage description into `buf` as a NUL-terminated string.
  *
  * Returns the number of bytes written excluding the terminator, or a negative
- * error. Truncates on a short buffer rather than failing, and truncates on a
+ * error. Truncates on a short buffer instead of failing, and truncates on a
  * character boundary so the result is always valid UTF-8: this is display text,
  * and a clipped sentence beats no sentence.
  *

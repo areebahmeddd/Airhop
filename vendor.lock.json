@@ -1,12 +1,12 @@
 {
   "files": {
-    "android/app/src/main/jniLibs/arm64-v8a/libarti_airhop.so": "7d307fd1d93d11e931ec96e3061103d83016f0bae3b3f18449c949f800d29cc9",
-    "android/app/src/main/jniLibs/armeabi-v7a/libarti_airhop.so": "6dadada0d897873ee09008eb25cb396d2b635a3de6e247b95104af93a507ba32",
-    "android/app/src/main/jniLibs/x86_64/libarti_airhop.so": "c7ae7909b9ae0966d19647e46b0603912e268eaa6fcb64f2490e5a89041353f3",
+    "android/app/src/main/jniLibs/arm64-v8a/libarti_airhop.so": "cb7331997cd3a28faf9632be2cf747d4e9e55a89d5b75feae179a94a0eb85e1d",
+    "android/app/src/main/jniLibs/armeabi-v7a/libarti_airhop.so": "8020552ee6439a801e7170673ce56053812fa0adc62924d5d9be3f8456603f9e",
+    "android/app/src/main/jniLibs/x86_64/libarti_airhop.so": "70242c68c7b14ab2c37ebae1b071beb1fe0472abc946f4672cf21c6db2bad3d0",
     "ios/Frameworks/arti.xcframework/Info.plist": "dffda6060c2558b678bc77956261f1c9b291ea3a7dcfcbab45db4c169c96d6b0",
-    "ios/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h": "3394493a5f685c255dc1f5e9d8dfb921d75c3246c73cf4d27e26b31849d0c0ba",
-    "ios/Frameworks/arti.xcframework/ios-arm64/libarti_airhop.a": "ded7bffb0a82481a4532c40bff1c03ff99fa011157c579b113b1ce2d79e3a278",
-    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h": "3394493a5f685c255dc1f5e9d8dfb921d75c3246c73cf4d27e26b31849d0c0ba",
-    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_airhop.a": "a12017d5cecd068db447db577886dc4e555b6f2c637012291b0dea813236ceff"
+    "ios/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h": "f98e9f0d7e3afba622be9baaf2d35f555777c4f41c794e2e69e27eb001c0d467",
+    "ios/Frameworks/arti.xcframework/ios-arm64/libarti_airhop.a": "d45998cea29bed47e115dc39a8ab8778dd285522b1ff53c48b5622a2dabf83fd",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h": "f98e9f0d7e3afba622be9baaf2d35f555777c4f41c794e2e69e27eb001c0d467",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_airhop.a": "c41f8537e60f59c243af112b02753b7303266ccbbf2e6f285f0e217bcdd93acb"
   }
 }
