@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build arti.xcframework for iOS device, iOS simulator and macOS, and install it
+# Build arti.xcframework for iOS device and iOS simulator, and install it
 # into ios/Frameworks/.
 #
 # macOS only: lipo and xcodebuild have no equivalent elsewhere, and Apple's
@@ -10,8 +10,8 @@
 #
 #     native/arti/build-apple.sh [--clean]
 #
-# The three slices match the layout the existing framework already has, so
-# ios/Arti.podspec and the Xcode target need no change when this replaces it.
+# Two slices, device and simulator. See the note beside SIM_TARGETS for why there
+# is no macOS one.
 
 set -euo pipefail
 
@@ -41,7 +41,6 @@ export CARGO_INCREMENTAL=0
 export TZ=UTC
 export LC_ALL=C
 export IPHONEOS_DEPLOYMENT_TARGET="$IOS_MIN_VERSION"
-export MACOSX_DEPLOYMENT_TARGET="$MACOS_MIN_VERSION"
 
 CARGO_HOME_PATH="${CARGO_HOME:-$HOME/.cargo}"
 RUSTFLAGS="${RUSTFLAGS:-}"
@@ -58,7 +57,11 @@ mkdir -p "$BUILD_DIR"
 
 DEVICE_TARGET=aarch64-apple-ios
 SIM_TARGETS=(aarch64-apple-ios-sim x86_64-apple-ios)
-MAC_TARGETS=(aarch64-apple-darwin x86_64-apple-darwin)
+# No macOS slice. Arti.podspec declares `s.platform = :ios` and the Xcode project
+# has a single iOS app target, so nothing could link one; it existed only because
+# the framework this replaces came from a project that does ship a Mac app.
+# Building it cost 87 MiB of committed binary and a third of the build. Restoring
+# it is this array, one merge_slice call and one -library line.
 
 # The header is generated from src/ffi.rs, never edited. See cbindgen.toml.
 #
@@ -175,7 +178,7 @@ build_target() {
 
 info "Reading symbols with $NM"
 build_target "$DEVICE_TARGET"
-for target in "${SIM_TARGETS[@]}" "${MAC_TARGETS[@]}"; do
+for target in "${SIM_TARGETS[@]}"; do
   build_target "$target"
 done
 
@@ -183,7 +186,7 @@ done
 # architectures but only one per platform-variant, which is why device and
 # simulator cannot be merged even though both are arm64.
 info "Merging architectures"
-mkdir -p "$BUILD_DIR/ios" "$BUILD_DIR/ios-sim" "$BUILD_DIR/macos"
+mkdir -p "$BUILD_DIR/ios" "$BUILD_DIR/ios-sim"
 
 # Where cargo leaves one target's static library.
 lib_for() { printf '%s/target/%s/apple/%s' "$SCRIPT_DIR" "$1" "$LIB_NAME"; }
@@ -203,9 +206,8 @@ merge_slice() {
 
 cp "$(lib_for "$DEVICE_TARGET")" "$BUILD_DIR/ios/$LIB_NAME"
 merge_slice "$BUILD_DIR/ios-sim/$LIB_NAME" "${SIM_TARGETS[@]}"
-merge_slice "$BUILD_DIR/macos/$LIB_NAME" "${MAC_TARGETS[@]}"
 
-for slice in ios ios-sim macos; do
+for slice in ios ios-sim; do
   mkdir -p "$BUILD_DIR/$slice/Headers"
   cp "$BUILD_DIR/include/arti.h" "$BUILD_DIR/$slice/Headers/arti.h"
 done
@@ -216,7 +218,6 @@ mkdir -p "$FRAMEWORKS_DIR"
 xcodebuild -create-xcframework \
   -library "$BUILD_DIR/ios/$LIB_NAME" -headers "$BUILD_DIR/ios/Headers" \
   -library "$BUILD_DIR/ios-sim/$LIB_NAME" -headers "$BUILD_DIR/ios-sim/Headers" \
-  -library "$BUILD_DIR/macos/$LIB_NAME" -headers "$BUILD_DIR/macos/Headers" \
   -output "$XCFRAMEWORK"
 
 
