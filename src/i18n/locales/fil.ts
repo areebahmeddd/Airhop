@@ -1399,9 +1399,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Hindi dumadaan sa Tor ang mga hiling sa mint sa iOS.",
   "wallet.svc.tor_ios_body":
     "Mga WebSocket lang ng Nostr ang binabalot ng Arti, kaya mararating ng hiling na ito ang mint sa bukas na net at maiuugnay ang IP mo sa mga patunay na ito. Payagan ito sa ilalim ng Mga Setting > Seguridad, o i-off muna ang Tor. Gumagana pa rin ang pagpapadala at pagtanggap ng ecash sa mesh.",
-  "wallet.svc.tor_paused": "Naka-on ang Tor pero hindi nakakonekta.",
-  "wallet.svc.tor_paused_body":
-    "Tumigil na sa pagruruta ang Orbot, kaya mararating ng hiling na ito ang mint sa bukas na net at maiuugnay ang IP mo sa mga patunay na ito. Buksan ulit ang Orbot, o i-off ang Tor. Gumagana pa rin ang pagpapadala at pagtanggap ng ecash sa mesh.",
   "wallet.svc.keys_uncached":
     "Hindi nakaimbak sa device na ito ang mga susi ng mint na ito.",
   "wallet.svc.keys_uncached_body":
@@ -1849,8 +1846,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "I-off ang pagruruta sa Tor?",
   "settings.conn.tor_off_body":
     "Babalik ang trapiko ng Nostr sa karaniwan mong koneksyon, kaya makikita ulit ng mga relay ang IP address mo. Hindi apektado ang Bluetooth sa dalawang paraan.",
-  "settings.conn.tor_orbot_idle":
-    "Naka-install ang Orbot pero hindi nakakonekta. Buksan ang Orbot, simulan ang VPN nito, tapos i-on ito.",
   "settings.conn.tor_unavailable": "Walang pagruruta sa Tor sa build na ito.",
   "settings.conn.tor_timeout":
     "Mahigit isang minuto nang kumokonekta ang Tor. Mananatili itong naka-on at patuloy na susubok; sasabihin ng tab na Mesh kung kailan ito nagruruta, o kung hinaharangan ito ng network na ito.",
@@ -1882,16 +1877,11 @@ export const strings: Strings = {
     "Hinahanap nito ang barangay mo mula sa isang pagtukoy ng lokasyon. Magbigay ng lokasyon para magsimulang magtulay.",
   "settings.conn.grant_location": "Magbigay ng pahintulot sa lokasyon",
   "settings.conn.grant_short": "Ibigay",
-  "settings.conn.orbot_body":
-    "Iniruruta ng Airhop ang trapiko ng Tor sa Orbot. I-install at i-enable ang Orbot mula sa Play Store, tapos i-on ito.",
   "settings.conn.internet_off": "Naka-off ang internet",
   "settings.conn.internet_off_desc":
     "Gumagamit ng internet ang Tor, ang bridge at ang gateway. I-on ang Fallback sa internet sa ilalim ng Network para magamit ang mga ito.",
   "settings.conn.turn_on": "I-on",
   "settings.conn.turn_off": "I-off",
-  "settings.conn.orbot_title": "Tor sa Android",
-  "settings.conn.get_orbot": "Kunin ang Orbot",
-  "settings.conn.later": "Mamaya",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

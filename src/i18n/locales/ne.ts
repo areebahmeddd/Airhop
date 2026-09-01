@@ -1339,9 +1339,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS मा टकसारका अनुरोध Tor बाट जाँदैनन्।",
   "wallet.svc.tor_ios_body":
     "Arti ले Nostr का WebSocket मात्र बेर्छ, त्यसैले यो अनुरोध टकसारसम्म खुला सञ्जालबाट पुग्थ्यो र तपाईंको IP यी प्रमाणसँग जोड्थ्यो। सेटिङ > सुरक्षा अन्तर्गत यसलाई अनुमति दिनुहोस्, वा पहिले Tor बन्द गर्नुहोस्। मेशबाट ecash पठाउने र लिने काम भने चलिरहन्छ।",
-  "wallet.svc.tor_paused": "Tor खुला छ तर जोडिएको छैन।",
-  "wallet.svc.tor_paused_body":
-    "Orbot ले रुटिङ रोकेको छ, त्यसैले यो अनुरोध टकसारसम्म खुला सञ्जालबाट पुग्थ्यो र तपाईंको IP यी प्रमाणसँग जोड्थ्यो। Orbot फेरि सुरु गर्नुहोस्, वा Tor बन्द गर्नुहोस्। मेशबाट ecash पठाउने र लिने काम भने चलिरहन्छ।",
   "wallet.svc.keys_uncached": "यो टकसारका कुञ्जी यो यन्त्रमा राखिएका छैनन्।",
   "wallet.svc.keys_uncached_body":
     "ती ल्याउन अनलाइन हुँदा वालेट एक पटक खोल्नुहोस्।",
@@ -1770,8 +1767,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor बाटो बन्द गर्ने?",
   "settings.conn.tor_off_body":
     "Nostr ट्राफिक तपाईंको सामान्य जडानमा फर्कन्छ, त्यसैले रिलेले तपाईंको IP ठेगाना फेरि देख्छन्। ब्लुटुथमा जे भए पनि असर पर्दैन।",
-  "settings.conn.tor_orbot_idle":
-    "Orbot जडान भएको छ तर जोडिएको छैन। Orbot खोल्नुहोस्, यसको VPN सुरु गर्नुहोस्, अनि यो खोल्नुहोस्।",
   "settings.conn.tor_unavailable": "यो संस्करणमा Tor बाटो उपलब्ध छैन।",
   "settings.conn.tor_timeout":
     "Tor लाई जोडिन एक मिनेटभन्दा बढी लाग्दै छ। यो खुला रहन्छ र प्रयास गरिरहन्छ; मेश ट्याबले भन्नेछ कि यो कहिले बाटो दिँदै छ, वा यो सञ्जालले रोकेको छ कि।",
@@ -1803,16 +1798,11 @@ export const strings: Strings = {
     "यसले स्थानको नापबाट तपाईंको टोल पत्ता लगाउँछ। पुल बनाउन थाल्न स्थानको अनुमति दिनुहोस्।",
   "settings.conn.grant_location": "स्थानको अनुमति दिनुहोस्",
   "settings.conn.grant_short": "दिनुहोस्",
-  "settings.conn.orbot_body":
-    "Airhop ले Tor को ट्राफिक Orbot बाट पठाउँछ। Play Store बाट Orbot जडान गरी सक्रिय पार्नुहोस्, अनि यो खोल्नुहोस्।",
   "settings.conn.internet_off": "इन्टरनेट बन्द छ",
   "settings.conn.internet_off_desc":
     "Tor, पुल र गेटवे सबैले इन्टरनेट चलाउँछन्। तिनलाई चलाउन सञ्जाल अन्तर्गतको इन्टरनेट विकल्प खोल्नुहोस्।",
   "settings.conn.turn_on": "खोल्नुहोस्",
   "settings.conn.turn_off": "बन्द गर्नुहोस्",
-  "settings.conn.orbot_title": "Android मा Tor",
-  "settings.conn.get_orbot": "Orbot लिनुहोस्",
-  "settings.conn.later": "पछि",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "ब्लुटुथ",

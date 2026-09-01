@@ -1382,9 +1382,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Sur iOS, les requêtes au mint ne passent pas par Tor.",
   "wallet.svc.tor_ios_body":
     "Arti n’enveloppe que les WebSockets Nostr, cette requête atteindrait donc le mint sur le réseau en clair et relierait ton IP à ces preuves. Autorise-le dans Réglages > Sécurité, ou désactive Tor d’abord. Envoyer et recevoir des ecash sur le maillage fonctionne toujours.",
-  "wallet.svc.tor_paused": "Tor est activé mais pas connecté.",
-  "wallet.svc.tor_paused_body":
-    "Orbot ne route plus rien, cette requête atteindrait donc le mint sur le réseau en clair et relierait ton IP à ces preuves. Relance Orbot, ou désactive Tor. Envoyer et recevoir des ecash sur le maillage fonctionne toujours.",
   "wallet.svc.keys_uncached":
     "Les clés de ce mint ne sont pas conservées sur cet appareil.",
   "wallet.svc.keys_uncached_body":
@@ -1830,8 +1827,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Désactiver le routage par Tor ?",
   "settings.conn.tor_off_body":
     "Le trafic Nostr repasse par ta connexion habituelle, donc les relais reverront ton adresse IP. Dans les deux cas, le Bluetooth n’est pas concerné.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot est installé mais pas connecté. Ouvre Orbot, démarre son VPN, puis active ceci.",
   "settings.conn.tor_unavailable":
     "Le routage par Tor n’est pas disponible dans cette version.",
   "settings.conn.tor_timeout":
@@ -1866,16 +1861,11 @@ export const strings: Strings = {
     "Il trouve ton quartier à partir d’un relevé de position. Accorde la localisation pour commencer à relier.",
   "settings.conn.grant_location": "Accorder l’autorisation de localisation",
   "settings.conn.grant_short": "Accorder",
-  "settings.conn.orbot_body":
-    "Airhop fait passer le trafic Tor par Orbot. Installe et active Orbot depuis le Play Store, puis active ceci.",
   "settings.conn.internet_off": "Internet est désactivé",
   "settings.conn.internet_off_desc":
     "Tor, le pont et la passerelle utilisent tous internet. Active le repli par internet sous Réseau pour t’en servir.",
   "settings.conn.turn_on": "Activer",
   "settings.conn.turn_off": "Désactiver",
-  "settings.conn.orbot_title": "Tor sur Android",
-  "settings.conn.get_orbot": "Installer Orbot",
-  "settings.conn.later": "Plus tard",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

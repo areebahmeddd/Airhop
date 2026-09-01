@@ -1354,9 +1354,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOSではミントへのリクエストはTorを通りません。",
   "wallet.svc.tor_ios_body":
     "ArtiがくるむのはNostrのWebSocketだけなので、このリクエストは素のネットワークでミントに届き、あなたのIPとこのプルーフを結び付けてしまいます。設定＞セキュリティで許可するか、先にTorをオフにしてください。メッシュ経由のecashの送受信は引き続き使えます。",
-  "wallet.svc.tor_paused": "Torはオンですが接続されていません。",
-  "wallet.svc.tor_paused_body":
-    "Orbotが中継をやめたため、このリクエストは素のネットワークでミントに届き、あなたのIPとこのプルーフを結び付けてしまいます。Orbotをもう一度起動するか、Torをオフにしてください。メッシュ経由のecashの送受信は引き続き使えます。",
   "wallet.svc.keys_uncached": "このミントの鍵はこの端末に保存されていません。",
   "wallet.svc.keys_uncached_body":
     "オンラインのときにウォレットを一度開いて取得してください。",
@@ -1785,8 +1782,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor経由の通信をオフにしますか",
   "settings.conn.tor_off_body":
     "Nostrの通信は通常の接続に戻るので、リレーから再びIPアドレスが見えます。どちらにしてもBluetoothには影響しません。",
-  "settings.conn.tor_orbot_idle":
-    "Orbotはインストールされていますが接続していません。Orbotを開いてVPNを開始してから、これをオンにしてください。",
   "settings.conn.tor_unavailable": "このビルドではTor経由の通信を使えません。",
   "settings.conn.tor_timeout":
     "Torの接続に1分以上かかっています。オンのまま試み続けます。中継が始まったか、このネットワークが遮断しているかは、メッシュタブでお知らせします。",
@@ -1821,16 +1816,11 @@ export const strings: Strings = {
     "位置の測定から近隣エリアを判断します。橋渡しを始めるには位置情報を許可してください。",
   "settings.conn.grant_location": "位置情報の権限を許可",
   "settings.conn.grant_short": "許可",
-  "settings.conn.orbot_body":
-    "AirhopはTorの通信をOrbot経由にします。Play ストアからOrbotをインストールして有効にしてから、これをオンにしてください。",
   "settings.conn.internet_off": "インターネットがオフです",
   "settings.conn.internet_off_desc":
     "Tor、ブリッジ、ゲートウェイはいずれもインターネットを使います。使うには、ネットワークの設定でインターネットへの切り替えをオンにしてください。",
   "settings.conn.turn_on": "オンにする",
   "settings.conn.turn_off": "オフにする",
-  "settings.conn.orbot_title": "AndroidでのTor",
-  "settings.conn.get_orbot": "Orbotを入手",
-  "settings.conn.later": "あとで",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

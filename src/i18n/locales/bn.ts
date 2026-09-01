@@ -1337,9 +1337,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS-এ মিন্টের অনুরোধ Tor দিয়ে যায় না।",
   "wallet.svc.tor_ios_body":
     "Arti কেবল Nostr-এর WebSocket মুড়ে রাখে, তাই এই অনুরোধটি খোলা নেটে মিন্টে পৌঁছে আপনার IP-কে এই প্রমাণগুলোর সঙ্গে জুড়ে দিত। সেটিংস > নিরাপত্তায় এটি অনুমোদন করুন, বা আগে Tor বন্ধ করুন। মেশে ecash পাঠানো ও নেওয়া তবুও চলে।",
-  "wallet.svc.tor_paused": "Tor চালু আছে কিন্তু যুক্ত নয়।",
-  "wallet.svc.tor_paused_body":
-    "Orbot রাউটিং বন্ধ করে দিয়েছে, তাই এই অনুরোধটি খোলা নেটে মিন্টে পৌঁছে আপনার IP-কে এই প্রমাণগুলোর সঙ্গে জুড়ে দিত। Orbot আবার চালু করুন, বা Tor বন্ধ করুন। মেশে ecash পাঠানো ও নেওয়া তবুও চলে।",
   "wallet.svc.keys_uncached": "এই মিন্টের কী এই ডিভাইসে জমা নেই।",
   "wallet.svc.keys_uncached_body":
     "সেগুলো আনতে অনলাইনে থাকতে একবার ওয়ালেট খুলুন।",
@@ -1771,8 +1768,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor রাউটিং বন্ধ করবেন?",
   "settings.conn.tor_off_body":
     "Nostr-এর যাতায়াত আপনার সাধারণ সংযোগে ফিরে যায়, তাই রিলে আবার আপনার IP ঠিকানা দেখে। যেভাবেই হোক ব্লুটুথে কিছু বদলায় না।",
-  "settings.conn.tor_orbot_idle":
-    "Orbot বসানো আছে কিন্তু যুক্ত নয়। Orbot খুলে এর VPN চালু করে তারপর এটি চালু করুন।",
   "settings.conn.tor_unavailable": "এই বিল্ডে Tor রাউটিং নেই।",
   "settings.conn.tor_timeout":
     "Tor যুক্ত হতে এক মিনিটের বেশি নিচ্ছে। এটি চালু থেকে চেষ্টা করে যায়; মেশ ট্যাব জানাবে কখন এটি ঘোরাচ্ছে, বা এই নেটওয়ার্ক এটি আটকাচ্ছে কিনা।",
@@ -1804,16 +1799,11 @@ export const strings: Strings = {
     "একটি অবস্থান নিয়ে এটি আপনার আশপাশ বের করে। সেতু বাঁধা শুরু করতে অবস্থানের অনুমতি দিন।",
   "settings.conn.grant_location": "অবস্থানের অনুমতি দিন",
   "settings.conn.grant_short": "দিন",
-  "settings.conn.orbot_body":
-    "Airhop Tor-এর যাতায়াত Orbot দিয়ে ঘোরায়। Play Store থেকে Orbot বসিয়ে চালু করে তারপর এটি চালু করুন।",
   "settings.conn.internet_off": "ইন্টারনেট বন্ধ",
   "settings.conn.internet_off_desc":
     "Tor, সেতু ও গেটওয়ে সবই ইন্টারনেট ব্যবহার করে। সেগুলো চালাতে নেটওয়ার্কে ইন্টারনেট বিকল্প চালু করুন।",
   "settings.conn.turn_on": "চালু করুন",
   "settings.conn.turn_off": "বন্ধ করুন",
-  "settings.conn.orbot_title": "Android-এ Tor",
-  "settings.conn.get_orbot": "Orbot নিন",
-  "settings.conn.later": "পরে",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "ব্লুটুথ",

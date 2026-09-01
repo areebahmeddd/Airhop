@@ -1360,9 +1360,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS-ზე ზარაფხანასთან მოთხოვნები Tor-ით არ გადის.",
   "wallet.svc.tor_ios_body":
     "Arti მხოლოდ Nostr-ის WebSocket-ებს ფარავს, ამიტომ ეს მოთხოვნა ზარაფხანას ღია ქსელით მიაღწევდა და შენს IP-ს ამ დასტურებთან დააკავშირებდა. დაუშვი პარამეტრები > უსაფრთხოება-ში, ან ჯერ გამორთე Tor. მეშით ecash-ის გაგზავნა და მიღება მაინც მუშაობს.",
-  "wallet.svc.tor_paused": "Tor ჩართულია, მაგრამ არ არის დაკავშირებული.",
-  "wallet.svc.tor_paused_body":
-    "Orbot-მა მიმართვა შეწყვიტა, ამიტომ ეს მოთხოვნა ზარაფხანას ღია ქსელით მიაღწევდა და შენს IP-ს ამ დასტურებთან დააკავშირებდა. ხელახლა გახსენი Orbot, ან გამორთე Tor. მეშით ecash-ის გაგზავნა და მიღება მაინც მუშაობს.",
   "wallet.svc.keys_uncached":
     "ამ ზარაფხანის გასაღებები ამ მოწყობილობაზე არ ინახება.",
   "wallet.svc.keys_uncached_body":
@@ -1801,8 +1798,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "გამოვრთოთ Tor-ით მიმართვა?",
   "settings.conn.tor_off_body":
     "Nostr-ის ტრაფიკი შენს ჩვეულებრივ კავშირს უბრუნდება, ამიტომ რელეები შენს IP მისამართს ისევ დაინახავენ. ორივე შემთხვევაში ბლუთუზზე ეს არ მოქმედებს.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot დაინსტალირებულია, მაგრამ არ არის დაკავშირებული. გახსენი Orbot, გაუშვი მისი VPN, შემდეგ კი ეს ჩართე.",
   "settings.conn.tor_unavailable": "ამ ბილდში Tor-ით მიმართვა მიუწვდომელია.",
   "settings.conn.tor_timeout":
     "Tor-ს დაკავშირებას ერთ წუთზე მეტი სჭირდება. ის ჩართული რჩება და ცდას აგრძელებს; მეშის ჩანართი გეტყვის, როდის დაიწყო მიმართვა, ან თუ ეს ქსელი მას ბლოკავს.",
@@ -1834,16 +1829,11 @@ export const strings: Strings = {
     "ის შენს უბანს მდებარეობის მიხედვით პოულობს. დაუშვი მდებარეობა, რომ ხიდი ამუშავდეს.",
   "settings.conn.grant_location": "მდებარეობის ნებართვის მიცემა",
   "settings.conn.grant_short": "დაშვება",
-  "settings.conn.orbot_body":
-    "Airhop Tor-ის ტრაფიკს Orbot-ით მიმართავს. დააინსტალირე და ჩართე Orbot Play Store-იდან, შემდეგ კი ეს ჩართე.",
   "settings.conn.internet_off": "ინტერნეტი გამორთულია",
   "settings.conn.internet_off_desc":
     "Tor, ხიდი და კარიბჭე ინტერნეტს იყენებენ. მათ გამოსაყენებლად ჩართე ინტერნეტზე გადასვლა ქსელის განყოფილებაში.",
   "settings.conn.turn_on": "ჩართვა",
   "settings.conn.turn_off": "გამორთვა",
-  "settings.conn.orbot_title": "Tor Android-ზე",
-  "settings.conn.get_orbot": "Orbot-ის მიღება",
-  "settings.conn.later": "მოგვიანებით",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "ბლუთუზი",

@@ -1349,9 +1349,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "روی iOS درخواست‌های ضراب‌خانه از Tor نمی‌گذرند.",
   "wallet.svc.tor_ios_body":
     "Arti تنها WebSocket‌های Nostr را می‌پوشاند، پس این درخواست از شبکهٔ باز به ضراب‌خانه می‌رسد و نشانی IP شما را به این اثبات‌ها گره می‌زند. زیر تنظیمات > امنیت مجازش کنید، یا اول Tor را خاموش کنید. فرستادن و گرفتن ecash روی مش همچنان کار می‌کند.",
-  "wallet.svc.tor_paused": "Tor روشن است اما وصل نیست.",
-  "wallet.svc.tor_paused_body":
-    "Orbot دیگر مسیریابی نمی‌کند، پس این درخواست از شبکهٔ باز به ضراب‌خانه می‌رسد و نشانی IP شما را به این اثبات‌ها گره می‌زند. Orbot را دوباره اجرا کنید، یا Tor را خاموش کنید. فرستادن و گرفتن ecash روی مش همچنان کار می‌کند.",
   "wallet.svc.keys_uncached":
     "کلیدهای این ضراب‌خانه روی این دستگاه ذخیره نشده‌اند.",
   "wallet.svc.keys_uncached_body":
@@ -1784,8 +1781,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "مسیردهی Tor خاموش شود؟",
   "settings.conn.tor_off_body":
     "ترافیک Nostr به اتصال معمولی شما بازمی‌گردد، پس رله‌ها دوباره نشانی IP شما را می‌بینند. در هر حال بلوتوث بی‌تأثیر است.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot نصب است اما وصل نیست. Orbot را باز کنید، VPN آن را راه بیندازید، سپس این را روشن کنید.",
   "settings.conn.tor_unavailable": "مسیردهی Tor در این نسخه در دسترس نیست.",
   "settings.conn.tor_timeout":
     "اتصال Tor بیش از یک دقیقه طول کشیده است. روشن می‌ماند و تلاش را ادامه می‌دهد؛ زبانهٔ مش خواهد گفت کِی مسیردهی برقرار شده، یا اینکه این شبکه جلویش را گرفته است.",
@@ -1817,16 +1812,11 @@ export const strings: Strings = {
     "محلهٔ شما را از روی یک تثبیت موقعیت پیدا می‌کند. برای آغاز پل‌زدن به موقعیت مکانی اجازه بدهید.",
   "settings.conn.grant_location": "اجازهٔ موقعیت مکانی",
   "settings.conn.grant_short": "اجازه بده",
-  "settings.conn.orbot_body":
-    "Airhop ترافیک Tor را از راه Orbot می‌فرستد. Orbot را از Play Store نصب و فعال کنید، سپس این را روشن کنید.",
   "settings.conn.internet_off": "اینترنت خاموش است",
   "settings.conn.internet_off_desc":
     "Tor و پل و دروازه همگی از اینترنت استفاده می‌کنند. برای به کار بردنشان، اینترنت جایگزین را زیر بخش شبکه روشن کنید.",
   "settings.conn.turn_on": "روشن کن",
   "settings.conn.turn_off": "خاموش کن",
-  "settings.conn.orbot_title": "Tor روی Android",
-  "settings.conn.get_orbot": "دریافت Orbot",
-  "settings.conn.later": "بعداً",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "بلوتوث",

@@ -1365,9 +1365,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Запросы к монетному двору на iOS не идут через Tor.",
   "wallet.svc.tor_ios_body":
     "Arti оборачивает только веб-сокеты Nostr, поэтому этот запрос дошёл бы до монетного двора по открытой сети и связал ваш IP с этими доказательствами. Разрешите это в разделе «Настройки» > «Безопасность» или сначала выключите Tor. Отправка и приём ecash по сети по-прежнему работают.",
-  "wallet.svc.tor_paused": "Tor включён, но не подключён.",
-  "wallet.svc.tor_paused_body":
-    "Orbot перестал направлять трафик, поэтому этот запрос дошёл бы до монетного двора по открытой сети и связал ваш IP с этими доказательствами. Запустите Orbot заново или выключите Tor. Отправка и приём ecash по сети по-прежнему работают.",
   "wallet.svc.keys_uncached":
     "Ключи этого монетного двора не сохранены на этом устройстве.",
   "wallet.svc.keys_uncached_body":
@@ -1809,8 +1806,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Выключить маршрутизацию через Tor?",
   "settings.conn.tor_off_body":
     "Трафик Nostr вернётся на обычное соединение, и ретрансляторы снова увидят ваш IP-адрес. Bluetooth это не затрагивает в любом случае.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot установлен, но не подключён. Откройте Orbot, запустите его VPN, затем включите это.",
   "settings.conn.tor_unavailable":
     "Маршрутизация через Tor недоступна в этой сборке.",
   "settings.conn.tor_timeout":
@@ -1844,16 +1839,11 @@ export const strings: Strings = {
     "Он определяет ваш район по геопозиции. Разрешите её, чтобы начать связывание.",
   "settings.conn.grant_location": "Дать разрешение на геопозицию",
   "settings.conn.grant_short": "Разрешить",
-  "settings.conn.orbot_body":
-    "Airhop направляет трафик Tor через Orbot. Установите и включите Orbot из Play Маркета, затем включите это.",
   "settings.conn.internet_off": "Интернет выключен",
   "settings.conn.internet_off_desc":
     "Tor, мост и шлюз используют интернет. Включите резервный интернет в разделе «Сеть», чтобы пользоваться ими.",
   "settings.conn.turn_on": "Включить",
   "settings.conn.turn_off": "Выключить",
-  "settings.conn.orbot_title": "Tor на Android",
-  "settings.conn.get_orbot": "Установить Orbot",
-  "settings.conn.later": "Позже",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

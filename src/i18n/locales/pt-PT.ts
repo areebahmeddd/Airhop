@@ -1378,9 +1378,6 @@ export const strings: Strings = {
     "No iOS os pedidos à casa de emissão não passam pelo Tor.",
   "wallet.svc.tor_ios_body":
     "O Arti envolve só os WebSockets do Nostr, por isso este pedido chegaria à casa de emissão pela rede aberta e ligaria o teu IP a estas provas. Permite-o em Definições > Segurança, ou desliga antes o Tor. Enviar e receber ecash pela malha continua a funcionar.",
-  "wallet.svc.tor_paused": "O Tor está ligado, mas não está ligado à rede.",
-  "wallet.svc.tor_paused_body":
-    "O Orbot deixou de encaminhar, por isso este pedido chegaria à casa de emissão pela rede aberta e ligaria o teu IP a estas provas. Abre o Orbot de novo, ou desliga o Tor. Enviar e receber ecash pela malha continua a funcionar.",
   "wallet.svc.keys_uncached":
     "As chaves desta casa de emissão não estão guardadas neste dispositivo.",
   "wallet.svc.keys_uncached_body":
@@ -1824,8 +1821,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Desligar o encaminhamento por Tor?",
   "settings.conn.tor_off_body":
     "O tráfego Nostr volta à tua ligação normal, por isso os relays voltam a ver o teu endereço IP. De qualquer forma, o Bluetooth não é afetado.",
-  "settings.conn.tor_orbot_idle":
-    "O Orbot está instalado mas não está ligado. Abre o Orbot, inicia a VPN dele, e depois liga isto.",
   "settings.conn.tor_unavailable":
     "O encaminhamento por Tor não está disponível nesta versão.",
   "settings.conn.tor_timeout":
@@ -1860,16 +1855,11 @@ export const strings: Strings = {
     "Encontra o teu bairro a partir de uma localização. Concede a localização para começar a fazer a ponte.",
   "settings.conn.grant_location": "Conceder a permissão de localização",
   "settings.conn.grant_short": "Conceder",
-  "settings.conn.orbot_body":
-    "O Airhop encaminha o tráfego Tor pelo Orbot. Instala e ativa o Orbot a partir da Play Store, e depois liga isto.",
   "settings.conn.internet_off": "A Internet está desligada",
   "settings.conn.internet_off_desc":
     "O Tor, a ponte de malha e a ponte de Internet usam todos a Internet. Liga o Recurso à Internet em Rede para os usares.",
   "settings.conn.turn_on": "Ligar",
   "settings.conn.turn_off": "Desligar",
-  "settings.conn.orbot_title": "Tor no Android",
-  "settings.conn.get_orbot": "Obter o Orbot",
-  "settings.conn.later": "Mais tarde",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

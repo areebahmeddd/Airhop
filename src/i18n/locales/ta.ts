@@ -1389,9 +1389,6 @@ export const strings: Strings = {
     "iOS இல் நாணயச்சாலைக் கோரிக்கைகள் Tor வழியாகச் செல்வதில்லை.",
   "wallet.svc.tor_ios_body":
     "Arti, Nostr WebSocket களை மட்டுமே மூடுகிறது, எனவே இந்தக் கோரிக்கை திறந்த வலை வழியாக நாணயச்சாலையை அடைந்து உங்கள் IP ஐ இந்தச் சான்றுகளுடன் இணைக்கும். அமைப்புகள் > பாதுகாப்பின் கீழ் அதை அனுமதியுங்கள், அல்லது முதலில் Tor ஐ முடக்குங்கள். மெஷ் வழியாக ecash அனுப்புவதும் பெறுவதும் தொடர்ந்து இயங்கும்.",
-  "wallet.svc.tor_paused": "Tor இயக்கத்தில் உள்ளது, ஆனால் இணைக்கப்படவில்லை.",
-  "wallet.svc.tor_paused_body":
-    "Orbot வழியனுப்புவதை நிறுத்திவிட்டது, எனவே இந்தக் கோரிக்கை திறந்த வலை வழியாக நாணயச்சாலையை அடைந்து உங்கள் IP ஐ இந்தச் சான்றுகளுடன் இணைக்கும். Orbot ஐ மீண்டும் தொடங்குங்கள், அல்லது Tor ஐ முடக்குங்கள். மெஷ் வழியாக ecash அனுப்புவதும் பெறுவதும் தொடர்ந்து இயங்கும்.",
   "wallet.svc.keys_uncached":
     "இந்த நாணயச்சாலையின் சாவிகள் இந்தச் சாதனத்தில் சேமிக்கப்படவில்லை.",
   "wallet.svc.keys_uncached_body":
@@ -1847,8 +1844,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor திசைவழியை முடக்கவா?",
   "settings.conn.tor_off_body":
     "Nostr போக்குவரத்து உங்கள் வழக்கமான இணைப்புக்குத் திரும்பும், எனவே ரிலேக்கள் உங்கள் IP முகவரியை மீண்டும் பார்க்கும். எப்படியிருந்தாலும் புளூடூத் பாதிக்கப்படாது.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot நிறுவப்பட்டுள்ளது ஆனால் இணைக்கப்படவில்லை. Orbot ஐத் திறந்து, அதன் VPN ஐத் தொடங்கி, பிறகு இதை இயக்குங்கள்.",
   "settings.conn.tor_unavailable":
     "இந்தக் கட்டமைப்பில் Tor திசைவழி கிடைக்கவில்லை.",
   "settings.conn.tor_timeout":
@@ -1882,16 +1877,11 @@ export const strings: Strings = {
     "இட அளவீட்டிலிருந்து உங்கள் அக்கம்பக்கத்தைக் கண்டறிகிறது. பாலம் அமைக்கத் தொடங்க இட அனுமதி கொடுங்கள்.",
   "settings.conn.grant_location": "இட அனுமதி கொடு",
   "settings.conn.grant_short": "கொடு",
-  "settings.conn.orbot_body":
-    "Airhop, Tor போக்குவரத்தை Orbot வழியாக அனுப்புகிறது. Play Store இலிருந்து Orbot ஐ நிறுவி இயக்கி, பிறகு இதை இயக்குங்கள்.",
   "settings.conn.internet_off": "இணையம் முடக்கத்தில் உள்ளது",
   "settings.conn.internet_off_desc":
     "Tor, பாலம், நுழைவாயில் அனைத்தும் இணையத்தைப் பயன்படுத்துகின்றன. அவற்றைப் பயன்படுத்த வலையமைப்புக்குக் கீழே இணைய மாற்றை இயக்குங்கள்.",
   "settings.conn.turn_on": "இயக்கு",
   "settings.conn.turn_off": "முடக்கு",
-  "settings.conn.orbot_title": "Android இல் Tor",
-  "settings.conn.get_orbot": "Orbot ஐப் பெறு",
-  "settings.conn.later": "பிறகு",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "புளூடூத்",

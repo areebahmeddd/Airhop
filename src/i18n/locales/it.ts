@@ -1375,9 +1375,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Su iOS le richieste al mint non passano da Tor.",
   "wallet.svc.tor_ios_body":
     "Arti copre solo i WebSocket di Nostr, quindi questa richiesta raggiungerebbe il mint sulla rete in chiaro e collegherebbe il tuo IP a queste prove. Consentilo in Impostazioni > Sicurezza, oppure disattiva prima Tor. Inviare e ricevere ecash sulla mesh continua a funzionare.",
-  "wallet.svc.tor_paused": "Tor è attivo ma non connesso.",
-  "wallet.svc.tor_paused_body":
-    "Orbot ha smesso di instradare, quindi questa richiesta raggiungerebbe il mint sulla rete in chiaro e collegherebbe il tuo IP a queste prove. Riavvia Orbot, oppure disattiva Tor. Inviare e ricevere ecash sulla mesh continua a funzionare.",
   "wallet.svc.keys_uncached":
     "Le chiavi di questo mint non sono conservate su questo dispositivo.",
   "wallet.svc.keys_uncached_body":
@@ -1826,8 +1823,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Disattivare l’instradamento su Tor?",
   "settings.conn.tor_off_body":
     "Il traffico Nostr torna sulla tua connessione normale, quindi i relay rivedranno il tuo indirizzo IP. In ogni caso il Bluetooth non è toccato.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot è installato ma non connesso. Apri Orbot, avvia la sua VPN e poi attiva questa opzione.",
   "settings.conn.tor_unavailable":
     "L’instradamento su Tor non è disponibile in questa build.",
   "settings.conn.tor_timeout":
@@ -1861,16 +1856,11 @@ export const strings: Strings = {
     "Individua il tuo quartiere da una rilevazione di posizione. Concedi la posizione per iniziare a collegare.",
   "settings.conn.grant_location": "Concedi il permesso di posizione",
   "settings.conn.grant_short": "Concedi",
-  "settings.conn.orbot_body":
-    "Airhop instrada il traffico Tor tramite Orbot. Installa e abilita Orbot dal Play Store, poi attiva questa opzione.",
   "settings.conn.internet_off": "Internet è disattivato",
   "settings.conn.internet_off_desc":
     "Tor, il ponte e il gateway usano tutti internet. Attiva il ripiego su internet sotto Rete per usarli.",
   "settings.conn.turn_on": "Attiva",
   "settings.conn.turn_off": "Disattiva",
-  "settings.conn.orbot_title": "Tor su Android",
-  "settings.conn.get_orbot": "Scarica Orbot",
-  "settings.conn.later": "Più tardi",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

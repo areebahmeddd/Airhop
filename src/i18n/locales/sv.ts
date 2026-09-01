@@ -1352,9 +1352,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Mint-förfrågningar går inte genom Tor på iOS.",
   "wallet.svc.tor_ios_body":
     "Arti omsluter bara Nostr-WebSockets, så förfrågan skulle nå minten över det öppna nätet och knyta din IP till de här bevisen. Tillåt det under Inställningar > Säkerhet, eller stäng av Tor först. Att skicka och ta emot ecash över meshen fungerar ändå.",
-  "wallet.svc.tor_paused": "Tor är på men inte ansluten.",
-  "wallet.svc.tor_paused_body":
-    "Orbot har slutat dirigera trafiken, så förfrågan skulle nå minten över det öppna nätet och knyta din IP till de här bevisen. Starta Orbot igen, eller stäng av Tor. Att skicka och ta emot ecash över meshen fungerar ändå.",
   "wallet.svc.keys_uncached": "Den här mintens nycklar finns inte på enheten.",
   "wallet.svc.keys_uncached_body":
     "Öppna plånboken en gång medan du är online för att hämta dem.",
@@ -1786,8 +1783,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Stänga av Tor-routing?",
   "settings.conn.tor_off_body":
     "Nostr-trafiken går tillbaka över din vanliga uppkoppling, så reläerna ser din IP-adress igen. Bluetooth påverkas inte i något av fallen.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot är installerat men inte anslutet. Öppna Orbot, starta dess VPN och slå sedan på det här.",
   "settings.conn.tor_unavailable":
     "Tor-routing finns inte i den här versionen.",
   "settings.conn.tor_timeout":
@@ -1820,16 +1815,11 @@ export const strings: Strings = {
     "Den hittar din stadsdel utifrån en platsbestämning. Ge platsbehörighet för att börja brygga.",
   "settings.conn.grant_location": "Ge platsbehörighet",
   "settings.conn.grant_short": "Ge",
-  "settings.conn.orbot_body":
-    "Airhop skickar Tor-trafik genom Orbot. Installera och aktivera Orbot från Play Store och slå sedan på det här.",
   "settings.conn.internet_off": "Internet är av",
   "settings.conn.internet_off_desc":
     "Tor, bryggan och gatewayen använder alla internet. Slå på Internet som reserv under Nätverk för att använda dem.",
   "settings.conn.turn_on": "Slå på",
   "settings.conn.turn_off": "Stäng av",
-  "settings.conn.orbot_title": "Tor på Android",
-  "settings.conn.get_orbot": "Hämta Orbot",
-  "settings.conn.later": "Senare",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

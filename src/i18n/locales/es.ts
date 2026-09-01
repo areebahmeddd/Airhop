@@ -1375,9 +1375,6 @@ export const strings: Strings = {
     "En iOS, las peticiones a la casa de cambio no pasan por Tor.",
   "wallet.svc.tor_ios_body":
     "Arti solo envuelve los WebSockets de Nostr, así que esta petición llegaría a la casa de cambio por la red abierta y vincularía tu IP con estas pruebas. Permítelo en Ajustes > Seguridad, o desactiva Tor antes. Enviar y recibir ecash por la malla sigue funcionando.",
-  "wallet.svc.tor_paused": "Tor está activado pero sin conexión.",
-  "wallet.svc.tor_paused_body":
-    "Orbot dejó de enrutar, así que esta petición llegaría a la casa de cambio por la red abierta y vincularía tu IP con estas pruebas. Vuelve a iniciar Orbot, o desactiva Tor. Enviar y recibir ecash por la malla sigue funcionando.",
   "wallet.svc.keys_uncached":
     "Las claves de esta casa de cambio no están guardadas en este dispositivo.",
   "wallet.svc.keys_uncached_body":
@@ -1822,8 +1819,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "¿Desactivar el enrutado por Tor?",
   "settings.conn.tor_off_body":
     "El tráfico de Nostr vuelve por tu conexión normal, así que los relés verán de nuevo tu dirección IP. En ambos casos el Bluetooth no se ve afectado.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot está instalado pero no conectado. Abre Orbot, inicia su VPN y luego activa esto.",
   "settings.conn.tor_unavailable":
     "El enrutado por Tor no está disponible en esta versión.",
   "settings.conn.tor_timeout":
@@ -1858,16 +1853,11 @@ export const strings: Strings = {
     "Encuentra tu barrio a partir de una lectura de ubicación. Concede la ubicación para empezar a enlazar.",
   "settings.conn.grant_location": "Conceder el permiso de ubicación",
   "settings.conn.grant_short": "Conceder",
-  "settings.conn.orbot_body":
-    "Airhop enruta el tráfico de Tor a través de Orbot. Instala y activa Orbot desde Play Store y luego activa esto.",
   "settings.conn.internet_off": "Internet está desactivado",
   "settings.conn.internet_off_desc":
     "Tor, el puente y la pasarela usan internet. Activa el respaldo por internet en Red para usarlos.",
   "settings.conn.turn_on": "Activar",
   "settings.conn.turn_off": "Desactivar",
-  "settings.conn.orbot_title": "Tor en Android",
-  "settings.conn.get_orbot": "Descargar Orbot",
-  "settings.conn.later": "Más tarde",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

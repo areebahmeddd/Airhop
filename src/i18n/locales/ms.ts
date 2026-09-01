@@ -1368,9 +1368,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Permintaan mint tidak melalui Tor pada iOS.",
   "wallet.svc.tor_ios_body":
     "Arti hanya membalut WebSocket Nostr, jadi permintaan ini akan sampai kepada mint melalui rangkaian terbuka dan mengaitkan IP anda dengan bukti ini. Benarkannya di bawah Tetapan > Keselamatan, atau matikan Tor dahulu. Menghantar dan menerima ecash melalui mesh tetap berfungsi.",
-  "wallet.svc.tor_paused": "Tor dihidupkan tetapi tidak bersambung.",
-  "wallet.svc.tor_paused_body":
-    "Orbot berhenti menghalakan trafik, jadi permintaan ini akan sampai kepada mint melalui rangkaian terbuka dan mengaitkan IP anda dengan bukti ini. Hidupkan semula Orbot, atau matikan Tor. Menghantar dan menerima ecash melalui mesh tetap berfungsi.",
   "wallet.svc.keys_uncached":
     "Kunci mint ini tidak tersimpan pada peranti ini.",
   "wallet.svc.keys_uncached_body":
@@ -1814,8 +1811,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Matikan penghalaan Tor?",
   "settings.conn.tor_off_body":
     "Trafik Nostr kembali melalui sambungan biasa anda, jadi geganti melihat alamat IP anda semula. Bluetooth tetap tidak terjejas.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot dipasang tetapi belum bersambung. Buka Orbot, mulakan VPNnya, kemudian hidupkan ini.",
   "settings.conn.tor_unavailable":
     "Penghalaan Tor tidak tersedia dalam binaan ini.",
   "settings.conn.tor_timeout":
@@ -1849,16 +1844,11 @@ export const strings: Strings = {
     "Ia mencari kejiranan anda daripada penetapan kedudukan. Berikan kebenaran lokasi untuk mula menjambatani.",
   "settings.conn.grant_location": "Berikan kebenaran lokasi",
   "settings.conn.grant_short": "Berikan",
-  "settings.conn.orbot_body":
-    "Airhop menghalakan trafik Tor melalui Orbot. Pasang dan dayakan Orbot daripada Play Store, kemudian hidupkan ini.",
   "settings.conn.internet_off": "Internet dimatikan",
   "settings.conn.internet_off_desc":
     "Tor, jambatan dan get semuanya menggunakan internet. Hidupkan Sandaran internet di bawah Rangkaian untuk menggunakannya.",
   "settings.conn.turn_on": "Hidupkan",
   "settings.conn.turn_off": "Matikan",
-  "settings.conn.orbot_title": "Tor pada Android",
-  "settings.conn.get_orbot": "Dapatkan Orbot",
-  "settings.conn.later": "Kemudian",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

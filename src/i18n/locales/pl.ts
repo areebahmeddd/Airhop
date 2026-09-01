@@ -1375,9 +1375,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Zapytania do mennicy nie idą przez Tor na iOS.",
   "wallet.svc.tor_ios_body":
     "Arti otacza tylko WebSockety Nostr, więc to zapytanie dotarłoby do mennicy otwartą siecią i powiązało twoje IP z tymi dowodami. Zezwól na to w Ustawieniach > Bezpieczeństwo albo najpierw wyłącz Tor. Wysyłanie i odbieranie ecash przez sieć mesh działa dalej.",
-  "wallet.svc.tor_paused": "Tor jest włączony, ale bez połączenia.",
-  "wallet.svc.tor_paused_body":
-    "Orbot przestał kierować ruch, więc to zapytanie dotarłoby do mennicy otwartą siecią i powiązało twoje IP z tymi dowodami. Uruchom Orbot ponownie albo wyłącz Tor. Wysyłanie i odbieranie ecash przez sieć mesh działa dalej.",
   "wallet.svc.keys_uncached": "Kluczy tej mennicy nie ma na tym urządzeniu.",
   "wallet.svc.keys_uncached_body":
     "Otwórz portfel raz przy internecie, żeby je pobrać.",
@@ -1813,8 +1810,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Wyłączyć trasowanie przez Tor?",
   "settings.conn.tor_off_body":
     "Ruch Nostr wraca na zwykłe połączenie, więc przekaźniki znów widzą twój adres IP. Bluetooth tak czy inaczej pozostaje bez zmian.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot jest zainstalowany, ale niepołączony. Otwórz Orbota, uruchom jego VPN, a potem włącz to.",
   "settings.conn.tor_unavailable":
     "Trasowanie przez Tor jest niedostępne w tej kompilacji.",
   "settings.conn.tor_timeout":
@@ -1847,16 +1842,11 @@ export const strings: Strings = {
     "Znajduje twoją dzielnicę na podstawie ustalenia pozycji. Przyznaj lokalizację, żeby zacząć mostkowanie.",
   "settings.conn.grant_location": "Przyznaj uprawnienie do lokalizacji",
   "settings.conn.grant_short": "Przyznaj",
-  "settings.conn.orbot_body":
-    "Airhop kieruje ruch Tor przez Orbota. Zainstaluj i włącz Orbota ze Sklepu Play, a potem włącz to.",
   "settings.conn.internet_off": "Internet jest wyłączony",
   "settings.conn.internet_off_desc":
     "Tor, most i brama korzystają z internetu. Włącz Internet zapasowo w sekcji Sieć, żeby ich używać.",
   "settings.conn.turn_on": "Włącz",
   "settings.conn.turn_off": "Wyłącz",
-  "settings.conn.orbot_title": "Tor na Androidzie",
-  "settings.conn.get_orbot": "Pobierz Orbota",
-  "settings.conn.later": "Później",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

@@ -1368,9 +1368,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Op iOS gaan mintverzoeken niet via Tor.",
   "wallet.svc.tor_ios_body":
     "Arti omhult alleen Nostr-WebSockets, dus dit verzoek zou de mint over het open net bereiken en je IP aan deze bewijzen koppelen. Sta het toe onder Instellingen > Beveiliging, of zet Tor eerst uit. Ecash sturen en ontvangen over de mesh blijft werken.",
-  "wallet.svc.tor_paused": "Tor staat aan maar is niet verbonden.",
-  "wallet.svc.tor_paused_body":
-    "Orbot routeert niets meer, dus dit verzoek zou de mint over het open net bereiken en je IP aan deze bewijzen koppelen. Start Orbot opnieuw, of zet Tor uit. Ecash sturen en ontvangen over de mesh blijft werken.",
   "wallet.svc.keys_uncached":
     "De sleutels van deze mint staan niet op dit toestel.",
   "wallet.svc.keys_uncached_body":
@@ -1811,8 +1808,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Routeren via Tor uitzetten?",
   "settings.conn.tor_off_body":
     "Nostr-verkeer gaat weer over je gewone verbinding, dus relays zien je IP-adres weer. Bluetooth verandert hoe dan ook niet.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot is geïnstalleerd maar niet verbonden. Open Orbot, start de VPN en zet dit daarna aan.",
   "settings.conn.tor_unavailable": "Routeren via Tor zit niet in deze build.",
   "settings.conn.tor_timeout":
     "Tor doet er langer dan een minuut over om te verbinden. Het blijft aan en blijft proberen; het Mesh-tabblad laat weten wanneer het routeert, of dat dit netwerk het blokkeert.",
@@ -1844,16 +1839,11 @@ export const strings: Strings = {
     "Hij vindt je buurt aan de hand van een locatiemeting. Geef locatietoestemming om te gaan koppelen.",
   "settings.conn.grant_location": "Locatietoestemming geven",
   "settings.conn.grant_short": "Toestaan",
-  "settings.conn.orbot_body":
-    "Airhop laat Tor-verkeer via Orbot lopen. Installeer Orbot uit de Play Store, zet het aan en schakel dit daarna in.",
   "settings.conn.internet_off": "Internet staat uit",
   "settings.conn.internet_off_desc":
     "Tor, de brug en de gateway gebruiken allemaal internet. Zet terugval op internet aan onder Netwerk om ze te gebruiken.",
   "settings.conn.turn_on": "Aanzetten",
   "settings.conn.turn_off": "Uitzetten",
-  "settings.conn.orbot_title": "Tor op Android",
-  "settings.conn.get_orbot": "Orbot ophalen",
-  "settings.conn.later": "Later",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

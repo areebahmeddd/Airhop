@@ -1374,9 +1374,6 @@ export const strings: Strings = {
     "No iOS os pedidos à casa de emissão não passam pelo Tor.",
   "wallet.svc.tor_ios_body":
     "O Arti envolve só os WebSockets do Nostr, então este pedido chegaria à casa de emissão pela rede aberta e ligaria seu IP a estas provas. Libere em Configurações > Segurança, ou desligue o Tor antes. Enviar e receber ecash pela malha continua funcionando.",
-  "wallet.svc.tor_paused": "O Tor está ligado, mas não conectado.",
-  "wallet.svc.tor_paused_body":
-    "O Orbot parou de rotear, então este pedido chegaria à casa de emissão pela rede aberta e ligaria seu IP a estas provas. Abra o Orbot de novo, ou desligue o Tor. Enviar e receber ecash pela malha continua funcionando.",
   "wallet.svc.keys_uncached":
     "As chaves desta casa de emissão não estão guardadas neste aparelho.",
   "wallet.svc.keys_uncached_body":
@@ -1816,8 +1813,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Desligar o roteamento por Tor?",
   "settings.conn.tor_off_body":
     "O tráfego Nostr volta pela sua conexão comum, então os relays veem seu endereço IP de novo. De um jeito ou de outro, o Bluetooth não é afetado.",
-  "settings.conn.tor_orbot_idle":
-    "O Orbot está instalado mas não conectado. Abra o Orbot, inicie a VPN dele e depois ligue isto.",
   "settings.conn.tor_unavailable":
     "O roteamento por Tor não está disponível nesta versão.",
   "settings.conn.tor_timeout":
@@ -1852,16 +1847,11 @@ export const strings: Strings = {
     "Ela descobre seu bairro a partir de uma leitura de posição. Conceda a localização para começar a conectar.",
   "settings.conn.grant_location": "Conceder a permissão de localização",
   "settings.conn.grant_short": "Conceder",
-  "settings.conn.orbot_body":
-    "O Airhop faz o tráfego Tor passar pelo Orbot. Instale e ative o Orbot pela Play Store e depois ligue isto.",
   "settings.conn.internet_off": "A internet está desligada",
   "settings.conn.internet_off_desc":
     "O Tor, a ponte de malha e a ponte de internet usam internet. Ligue a alternativa por internet em Rede para usá-los.",
   "settings.conn.turn_on": "Ligar",
   "settings.conn.turn_off": "Desligar",
-  "settings.conn.orbot_title": "Tor no Android",
-  "settings.conn.get_orbot": "Baixar o Orbot",
-  "settings.conn.later": "Mais tarde",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",
