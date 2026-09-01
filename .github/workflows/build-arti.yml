@@ -201,7 +201,37 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(arti): rebuild the embedded Tor client" \
             -m "Android in the pinned container on ubuntu, Apple on macOS. Versions and toolchain: native/arti/TOOLCHAIN.env."
-          git push origin "HEAD:$TARGET_REF"
+
+          # This push carries roughly 40 MB of static libraries, and the default
+          # settings fail it reproducibly with "RPC failed; HTTP 408" after about
+          # forty seconds.
+          #
+          # postBuffer is the fix that matters: below it git streams the pack with
+          # chunked transfer encoding, and something between the runner and GitHub
+          # gives up on a chunked body that size. Buffering the pack and sending it
+          # with a known length avoids the question. HTTP/1.1 is the belt to that
+          # brace, since HTTP/2 multiplexing has its own history of stalling large
+          # uploads from Actions.
+          git config http.postBuffer 524288000
+          git config http.version HTTP/1.1
+
+          # Retried anyway. The settings above make a timeout unlikely rather than
+          # impossible, and losing an hour of compute to one slow network moment
+          # is a poor trade against three attempts.
+          pushed=false
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:$TARGET_REF"; then
+              echo "Pushed on attempt $attempt."
+              pushed=true
+              break
+            fi
+            echo "::warning::push attempt $attempt failed"
+            sleep $(( attempt * 15 ))
+          done
+          if [ "$pushed" != "true" ]; then
+            echo "::error::could not push after 3 attempts"
+            exit 1
+          fi
 
           {
             echo "### Committed to \`$TARGET_REF\`"
