@@ -28,11 +28,16 @@ fail() { printf '\033[0;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = "Darwin" ] || fail "build-apple.sh requires macOS"
 command -v cargo >/dev/null || fail "cargo is not on PATH"
-command -v cbindgen >/dev/null || fail "cbindgen is not installed: cargo install cbindgen --locked"
+command -v cbindgen >/dev/null || fail "cbindgen is not installed: cargo install cbindgen --version $CBINDGEN_VERSION --locked"
 command -v xcodebuild >/dev/null || fail "xcodebuild is not on PATH"
 
 actual_rust="$(rustc --version | awk '{print $2}')"
 [ "$actual_rust" = "$RUST_VERSION" ] || fail "rustc is $actual_rust, TOOLCHAIN.env pins $RUST_VERSION"
+
+# arti.h is a build output, so the generator affects the shipped artifact.
+# A different cbindgen can change formatting/type rendering, moving the hash without Rust changes.
+actual_cbindgen="$(cbindgen --version | awk '{print $2}')"
+[ "$actual_cbindgen" = "$CBINDGEN_VERSION" ] || fail "cbindgen is $actual_cbindgen, TOOLCHAIN.env pins $CBINDGEN_VERSION"
 
 # ---- Reproducibility ------------------------------------------------------
 #

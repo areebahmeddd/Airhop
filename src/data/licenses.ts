@@ -314,7 +314,7 @@ const CATALOG: {
     packages: [
       {
         name: "arti",
-        version: "0.45.0",
+        version: "0.46.0",
         license: "MIT OR Apache-2.0",
         repo: "https://gitlab.torproject.org/tpo/core/arti",
       },

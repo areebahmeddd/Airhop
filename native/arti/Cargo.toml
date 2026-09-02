@@ -16,20 +16,25 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # Use rustls instead of native-tls to avoid OpenSSL and the platform trust store.
 # Disable arti-client defaults and enable only the features needed by Airhop.
 #
+# `compression` is the one upstream default worth keeping: uncompressed
+# directory downloads cost bandwidth on a phone.
+#
 # Bridge support is compiled in but not configured yet. This keeps enabling
 # bridges a configuration change rather than a separate binary rebuild.
-arti-client = { version = "0.45", default-features = false, features = [
+#
+# The version is duplicated from ARTI_CLIENT_VERSION in TOOLCHAIN.env because
+# cargo cannot read it from there. Nowhere else restates it.
+arti-client = { version = "0.46", default-features = false, features = [
     "tokio",
     "rustls",
     "compression",
-    "flowctl-cc",
     "bridge-client",
     "pt-client",
     "onion-service-client",
     "vanguards",
     "static-sqlite",
 ] }
-tor-rtcompat = { version = "0.45", default-features = false, features = [
+tor-rtcompat = { version = "0.46", default-features = false, features = [
     "tokio",
     "rustls",
 ] }

@@ -64,7 +64,7 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from the bundled CSV, surfaced in the channel info sheet
 - [x] `src/core/nostr/geohash-presence.ts`: kind 20001 heartbeats
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
-- [x] Arti embedded on both platforms from one Rust crate (`native/arti/`, arti-client 0.45): lifecycle, real bootstrap progress, dormancy, per-relay circuit isolation, and a SOCKS5 listener. Android installs the proxy into React Native's OkHttp client so `fetch` is covered too; iOS adds a WebSocket shim, which is the only thing the two platforms do differently
+- [x] Arti embedded on both platforms from one Rust crate (`native/arti/`): lifecycle, real bootstrap progress, dormancy, per-relay circuit isolation, and a SOCKS5 listener. Android installs the proxy into React Native's OkHttp client so `fetch` is covered too; iOS adds a WebSocket shim, which is the only thing the two platforms do differently
 - [x] Reproducible native build: `native/arti/build-in-container.sh` pins Rust, the NDK and a Debian snapshot; `build-apple.sh` produces the xcframework; both verify exported symbols, and Android additionally verifies 16 KiB page alignment and that no build-machine path survived
 - [x] `src/services/tor-routing.ts`: the single toggle and startup choke point. Every relay connection is dialled through the proxy, so Tor fails closed
 - [x] PTT voice: `voice-capture.ts` + `voice-player.ts`, streaming mic and speaker off the JS thread, `VOICE_FRAME` (0x29) relayed in the mesh

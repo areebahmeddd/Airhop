@@ -62,7 +62,7 @@ Neither script trusts its toolchain:
 1. Bump `arti-client` and `tor-rtcompat` in `Cargo.toml` and `ARTI_CLIENT_VERSION` in `TOOLCHAIN.env`.
 2. Regenerate `Cargo.lock` and **review every dependency change**. This is a Tor client; the dependency graph is part of the security review.
 3. Rebuild both platforms, re-record the hashes, and update the `arti` entry in `src/data/licenses.ts`.
-4. Read the upstream changelog for `arti-client` API breaks. They happen: Arti 2.4.0 made every `TorClient` constructor return an `Arc`.
+4. Read the upstream changelog for API and cargo-feature breaks. Both happen, and a dropped feature fails at resolve time with a list of what is available, which is the easy case; an API change fails at compile time in `lib.rs`.
 
 A compiler bump moves `RUST_VERSION` in `TOOLCHAIN.env` and the channel in `rust-toolchain.toml` together. The build asserts they agree.
 
@@ -70,7 +70,7 @@ Run the container build twice from clean and confirm `SHA256SUMS.android` does n
 
 ## Deliberate choices
 
-**Features.** `rustls`, not `native-tls`, so there is no OpenSSL and no dependence on the platform trust store beneath the circuit. `compression` and `flowctl-cc` are upstream defaults that `default-features = false` would otherwise drop, and both matter on mobile: uncompressed directory downloads cost bandwidth, and congestion control costs latency.
+**Features.** `rustls`, not `native-tls`, so there is no OpenSSL and no dependence on the platform trust store beneath the circuit. `compression` is an upstream default that `default-features = false` would otherwise drop, and it matters on mobile: uncompressed directory downloads cost bandwidth.
 
 **`bridge-client` and `pt-client` are compiled in but never configured.** Bridges are a later phase; having the code present means that phase is a configuration and UI change, not another binary rebuild across six architecture slices.
 
