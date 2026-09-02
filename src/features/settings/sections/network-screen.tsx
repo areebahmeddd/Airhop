@@ -8,23 +8,6 @@
 // Most venue WiFi blocks peer-to-peer traffic at the access point, and nothing
 // in the app can tell that apart from nobody being there, so the copy must not
 // claim to know which it is.
-function lanStatusText(state: LanState): string {
-  switch (state) {
-    case "active":
-      return t("settings.network.lan_active");
-    case "searching":
-      return t("settings.network.lan_searching");
-    case "unavailable":
-      return t("settings.network.lan_unavailable");
-    case "permission":
-      return t("settings.network.lan_permission");
-    case "unsupported":
-      return t("settings.network.lan_unsupported");
-    case "off":
-      return t("common.off");
-  }
-}
-
 import {
   DEFAULT_DM_RELAYS,
   MAX_CUSTOM_RELAYS,
@@ -59,6 +42,23 @@ import {
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
+
+function lanStatusText(state: LanState): string {
+  switch (state) {
+    case "active":
+      return t("settings.network.lan_active");
+    case "searching":
+      return t("settings.network.lan_searching");
+    case "unavailable":
+      return t("settings.network.lan_unavailable");
+    case "permission":
+      return t("settings.network.lan_permission");
+    case "unsupported":
+      return t("settings.network.lan_unsupported");
+    case "off":
+      return t("common.off");
+  }
+}
 
 interface Props {
   onBack: () => void;

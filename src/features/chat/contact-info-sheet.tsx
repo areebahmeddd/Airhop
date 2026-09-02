@@ -105,14 +105,9 @@ export default function ContactInfoSheet({
   // What they call themselves, which the sheet keeps showing after a rename so
   // the identity that was verified never disappears behind a label.
   const ownName = peerID ? resolvePeerOwnName(peerID) : "";
-  // The pencil is offered to any mesh peer, verified or not, and says why when
-  // it cannot be used.
-  //
-  // Hiding it from unverified contacts made the feature invisible to exactly
-  // the people who would want it: you cannot discover that renaming exists, or
-  // that verifying is what unlocks it, from a control that is not there. Shown
-  // and explained, the same tap teaches both - and the Verify button that fixes
-  // it is already on screen underneath.
+  // The pencil is offered to any peer and says why when it cannot be used. A
+  // control that is not there cannot teach that renaming exists or what unlocks
+  // it; shown and explained, the same tap does both.
   //
   // Offered on a location-channel pseudonym too, where it cannot be used - a
   // per-cell name changes when someone moves, so a label pinned to it would
@@ -279,9 +274,9 @@ export default function ContactInfoSheet({
       >
         {peerID && (
           <>
-            {/* Rename, for a contact verified in person only. Same corner slot
-                the channel sheet uses for its bookmark, so the sheets share one
-                place for "the action about this thing itself". */}
+            {/* Rename. Same corner slot the channel sheet uses for its
+                bookmark, so the sheets share one place for "the action about
+                this thing itself". */}
             {canRename && !editingName && (
               <Pressable
                 style={styles.cornerBtn}
