@@ -1,3 +1,3 @@
-cb7331997cd3a28faf9632be2cf747d4e9e55a89d5b75feae179a94a0eb85e1d  android/app/src/main/jniLibs/arm64-v8a/libarti_airhop.so
-8020552ee6439a801e7170673ce56053812fa0adc62924d5d9be3f8456603f9e  android/app/src/main/jniLibs/armeabi-v7a/libarti_airhop.so
-70242c68c7b14ab2c37ebae1b071beb1fe0472abc946f4672cf21c6db2bad3d0  android/app/src/main/jniLibs/x86_64/libarti_airhop.so
+afbb253725bb6e58ffe186e75bb4feaa3d0239679b913891551db11660674521  android/app/src/main/jniLibs/arm64-v8a/libarti_airhop.so
+a047b25d02ee3d974aa48d5b8ca02a6470d41921ff002d9e678019cbe372232f  android/app/src/main/jniLibs/armeabi-v7a/libarti_airhop.so
+6060b7f0a7e70dece674147c449725c7f511f68a9d06847b809e001de9130afa  android/app/src/main/jniLibs/x86_64/libarti_airhop.so
