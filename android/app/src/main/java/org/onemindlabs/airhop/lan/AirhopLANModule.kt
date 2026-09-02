@@ -37,7 +37,9 @@ import com.facebook.react.bridge.WritableNativeMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
@@ -54,6 +56,13 @@ private const val TAG = "AirhopLANModule"
 // reads as a typo of the other: Aware is a radio protocol needing no network,
 // this is mDNS over an ordinary one.
 private const val SERVICE_TYPE = "_airhop-lan-v1._tcp"
+
+// Interface names that can carry local peers: WiFi joined or served, ethernet,
+// USB tethering. Cellular (rmnet, ccmni) is absent because nobody else is on it.
+// Android identifies its own access point the same way, by name
+// (config_tether_wifi_regexs).
+private val LOCAL_IFACE_PREFIXES =
+    arrayOf("wlan", "softap", "ap", "swlan", "eth", "rndis", "usb")
 
 private const val EVT_PEER_DISCOVERED = "AirhopLAN.peerDiscovered"
 private const val EVT_PEER_LOST = "AirhopLAN.peerLost"
@@ -167,8 +176,8 @@ class AirhopLANModule(
             promise.resolve(null)
             return
         }
-        if (!hasNetwork()) {
-            promise.reject("LAN_UNAVAILABLE", "No network to publish on")
+        if (!hasLocalNetwork()) {
+            promise.reject("LAN_UNAVAILABLE", "No local network to publish on")
             return
         }
         if (!ensureServerSocket()) {
@@ -233,12 +242,28 @@ class AirhopLANModule(
         }
     }
 
-    private fun hasNetwork(): Boolean =
+    // Whether there is anywhere for mDNS to run. Not ConnectivityManager's
+    // active network: a phone sharing its connection serves a network rather
+    // than joining one, so it has no Network object and, with mobile data off,
+    // no active network at all. A link-local 169.254 address does not count.
+    //
+    // Not gated on whether Android serves mDNS on a tethering interface (13 and
+    // up does). That ships through Play system updates, so the OS version does
+    // not answer it, and a host nobody answers reads the same as an empty
+    // network, which this transport already reports honestly.
+    private fun hasLocalNetwork(): Boolean =
         try {
-            val cm = reactContext.applicationContext
-                .getSystemService(ConnectivityManager::class.java)
-            cm?.activeNetwork != null
+            NetworkInterface.getNetworkInterfaces().asSequence().any { iface ->
+                iface.isUp &&
+                    !iface.isLoopback &&
+                    LOCAL_IFACE_PREFIXES.any { iface.name.startsWith(it) } &&
+                    iface.inetAddresses.asSequence().any {
+                        it is Inet4Address && !it.isLinkLocalAddress
+                    }
+            }
         } catch (_: Exception) {
+            // Saying no costs one backoff step and the reconciler asks again.
+            // Saying yes opens a listener with nowhere to listen.
             false
         }
 
@@ -267,11 +292,17 @@ class AirhopLANModule(
             override fun onReceive(context: Context?, intent: Intent?) {
                 emitEvent(
                     EVT_AVAILABILITY_CHANGED,
-                    WritableNativeMap().apply { putBoolean("available", hasNetwork()) },
+                    WritableNativeMap().apply { putBoolean("available", hasLocalNetwork()) },
                 )
             }
         }
-        val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
+        val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION).apply {
+            // A hotspot starting or stopping does not reliably raise
+            // CONNECTIVITY_ACTION. Named rather than referenced: the constant is
+            // on TetheringManager (API 30) and ConnectivityManager's copy is
+            // hidden.
+            addAction("android.net.conn.TETHER_STATE_CHANGED")
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 reactContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)

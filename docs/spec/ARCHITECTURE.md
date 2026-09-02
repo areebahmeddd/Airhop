@@ -273,11 +273,12 @@ network, and whoever runs it, that this phone is carrying Airhop, which on a
 workplace or venue network is an attendance list. The Settings copy says that
 rather than selling the speed.
 
-| Constraint       | Consequence                                                                                                                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Client isolation | Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI has to say "No Airhop devices on this network" rather than spin   |
-| mDNS filtering   | Common even where ordinary traffic works. A manual join by address covers it                                                                                                                 |
-| iOS background   | A TCP socket has no equivalent of `bluetooth-central`, and a suspended app has its listener reclaimed without getting it back on resume. Foreground only, which WiFi Aware already is on iOS |
+| Constraint       | Consequence                                                                                                                                                                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Client isolation | Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI has to say "No Airhop devices on this network" rather than spin                                                                                                                         |
+| mDNS filtering   | Common even where ordinary traffic works. A manual join by address covers it                                                                                                                                                                                                                                       |
+| iOS background   | A TCP socket has no equivalent of `bluetooth-central`, and a suspended app has its listener reclaimed without getting it back on resume. Foreground only, which WiFi Aware already is on iOS                                                                                                                       |
+| Hotspot hosts    | A phone sharing its connection serves the network rather than joins it, so `ConnectivityManager` has no `Network` for it. Availability is read off the interfaces instead. Android has served mDNS on that interface since 13; below that the host sees an empty network, which reads the same as client isolation |
 
 ### Same-platform WiFi
 

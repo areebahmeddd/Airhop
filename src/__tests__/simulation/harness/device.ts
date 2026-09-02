@@ -249,7 +249,7 @@ interface MeshLike {
     text: string,
     nearbyOnly?: boolean,
   ) => {
-    bleLinks: number;
+    meshLinks: number;
     nostr: boolean;
     gateway: boolean;
     [k: string]: unknown;
@@ -266,6 +266,10 @@ interface MeshLike {
     onOutcome?: (ok: boolean) => void,
   ) => boolean;
   sendReadReceipts: (peerID: string) => void;
+  sendLocationPin: (
+    peerID: string,
+    pin: { lat: number; lng: number; takenAtMs: number },
+  ) => string | null;
   canSendLiveVoice: (channel: string) => boolean;
   setLiveVoiceAudible: (channel: string | null) => void;
   startVoiceBurst: (channel: string, onFailure: () => void) => Promise<boolean>;
@@ -650,14 +654,14 @@ export class SimDevice {
         channel.slice("group:".length),
         text,
         id,
-      ) as { sealed: boolean; bleLinks: number } | undefined;
-      status = sent?.sealed === true && sent.bleLinks > 0 ? "sent" : "failed";
+      ) as { sealed: boolean; meshLinks: number } | undefined;
+      status = sent?.sealed === true && sent.meshLinks > 0 ? "sent" : "failed";
     } else {
       const sent = service.sendChannelMessage(channel, text, nearbyOnly);
       // Mirrors message-thread.tsx: a location channel with no live relay but a
       // reachable gateway peer is "carried", not "failed".
       status =
-        sent.bleLinks > 0 || sent.nostr
+        sent.meshLinks > 0 || sent.nostr
           ? "sent"
           : sent.gateway
             ? "carried"
@@ -673,7 +677,7 @@ export class SimDevice {
     channel: string,
     text: string,
     nearbyOnly = false,
-  ): { bleLinks: number; nostr: boolean; gateway: boolean } | undefined {
+  ): { meshLinks: number; nostr: boolean; gateway: boolean } | undefined {
     this.log("SEND_CHANNEL", `${channel}: ${text}`);
     return this.mesh?.sendChannelMessage(channel, text, nearbyOnly);
   }
@@ -681,6 +685,22 @@ export class SimDevice {
   sendDm(peerID: string, text: string, messageID?: string): string {
     this.log("SEND_DM", `${peerID.slice(0, 8)}: ${text}`);
     return this.mesh?.sendDm(peerID, text, messageID) ?? "queued";
+  }
+
+  // Narrower than a DM: a pin that cannot go now does not go at all, so null
+  // is the sheet's failure state rather than a queue.
+  sendLocationPin(peerID: string, lat: number, lng: number): string | null {
+    this.log(
+      "SEND_PIN",
+      `${peerID.slice(0, 8)}: ${String(lat)},${String(lng)}`,
+    );
+    return (
+      this.mesh?.sendLocationPin(peerID, {
+        lat,
+        lng,
+        takenAtMs: this.world.now,
+      }) ?? null
+    );
   }
 
   sendAttachment(
@@ -744,8 +764,17 @@ export class SimDevice {
     return this.peers().length;
   }
 
-  // Whether this phone currently holds a BLE link to that peer, as opposed to
-  // merely having heard about them through the mesh.
+  // Peers heard from inside REACHABLE_TTL_MS, which is what the radar draws.
+  // The map outlives reachability, so `peers` is the wider set.
+  reachablePeers(): string[] {
+    const state = this.inner.stores.peerStore.getState() as {
+      reachablePeers?: () => { peerID: string }[];
+    };
+    return (state.reachablePeers?.() ?? []).map((p) => p.peerID);
+  }
+
+  // Whether this phone currently holds a link to that peer, on any transport,
+  // as opposed to merely having heard about them through the mesh.
   isDirectPeer(peerID: string): boolean {
     const peers = this.inner.stores.peerStore.getState().peers;
     if (!(peers instanceof Map)) return false;

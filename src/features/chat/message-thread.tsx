@@ -2358,7 +2358,7 @@ export default function MessageThread({
         // unlike every other failure here, walking around does not fix it.
         setStatus(msgChannel, msg.id, "failed");
         showStatus("no-group-key");
-      } else if (sent.bleLinks > 0) {
+      } else if (sent.meshLinks > 0) {
         setStatus(msgChannel, msg.id, "sent");
       } else {
         // Sealed but nobody in range. NOT a failure: the packet is now a gossip
@@ -2377,7 +2377,7 @@ export default function MessageThread({
       // meant "this channel can use the internet" rather than "the internet was
       // there", so a location channel on Bluetooth alone showed a sent tick.
       const sent = service.sendChannelMessage(msgChannel, msg.text, nearbyOnly);
-      if (sent.bleLinks > 0 || sent.nostr) {
+      if (sent.meshLinks > 0 || sent.nostr) {
         setStatus(msgChannel, msg.id, "sent");
       } else if (sent.gateway) {
         setStatus(msgChannel, msg.id, "carried");

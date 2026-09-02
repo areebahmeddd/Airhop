@@ -38,6 +38,12 @@ jest.mock("@bridge/NativeAirhopLAN", () => {
   const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.lanBridge };
 });
+// Live voice is offered only where the native module exists. Without this,
+// L06 would pass without having asked anything.
+jest.mock("@bridge/NativeAirhopVoice", () => {
+  const { createNativeVoiceMock } = require("../harness/media-fabric");
+  return { __esModule: true, default: createNativeVoiceMock().module };
+});
 
 import { SimDevice, type DeviceSpec } from "../harness/device";
 import { noCrashes } from "../harness/invariants";
@@ -356,6 +362,106 @@ test("L05 leaving the network takes the links with it", async () => {
     lan.linkCount() === 0,
     `links=${lan.linkCount()}`,
   );
+
+  s.expectNone("process health", noCrashes(devices));
+  s.assert(true);
+});
+
+test("L06 a LAN peer stays on the radar with no Bluetooth to keep it there", async () => {
+  const s = (scenario = new Scenario({
+    id: "L06",
+    title: "the announce that keeps a peer alive rides every transport",
+    seed: 706,
+  }));
+  const { lan, devices } = room(s, [
+    phone("a", 11, "android"),
+    phone("b", 22, "ios"),
+  ]);
+  const [a, b] = devices;
+  s.track(a, b);
+  lan.join("a", "flat");
+  lan.join("b", "flat");
+  a.launch();
+  b.launch();
+
+  const met = await waitFor(
+    s.world,
+    () => a.peers().includes(b.peerID) && b.peers().includes(a.peerID),
+    40_000,
+  );
+  s.check("they met", met);
+
+  // Twice REACHABLE_TTL_MS, so the announce sent at link-up cannot be what
+  // keeps either phone on the radar.
+  await s.world.advance(120_000);
+
+  s.check(
+    "both are still reachable two staleness windows later",
+    a.reachablePeers().includes(b.peerID) &&
+      b.reachablePeers().includes(a.peerID),
+    `a=[${a.reachablePeers().join(",")}] b=[${b.reachablePeers().join(",")}]`,
+  );
+  s.check(
+    "with no Bluetooth link to have kept them fresh",
+    a.bleLinkCount() === 0 && b.bleLinkCount() === 0,
+  );
+
+  // Live voice reads the link binding, which is made by an announce arriving
+  // on that link. One announce is one chance.
+  a.sendDm(b.peerID, "warming the session");
+  const sessioned = await waitFor(
+    s.world,
+    () => a.canSendLiveVoice(`dm:${b.peerID}`),
+    40_000,
+  );
+  s.check("and live voice is offered to a LAN-only neighbour", sessioned);
+
+  s.expectNone("process health", noCrashes(devices));
+  s.assert(true);
+});
+
+test("L07 a location pin is the first thing said in a LAN conversation", async () => {
+  const s = (scenario = new Scenario({
+    id: "L07",
+    title: "a pin starts the session it needs",
+    seed: 707,
+  }));
+  const { lan, devices } = room(s, [
+    phone("a", 11, "android"),
+    phone("b", 22, "android"),
+  ]);
+  const [a, b] = devices;
+  s.track(a, b);
+  lan.join("a", "hotspot");
+  lan.join("b", "hotspot");
+  a.launch();
+  b.launch();
+
+  const met = await waitFor(
+    s.world,
+    () => a.peers().includes(b.peerID),
+    40_000,
+  );
+  s.check("they met", met);
+
+  // A pin is never queued, being worth something only while it is current, so
+  // the first legitimately fails. What matters is that it starts the handshake.
+  const first = a.sendLocationPin(b.peerID, 12.9716, 77.5946);
+  s.check(
+    "the first pin does not go, because there is no session yet",
+    first === null,
+  );
+
+  const second = await waitFor(
+    s.world,
+    () => a.sendLocationPin(b.peerID, 12.9716, 77.5946) !== null,
+    40_000,
+  );
+  s.check(
+    "and a retry a few seconds later carries it, with no text sent first",
+    second,
+  );
+  s.check("over LAN alone", a.bleLinkCount() === 0 && b.bleLinkCount() === 0);
 
   s.expectNone("process health", noCrashes(devices));
   s.assert(true);

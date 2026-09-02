@@ -258,11 +258,11 @@ const OUTBOX_RETRY_MIN_INTERVAL_MS = 10_000;
 // notices the user has effectively already had the chance to see.
 const NOTICE_BELL_WINDOW_MS = 5 * 60 * 1000;
 
-// Where a channel message actually went. `bleLinks === 0 && !nostr` means it
+// Where a channel message actually went. `meshLinks === 0 && !nostr` means it
 // reached nobody. The UI must say so rather than render a normal sent bubble.
 export interface ChannelSendResult {
   msgId: string;
-  bleLinks: number;
+  meshLinks: number;
   // A relay was live when the publish went out. Not the channel's capability to
   // reach Nostr, which holds whether or not the phone has internet: a region
   // message carried by Bluetooth alone would report "sent" having reached nobody.
@@ -279,9 +279,9 @@ export interface GroupSendResult {
   // We held the group and its key, and the packet was built and handed to the
   // radio.
   sealed: boolean;
-  // How many Bluetooth/Wi-Fi links it went out on. Zero means it reached nobody:
-  // a group is Bluetooth-only, so there is no internet path to fall back on.
-  bleLinks: number;
+  // How many mesh links it went out on. Zero means it reached nobody: a group
+  // never leaves the mesh, so there is no internet path to fall back on.
+  meshLinks: number;
 }
 
 // Round-trip result of a mesh ping: latency and the number of links crossed.
@@ -777,16 +777,17 @@ export class MeshService {
 
     // Periodic ANNOUNCE so nearby peers learn our identity.
     const sendFn = (packet: Packet): void => {
-      // BLE links only. A peer on the WiFi fast path is announced to when its
-      // link comes up instead.
+      // Every link, on every transport. A peer heard from less often than
+      // REACHABLE_TTL_MS is dropped, and the repeat is also what makes the link
+      // binding certain: the announce sent at link-up can be suppressed by a
+      // relayed copy arriving first. Two links to one peer means two copies and
+      // the deduplicator drops one.
       //
       // A refused write is NOT a disconnect. The stack refuses for ordinary
       // reasons - its queue is full, the GATT server is mid-setup, another
       // transfer has the link busy - and the link is fine a moment later.
       // Teardown belongs to the disconnect event.
-      void this.links.broadcast(bytesToBase64(encodePacket(packet)), {
-        kind: "ble",
-      });
+      void this.links.broadcast(bytesToBase64(encodePacket(packet)));
     };
     this.announceManager.start(
       this.identity,
@@ -1703,9 +1704,9 @@ export class MeshService {
   }
 
   // Whether live voice can be offered at all: the native audio module has to
-  // exist, and there has to be somebody in Bluetooth range to hear it. Without
-  // a link a burst would be shouted into an empty room, and the voice note that
-  // the same gesture produces is the better answer.
+  // exist, and somebody has to be holding a link, on any transport. Without one
+  // a burst would be shouted into an empty room, and the voice note the same
+  // gesture produces is the better answer.
   // `channel` decides the scope: a "dm:<peerID>" channel streams to that one
   // peer inside their Noise session; anything else broadcasts to the room.
   canSendLiveVoice(channel: string): boolean {
@@ -1729,7 +1730,7 @@ export class MeshService {
         this.links.hasPeer(peerID)
       );
     }
-    // Public: somebody has to be in range, or the burst is shouted at nobody.
+    // Public: somebody has to be linked, or the burst is shouted at nobody.
     return this.links.size() > 0;
   }
 
@@ -2065,16 +2066,16 @@ export class MeshService {
     }
   }
 
-  // Start a Noise XX handshake with a peer we have a direct link to but no
-  // session for. No-op when a session or an in-flight handshake already exists,
-  // so it is safe to call speculatively.
+  // Start a Noise XX handshake with a peer we can reach over the mesh but have
+  // no session for. No-op when a session or an in-flight handshake already
+  // exists, so it is safe to call speculatively.
   private ensureNoiseSession(peerID: string): void {
     if (this.registry.get(peerID)?.session !== undefined) return;
     if (this.activeHandshake(peerID) !== undefined) return;
-    // BLE only. A neighbour held solely on the WiFi fast path reaches the
-    // handshake through trySendDm's flood instead of through here.
-    const link = this.links.linkFor(peerID, "ble");
-    if (link === undefined) return;
+    // Any link, on any transport: the callers that need a session before they
+    // can send at all (a location pin, an owed group state) have no other way
+    // to open one.
+    if (this.links.size() === 0) return;
     try {
       const hs = NoiseHandshake.createInitiator(
         this.identity.noiseStaticPrivKey,
@@ -2087,9 +2088,9 @@ export class MeshService {
         startedAt: Date.now(),
       });
       const pkt = this.makeHandshakePacket(hexToBytes(peerID), msg1);
-      this.links
-        .send(link.id, bytesToBase64(encodePacket(pkt)))
-        .catch(() => {});
+      // Direct when we hold a link, flooded when the peer is a hop away, which
+      // is how trySendDm carries its own msg1.
+      this.unicastFn(peerID, pkt);
     } catch {
       this.pendingHandshakes.delete(peerID);
     }
@@ -3377,8 +3378,8 @@ export class MeshService {
     if (!this.leaveIsAuthentic(packet)) return;
     const senderID = bytesToHex(packet.senderID);
 
-    // BLE only: a LEAVE clears the Bluetooth bindings and leaves any WiFi one
-    // for its own disconnect.
+    // BLE only: a WiFi or LAN binding is cleared by that socket's own
+    // disconnect, which is what actually ends it.
     this.links.unbind(senderID, "ble");
     this.registry.markIndirect(senderID);
     usePeerStore.getState().removePeer(senderID);
@@ -3595,7 +3596,7 @@ export class MeshService {
     // One ID shared by the local echo, the BLE packet and the Nostr event, so
     // a receiver on both transports sees one message rather than two.
     const msgId = newMessageId();
-    const bleLinks = this.links.size();
+    const meshLinks = this.links.size();
 
     // Private (custom) channel: seal with its key and broadcast encrypted over
     // BLE. There is no plaintext CHANNEL_MSG path, so the content never leaves
@@ -3619,7 +3620,7 @@ export class MeshService {
       // a separate question.
       return {
         msgId,
-        bleLinks,
+        meshLinks,
         nostr: overNostr && this.relaysConnected,
         gateway: false,
       };
@@ -3666,7 +3667,7 @@ export class MeshService {
 
     return {
       msgId,
-      bleLinks: teleported ? 0 : bleLinks,
+      meshLinks: teleported ? 0 : meshLinks,
       nostr: relaysLive,
       gateway: viaGateway,
     };
@@ -4525,8 +4526,8 @@ export class MeshService {
   // UI echo) and renders the local copy itself, so this does not echo.
   //
   // `sealed` is false only when we cannot build the packet at all: we do not hold
-  // the group, or its key is gone because the creator removed us. `bleLinks` is
-  // how many radios it actually went out on, which is the difference between
+  // the group, or its key is gone because the creator removed us. `meshLinks`
+  // is how many links it actually went out on, which is the difference between
   // "sent" and "nobody was there".
   sendGroupMessage(
     groupIDHex: string,
@@ -4534,7 +4535,7 @@ export class MeshService {
     messageID: string,
   ): GroupSendResult {
     const group = useGroupStore.getState().get(groupIDHex);
-    if (group === undefined) return { sealed: false, bleLinks: 0 };
+    if (group === undefined) return { sealed: false, meshLinks: 0 };
     const payload = sealGroupMessage({
       content: text,
       messageID,
@@ -4546,7 +4547,7 @@ export class MeshService {
       epoch: group.epoch,
       key: group.key,
     });
-    if (payload === null) return { sealed: false, bleLinks: 0 };
+    if (payload === null) return { sealed: false, meshLinks: 0 };
 
     const packet: Packet = {
       type: PacketType.GROUP_MESSAGE,
@@ -4568,7 +4569,7 @@ export class MeshService {
     // all) that tick was the only thing the user ever saw.
     return {
       sealed: true,
-      bleLinks: this.links.size(),
+      meshLinks: this.links.size(),
     };
   }
 

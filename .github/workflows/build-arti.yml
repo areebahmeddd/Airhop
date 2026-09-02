@@ -1,9 +1,6 @@
 name: Build Arti Libraries
 
 on:
-  # Manual only: these binaries change when native/arti does, which in practice
-  # means bumping Arti. Android builds in a pinned Linux container, Apple needs
-  # macOS, and neither can produce the other's.
   workflow_dispatch:
 
 permissions:
