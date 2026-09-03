@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Juridik",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Arkitektur",
   "footer.link.blogs": "Blogg",
   "footer.link.faq": "Vanliga frågor",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT-licens · Fri och öppen källkod · Fungerar med bitchat",
   "home.hero.group.mobile": "Mobil",
   "home.hero.group.desktop": "Dator",
-  "home.hero.option.f_droid": "Katalog med öppen källkod",
+  "home.hero.option.zapstore": "Signerad på Nostr",
   "home.hero.option.apk": "Direkt nedladdning",
   "home.hero.option.soon": "Kommer snart",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Varje session använder {noise}-protokollet för en autentiserad handskakning. Sparade meddelanden använder {ratchet}-algoritmen, det vill säga även om din enhet komprometteras senare förblir dina tidigare meddelanden oläsbara. Nödradering förstör alla nycklar och meddelanden på under en sekund.",
   "home.about.body.internet":
-    "När du och en kontakt är utanför Bluetooth-räckvidd fungerar {nostr}-reläer som en brygga över internet, med direktmeddelanden inslagna enligt {nip17}, så att meshet når hela världen så länge ni båda är uppkopplade. Stöd för {tor} finns på både iOS och Android, via {arti}.",
+    "När du och en kontakt är utanför Bluetooth-räckvidd fungerar {nostr}-reläer som en brygga över internet, med direktmeddelanden inslagna enligt {nip17}, så att meshet når hela världen så länge ni båda är uppkopplade. Stöd för {tor} finns på både iOS och Android, via {arti}, med {obfs4}- och {snowflake}-bryggor för nät som blockerar Tor.",
   "home.about.optional.title": "Airhop har valfria funktioner som du kan slå på:",
   "home.about.optional.payments.label": "Betalningar offline:",
   "home.about.optional.payments.body":

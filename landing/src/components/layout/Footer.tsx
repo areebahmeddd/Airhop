@@ -72,7 +72,7 @@ const NAV_COLUMNS: {
     links: [
       { labelKey: "footer.link.app_store", href: STORE_LINKS.appStore, external: true },
       { labelKey: "footer.link.play_store", href: STORE_LINKS.playStore, external: true },
-      { labelKey: "footer.link.f_droid", href: STORE_LINKS.fDroid, external: true },
+      { labelKey: "footer.link.zapstore", href: STORE_LINKS.zapstore, external: true },
     ],
   },
   {

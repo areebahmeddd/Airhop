@@ -243,8 +243,7 @@ private final class LANTransport {
                         // Most often no usable network. Whoever is still waiting
                         // on start hears why; anyone later hears it as the
                         // transport going away.
-                        self.settleStart(.unavailable(String(describing: error)))
-                        self.report(available: false)
+                        self.reportDead(.unavailable(String(describing: error)))
                     case .cancelled:
                         self.report(available: false)
                     case .ready:
@@ -273,17 +272,35 @@ private final class LANTransport {
 
     func stop(completion: @escaping () -> Void) {
         queue.async {
-            self.browser?.cancel()
-            self.browser = nil
-            self.listener?.cancel()
-            self.listener = nil
-            self.instanceName = nil
-            self.discovered.removeAll()
-            self.linkByName.removeAll()
             self.settleStart(.unavailable("stopped"))
-            for id in self.links.keys { self.closeLink(id) }
+            self.teardown()
             completion()
         }
+    }
+
+    /// Release everything and forget we are running. Callers are already on
+    /// `queue`. Keys copied before closing, matching the Kotlin side, so the
+    /// loop does not walk a dictionary its own body is emptying.
+    private func teardown() {
+        browser?.cancel()
+        browser = nil
+        listener?.cancel()
+        listener = nil
+        instanceName = nil
+        discovered.removeAll()
+        linkByName.removeAll()
+        for id in Array(links.keys) { closeLink(id) }
+    }
+
+    /// The listener or the browser died under us.
+    ///
+    /// Torn down here rather than waiting for the controller's stopLAN, which is
+    /// a bridge hop away: `start` is idempotent on `listener != nil`, so one
+    /// landing in that window resolves at once over a dead transport.
+    private func reportDead(_ failure: LANFailure) {
+        settleStart(failure)
+        teardown()
+        report(available: false)
     }
 
     private func report(available: Bool) {
@@ -309,7 +326,7 @@ private final class LANTransport {
                     if case let .dns(code) = error, code == kDNSServiceErr_PolicyDenied {
                         self.policyDenied = true
                     }
-                    self.report(available: false)
+                    self.reportDead(.unavailable(String(describing: error)))
                 }
             }
         }

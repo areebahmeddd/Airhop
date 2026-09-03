@@ -151,6 +151,10 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
     void run(() => setTorBridgeMode("custom", draftLines));
   }
 
+  const confirmAction = pendingOn
+    ? T("settings.conn.turn_on")
+    : T("settings.conn.turn_off");
+
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.conn.tor")} onBack={onBack} />
@@ -282,17 +286,6 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
         <View style={styles.sheetActions}>
           <Pressable
             style={({ pressed }) => [
-              styles.sheetBtn,
-              pressed && styles.sheetBtnPressed,
-            ]}
-            onPress={() => setConfirmVisible(false)}
-            accessibilityRole="button"
-          >
-            <Text style={styles.sheetBtnText}>{T("common.cancel")}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.sheetBtn,
               styles.sheetBtnPrimary,
               pressed && styles.sheetBtnPrimaryPressed,
             ]}
@@ -301,12 +294,20 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
               void run(() => setTorRouting(pendingOn));
             }}
             accessibilityRole="button"
+            accessibilityLabel={confirmAction}
           >
-            <Text style={[styles.sheetBtnText, styles.sheetBtnTextPrimary]}>
-              {pendingOn
-                ? T("settings.conn.turn_on")
-                : T("settings.conn.turn_off")}
-            </Text>
+            <Text style={styles.sheetBtnTextPrimary}>{confirmAction}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.sheetBtn,
+              pressed && styles.sheetBtnPressed,
+            ]}
+            onPress={() => setConfirmVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel={T("common.cancel")}
+          >
+            <Text style={styles.sheetBtnText}>{T("common.cancel")}</Text>
           </Pressable>
         </View>
       </BottomSheet>

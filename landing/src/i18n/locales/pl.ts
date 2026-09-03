@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Prawne",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Architektura",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "FAQ",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Licencja MIT · Wolna i otwartoźródłowa · Działa z bitchat",
   "home.hero.group.mobile": "Mobilne",
   "home.hero.group.desktop": "Komputer",
-  "home.hero.option.f_droid": "Katalog otwartego oprogramowania",
+  "home.hero.option.zapstore": "Podpisane w Nostr",
   "home.hero.option.apk": "Pobieranie bezpośrednie",
   "home.hero.option.soon": "Wkrótce",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Każda sesja korzysta z protokołu {noise} do uwierzytelnionego uzgadniania. Zapisane wiadomości korzystają z algorytmu {ratchet}, czyli nawet jeśli twoje urządzenie zostanie później przejęte, dawne wiadomości pozostaną nieczytelne. Awaryjne czyszczenie niszczy wszystkie klucze i wiadomości w niecałą sekundę.",
   "home.about.body.internet":
-    "Kiedy ty i twój kontakt jesteście poza zasięgiem Bluetootha, przekaźniki {nostr} służą jako most przez internet, z wiadomościami bezpośrednimi zapakowanymi w formacie {nip17}, więc sieć mesh sięga całego świata, kiedy oboje jesteście online. Obsługa {tor} jest dostępna na iOS i Androidzie, przez {arti}.",
+    "Kiedy ty i twój kontakt jesteście poza zasięgiem Bluetootha, przekaźniki {nostr} służą jako most przez internet, z wiadomościami bezpośrednimi zapakowanymi w formacie {nip17}, więc sieć mesh sięga całego świata, kiedy oboje jesteście online. Obsługa {tor} jest dostępna na iOS i Androidzie, przez {arti}, z mostkami {obfs4} i {snowflake} dla sieci blokujących Tora.",
   "home.about.optional.title": "Airhop ma opcjonalne funkcje, które możesz włączyć:",
   "home.about.optional.payments.label": "Płatności offline:",
   "home.about.optional.payments.body":

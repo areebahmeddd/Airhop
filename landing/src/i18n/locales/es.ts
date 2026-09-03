@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Legal",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Arquitectura",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "Preguntas frecuentes",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Licencia MIT · Libre y de código abierto · Compatible con bitchat",
   "home.hero.group.mobile": "Móvil",
   "home.hero.group.desktop": "Escritorio",
-  "home.hero.option.f_droid": "Catálogo de código abierto",
+  "home.hero.option.zapstore": "Firmado en Nostr",
   "home.hero.option.apk": "Descarga directa",
   "home.hero.option.soon": "Próximamente",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Cada sesión usa el protocolo {noise} para un handshake autenticado. Los mensajes almacenados usan el algoritmo {ratchet}, es decir, aunque tu dispositivo se vea comprometido más adelante, tus mensajes anteriores siguen siendo ilegibles. El borrado de pánico destruye todas las claves y mensajes en menos de un segundo.",
   "home.about.body.internet":
-    "Cuando tú y un contacto estáis fuera del alcance de Bluetooth, los relés de {nostr} sirven de puente por internet, usando mensajes directos envueltos con el formato {nip17}, así que la red mesh se extiende globalmente siempre que ambos estéis en línea. También hay soporte de {tor} en iOS y Android, mediante {arti}.",
+    "Cuando tú y un contacto estáis fuera del alcance de Bluetooth, los relés de {nostr} sirven de puente por internet, usando mensajes directos envueltos con el formato {nip17}, así que la red mesh se extiende globalmente siempre que ambos estéis en línea. También hay soporte de {tor} en iOS y Android, mediante {arti}, con puentes {obfs4} y {snowflake} para las redes que bloquean Tor.",
   "home.about.optional.title": "Airhop tiene funciones opcionales que puedes activar:",
   "home.about.optional.payments.label": "Pagos sin conexión:",
   "home.about.optional.payments.body":

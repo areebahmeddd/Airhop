@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Правовое",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Архитектура",
   "footer.link.blogs": "Блог",
   "footer.link.faq": "Вопросы и ответы",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Лицензия MIT · Бесплатно и с открытым кодом · Работает с bitchat",
   "home.hero.group.mobile": "Мобильные",
   "home.hero.group.desktop": "Настольные",
-  "home.hero.option.f_droid": "Каталог открытого ПО",
+  "home.hero.option.zapstore": "Подписано в Nostr",
   "home.hero.option.apk": "Прямая загрузка",
   "home.hero.option.soon": "Скоро",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Каждая сессия использует протокол {noise} для аутентифицированного рукопожатия. Сохранённые сообщения используют алгоритм {ratchet}, то есть даже если ваше устройство позже будет скомпрометировано, прошлые сообщения останутся нечитаемыми. Экстренное стирание уничтожает все ключи и сообщения меньше чем за секунду.",
   "home.about.body.internet":
-    "Когда вы и ваш собеседник вне зоны действия Bluetooth, реле {nostr} служат мостом через интернет, используя личные сообщения в обёртке формата {nip17}, поэтому mesh расширяется до глобальной, пока вы оба в сети. Поддержка {tor} доступна на iOS и Android, через {arti}.",
+    "Когда вы и ваш собеседник вне зоны действия Bluetooth, реле {nostr} служат мостом через интернет, используя личные сообщения в обёртке формата {nip17}, поэтому mesh расширяется до глобальной, пока вы оба в сети. Поддержка {tor} доступна на iOS и Android, через {arti}, с мостами {obfs4} и {snowflake} для сетей, которые блокируют Tor.",
   "home.about.optional.title": "В Airhop есть дополнительные функции, которые можно включить:",
   "home.about.optional.payments.label": "Офлайн-платежи:",
   "home.about.optional.payments.body":

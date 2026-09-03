@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "法的事項",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "アーキテクチャ",
   "footer.link.blogs": "ブログ",
   "footer.link.faq": "よくある質問",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT ライセンス · 無料・オープンソース · bitchat と相互運用",
   "home.hero.group.mobile": "モバイル",
   "home.hero.group.desktop": "デスクトップ",
-  "home.hero.option.f_droid": "オープンソースのカタログ",
+  "home.hero.option.zapstore": "Nostr で署名済み",
   "home.hero.option.apk": "直接ダウンロード",
   "home.hero.option.soon": "近日公開",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "各セッションは認証付きハンドシェイクに {noise} プロトコルを使います。保存されたメッセージは {ratchet} アルゴリズムを使うため、後から端末が侵害されても過去のメッセージは読めないままです。緊急消去はすべての鍵とメッセージを 1 秒未満で破棄します。",
   "home.about.body.internet":
-    "あなたと相手が Bluetooth の圏外にいるときは、{nostr} リレーがインターネット経由の橋渡しとなり、{nip17} 形式でギフトラップしたダイレクトメッセージを使います。そのため二人ともオンラインであれば、メッシュは世界規模に広がります。{tor} は iOS でも Android でも {arti} 経由で利用できます。",
+    "あなたと相手が Bluetooth の圏外にいるときは、{nostr} リレーがインターネット経由の橋渡しとなり、{nip17} 形式でギフトラップしたダイレクトメッセージを使います。そのため二人ともオンラインであれば、メッシュは世界規模に広がります。{tor} は iOS でも Android でも {arti} 経由で利用でき、Tor をブロックするネットワーク向けに{obfs4} と {snowflake} のブリッジもあります。",
   "home.about.optional.title": "Airhop には、自分で有効にできる任意の機能があります:",
   "home.about.optional.payments.label": "オフライン決済:",
   "home.about.optional.payments.body":

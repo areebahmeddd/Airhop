@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "სამართლებრივი",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "არქიტექტურა",
   "footer.link.blogs": "ბლოგი",
   "footer.link.faq": "ხშირი კითხვები",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT ლიცენზია · უფასო და ღია კოდით · მუშაობს bitchat-თან",
   "home.hero.group.mobile": "მობილური",
   "home.hero.group.desktop": "დესკტოპი",
-  "home.hero.option.f_droid": "ღია კოდის კატალოგი",
+  "home.hero.option.zapstore": "ხელმოწერილია Nostr-ზე",
   "home.hero.option.apk": "პირდაპირი ჩამოტვირთვა",
   "home.hero.option.soon": "მალე",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "თითოეული სესია ავთენტიფიცირებული ხელის ჩამორთმევისთვის {noise} პროტოკოლს იყენებს. შენახული შეტყობინებები {ratchet} ალგორითმს იყენებს, ამიტომ მოგვიანებით მოწყობილობის ხელში ჩაგდების შემთხვევაშიც კი წარსული შეტყობინებები წაუკითხავი რჩება. საგანგებო წაშლა ყველა გასაღებსა და შეტყობინებას წამზე ნაკლებში ანადგურებს.",
   "home.about.body.internet":
-    "როცა თქვენ და კონტაქტი ბლუთუზის მიღმა ხართ, {nostr} რელეები ინტერნეტ-ხიდად მუშაობს და {nip17} ფორმის შეფუთულ პირად შეტყობინებებს იყენებს, ასე რომ მეში გლობალურად ვრცელდება, სანამ ორივე ონლაინ ხართ. {tor}-ის მხარდაჭერა არსებობს iOS-სა და Android-ზე, {arti}-ით.",
+    "როცა თქვენ და კონტაქტი ბლუთუზის მიღმა ხართ, {nostr} რელეები ინტერნეტ-ხიდად მუშაობს და {nip17} ფორმის შეფუთულ პირად შეტყობინებებს იყენებს, ასე რომ მეში გლობალურად ვრცელდება, სანამ ორივე ონლაინ ხართ. {tor}-ის მხარდაჭერა არსებობს iOS-სა და Android-ზე, {arti}-ით, {obfs4}-ისა და {snowflake}-ის ხიდებით იმ ქსელებისთვის, რომლებიც Tor-ს ბლოკავს.",
   "home.about.optional.title":
     "Airhop-ს აქვს არასავალდებულო შესაძლებლობები, რომლებიც შეგიძლიათ ჩართოთ:",
   "home.about.optional.payments.label": "ოფლაინ გადახდები:",

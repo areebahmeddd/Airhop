@@ -3,7 +3,7 @@
 //   node press/build.mjs                everything, light and dark
 //   node press/build.mjs --light        light only
 //   node press/build.mjs --only=social  one group (screens|social|icon)
-//   node press/build.mjs --fastlane=DIR also write an F-Droid fastlane tree
+//   node press/build.mjs --fastlane=DIR also write a fastlane metadata tree
 //
 // Each asset is an HTML page screenshot by headless Chrome at 2x. Pages are
 // kept in press/.build/ and can be opened in a browser.
@@ -40,7 +40,7 @@ const SANS = `'Segoe UI Variable Display','Segoe UI',-apple-system,'Helvetica Ne
 // ---------------------------------------------------------------------------
 
 // One size per platform. Apple scales the 6.9in shot down to every smaller
-// iPhone; Play and F-Droid take the same 1080x1920.
+// iPhone; Play and Zapstore take the same 1080x1920.
 const PHONE_TARGETS = [
   { id: "ios", px: [1290, 2796], platform: "ios" },
   { id: "android", px: [1080, 1920], platform: "android" },
@@ -336,7 +336,7 @@ async function renderIcon(chrome) {
   await shoot(chrome, "graphics/icon-512.png", html, [ICON_PX, ICON_PX], 1);
 }
 
-// F-Droid wants the Android set under fastlane's own numbered filenames.
+// A fastlane tree wants the Android set under its own numbered filenames.
 // Written on request rather than kept as a second copy in the repo.
 function writeFastlaneTree(dest) {
   const dst = join(dest, "en-US/images");

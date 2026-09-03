@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Legal",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Arkitektura",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "Mga madalas itanong",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Lisensyadong MIT · Libre at open source · Gumagana sa bitchat",
   "home.hero.group.mobile": "Mobile",
   "home.hero.group.desktop": "Desktop",
-  "home.hero.option.f_droid": "Katalogo ng open source",
+  "home.hero.option.zapstore": "Nilagdaan sa Nostr",
   "home.hero.option.apk": "Direktang download",
   "home.hero.option.soon": "Malapit na",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Bawat sesyon ay gumagamit ng protokol na {noise} para sa napatunayang handshake. Ang mga nakaimbak na mensahe ay gumagamit ng algoritmong {ratchet}, ibig sabihin kahit makompromiso ang iyong device sa hinaharap, mananatiling hindi mabasa ang iyong mga lumang mensahe. Ang panic wipe ay sumisira sa lahat ng susi at mensahe sa wala pang isang segundo.",
   "home.about.body.internet":
-    "Kapag ikaw at ang iyong kontak ay wala na sa saklaw ng Bluetooth, ang mga relay ng {nostr} ang nagsisilbing tulay sa internet, gamit ang mga direktang mensaheng nakabalot sa anyong {nip17}, kaya umaabot sa buong mundo ang mesh tuwing pareho kayong online. Available ang suporta sa {tor} sa iOS at Android, sa pamamagitan ng {arti}.",
+    "Kapag ikaw at ang iyong kontak ay wala na sa saklaw ng Bluetooth, ang mga relay ng {nostr} ang nagsisilbing tulay sa internet, gamit ang mga direktang mensaheng nakabalot sa anyong {nip17}, kaya umaabot sa buong mundo ang mesh tuwing pareho kayong online. Available ang suporta sa {tor} sa iOS at Android, sa pamamagitan ng {arti}, may mga bridge na {obfs4} at {snowflake} para sa mga network na humaharang sa Tor.",
   "home.about.optional.title": "May mga opsyonal na tampok ang Airhop na puwede mong buksan:",
   "home.about.optional.payments.label": "Offline na bayad:",
   "home.about.optional.payments.body":

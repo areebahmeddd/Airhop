@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "حقوقی",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "معماری",
   "footer.link.blogs": "بلاگ",
   "footer.link.faq": "پرسش‌های متداول",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "پروانهٔ MIT · رایگان و متن‌باز · سازگار با bitchat",
   "home.hero.group.mobile": "موبایل",
   "home.hero.group.desktop": "دسکتاپ",
-  "home.hero.option.f_droid": "فهرست نرم‌افزار متن‌باز",
+  "home.hero.option.zapstore": "امضاشده در Nostr",
   "home.hero.option.apk": "دانلود مستقیم",
   "home.hero.option.soon": "به‌زودی",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "هر نشست برای دست‌دادن احرازهویت‌شده از پروتکل {noise} استفاده می‌کند. پیام‌های ذخیره‌شده از الگوریتم {ratchet} استفاده می‌کنند؛ یعنی حتی اگر بعدها دستگاهتان به خطر بیفتد، پیام‌های گذشته‌تان خوانا نمی‌شود. پاک‌سازی اضطراری همهٔ کلیدها و پیام‌ها را در کمتر از یک ثانیه از بین می‌برد.",
   "home.about.body.internet":
-    "وقتی شما و مخاطبتان بیرون از برد Bluetooth هستید، رله‌های {nostr} نقش پل اینترنتی را بازی می‌کنند و از پیام‌های مستقیم بسته‌بندی‌شده به شکل {nip17} استفاده می‌کنند، پس تا وقتی هر دو آنلاین باشید مش تا سراسر جهان گسترش می‌یابد. پشتیبانی از {tor} روی iOS و Android از طریق {arti} در دسترس است.",
+    "وقتی شما و مخاطبتان بیرون از برد Bluetooth هستید، رله‌های {nostr} نقش پل اینترنتی را بازی می‌کنند و از پیام‌های مستقیم بسته‌بندی‌شده به شکل {nip17} استفاده می‌کنند، پس تا وقتی هر دو آنلاین باشید مش تا سراسر جهان گسترش می‌یابد. پشتیبانی از {tor} روی iOS و Android از طریق {arti} در دسترس است، همراه با پل‌های {obfs4} و {snowflake} برای شبکه‌هایی که Tor را مسدود می‌کنند.",
   "home.about.optional.title": "‏Airhop قابلیت‌های اختیاری دارد که می‌توانید فعال کنید:",
   "home.about.optional.payments.label": "پرداخت آفلاین:",
   "home.about.optional.payments.body":

@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "कानूनी",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "आर्किटेक्चर",
   "footer.link.blogs": "ब्लॉग",
   "footer.link.faq": "सामान्य प्रश्न",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT लाइसेंस · मुफ़्त और ओपन सोर्स · bitchat के साथ काम करता है",
   "home.hero.group.mobile": "मोबाइल",
   "home.hero.group.desktop": "डेस्कटॉप",
-  "home.hero.option.f_droid": "ओपन सोर्स कैटलॉग",
+  "home.hero.option.zapstore": "Nostr पर हस्ताक्षरित",
   "home.hero.option.apk": "सीधा डाउनलोड",
   "home.hero.option.soon": "जल्द आ रहा है",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "हर सत्र प्रमाणित हैंडशेक के लिए {noise} प्रोटोकॉल का उपयोग करता है। संग्रहीत संदेश {ratchet} एल्गोरिद्म का उपयोग करते हैं, यानी अगर आपका डिवाइस बाद में असुरक्षित हो भी जाए, तो आपके पुराने संदेश पढ़े नहीं जा सकते। पैनिक वाइप एक सेकंड से भी कम में सभी कुंजियाँ और संदेश नष्ट कर देता है।",
   "home.about.body.internet":
-    "जब आप और आपका संपर्क Bluetooth की सीमा से बाहर हों, तो {nostr} रिले इंटरनेट पुल का काम करते हैं, और {nip17} शैली के गिफ़्ट-रैप्ड डायरेक्ट मैसेज इस्तेमाल होते हैं, जिससे जब भी आप दोनों ऑनलाइन हों, मेश दुनिया भर तक फैल जाता है। {tor} समर्थन iOS और Android दोनों पर {arti} के ज़रिये उपलब्ध है।",
+    "जब आप और आपका संपर्क Bluetooth की सीमा से बाहर हों, तो {nostr} रिले इंटरनेट पुल का काम करते हैं, और {nip17} शैली के गिफ़्ट-रैप्ड डायरेक्ट मैसेज इस्तेमाल होते हैं, जिससे जब भी आप दोनों ऑनलाइन हों, मेश दुनिया भर तक फैल जाता है। {tor} समर्थन iOS और Android दोनों पर {arti} के ज़रिये उपलब्ध है, और Tor को रोकने वाले नेटवर्कों के लिए {obfs4} और {snowflake} ब्रिज भी हैं।",
   "home.about.optional.title": "Airhop में कुछ वैकल्पिक सुविधाएँ हैं जिन्हें आप चालू कर सकते हैं:",
   "home.about.optional.payments.label": "ऑफ़लाइन भुगतान:",
   "home.about.optional.payments.body":

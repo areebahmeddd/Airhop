@@ -20,7 +20,7 @@ export const strings = {
   "footer.group.legal": "Legal",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Architecture",
   "footer.link.blogs": "Blogs",
   "footer.link.faq": "FAQ",
@@ -49,7 +49,7 @@ export const strings = {
   "home.hero.badges": "MIT licensed · Free and open source · Works with bitchat",
   "home.hero.group.mobile": "Mobile",
   "home.hero.group.desktop": "Desktop",
-  "home.hero.option.f_droid": "Open source catalog",
+  "home.hero.option.zapstore": "Signed on Nostr",
   "home.hero.option.apk": "Direct download",
   "home.hero.option.soon": "Coming soon",
 
@@ -67,7 +67,7 @@ export const strings = {
   "home.about.body.crypto":
     "Every session uses the {noise} protocol for an authenticated handshake. Stored messages use the {ratchet} algorithm, so even if your device is compromised later, your past messages stay unreadable. Panic wipe destroys all keys and messages in under one second.",
   "home.about.body.internet":
-    "When you and a contact are out of Bluetooth range, {nostr} relays serve as an internet bridge, using {nip17}-shaped gift-wrapped direct messages, so the mesh extends globally whenever both of you are online. {tor} support is available on both iOS and Android, using {arti}.",
+    "When you and a contact are out of Bluetooth range, {nostr} relays serve as an internet bridge, using {nip17}-shaped gift-wrapped direct messages, so the mesh extends globally whenever both of you are online. {tor} support is available on both iOS and Android, using {arti}, with {obfs4} and {snowflake} bridges for networks that block Tor.",
   "home.about.optional.title": "Airhop has optional features you can enable:",
   "home.about.optional.payments.label": "Offline Payments:",
   "home.about.optional.payments.body":

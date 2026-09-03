@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Hukuki",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Mimari",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "SSS",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT lisanslı · Ücretsiz ve açık kaynak · bitchat ile uyumlu",
   "home.hero.group.mobile": "Mobil",
   "home.hero.group.desktop": "Masaüstü",
-  "home.hero.option.f_droid": "Açık kaynak kataloğu",
+  "home.hero.option.zapstore": "Nostr üzerinde imzalı",
   "home.hero.option.apk": "Doğrudan indirme",
   "home.hero.option.soon": "Yakında",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Her oturum, kimliği doğrulanmış bir el sıkışma için {noise} protokolünü kullanır. Saklanan mesajlar {ratchet} algoritmasını kullanır; yani cihazınız daha sonra ele geçirilse bile geçmiş mesajlarınız okunamaz kalır. Acil silme, tüm anahtarları ve mesajları bir saniyeden kısa sürede yok eder.",
   "home.about.body.internet":
-    "Siz ve bir kişiniz Bluetooth menzilinin dışındayken {nostr} röleleri internet üzerinden köprü görevi görür; {nip17} biçiminde paketlenmiş doğrudan mesajlar kullanılır, böylece ikiniz de çevrimiçi olduğunuzda mesh ağı dünya geneline uzanır. {tor} desteği hem iOS'ta hem de Android'de {arti} ile mevcuttur.",
+    "Siz ve bir kişiniz Bluetooth menzilinin dışındayken {nostr} röleleri internet üzerinden köprü görevi görür; {nip17} biçiminde paketlenmiş doğrudan mesajlar kullanılır, böylece ikiniz de çevrimiçi olduğunuzda mesh ağı dünya geneline uzanır. {tor} desteği hem iOS'ta hem de Android'de {arti} ile mevcuttur; Tor’u engelleyen ağlar için {obfs4} ve {snowflake} köprüleri de var.",
   "home.about.optional.title": "Airhop'ta açabileceğiniz isteğe bağlı özellikler var:",
   "home.about.optional.payments.label": "Çevrimdışı ödemeler:",
   "home.about.optional.payments.body":

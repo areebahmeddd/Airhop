@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Mentions légales",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Architecture",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "FAQ",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Licence MIT · Libre et open source · Compatible bitchat",
   "home.hero.group.mobile": "Mobile",
   "home.hero.group.desktop": "Ordinateur",
-  "home.hero.option.f_droid": "Catalogue open source",
+  "home.hero.option.zapstore": "Signé sur Nostr",
   "home.hero.option.apk": "Téléchargement direct",
   "home.hero.option.soon": "Bientôt disponible",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Chaque session utilise le protocole {noise} pour une poignée de main authentifiée. Les messages stockés utilisent l'algorithme {ratchet}, autrement dit même si votre appareil est compromis plus tard, vos anciens messages restent illisibles. L'effacement d'urgence détruit toutes les clés et tous les messages en moins d'une seconde.",
   "home.about.body.internet":
-    "Quand vous et votre contact êtes hors de portée du Bluetooth, les relais {nostr} servent de pont par internet, avec des messages privés emballés au format {nip17}, de sorte que le mesh s'étend au monde entier dès que vous êtes tous les deux en ligne. La prise en charge de {tor} est disponible sur iOS et Android, via {arti}.",
+    "Quand vous et votre contact êtes hors de portée du Bluetooth, les relais {nostr} servent de pont par internet, avec des messages privés emballés au format {nip17}, de sorte que le mesh s'étend au monde entier dès que vous êtes tous les deux en ligne. La prise en charge de {tor} est disponible sur iOS et Android, via {arti}, avec des bridges {obfs4} et {snowflake} pour les réseaux qui bloquent Tor.",
   "home.about.optional.title":
     "Airhop propose des fonctionnalités facultatives que vous pouvez activer :",
   "home.about.optional.payments.label": "Paiements hors ligne :",

@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Juridisch",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Architectuur",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "FAQ",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT-licentie · Gratis en opensource · Werkt met bitchat",
   "home.hero.group.mobile": "Mobiel",
   "home.hero.group.desktop": "Desktop",
-  "home.hero.option.f_droid": "Opensource-catalogus",
+  "home.hero.option.zapstore": "Ondertekend op Nostr",
   "home.hero.option.apk": "Directe download",
   "home.hero.option.soon": "Binnenkort",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Elke sessie gebruikt het {noise}-protocol voor een geauthenticeerde handshake. Opgeslagen berichten gebruiken het {ratchet}-algoritme, oftewel zelfs als je apparaat later gecompromitteerd raakt, blijven je oude berichten onleesbaar. Noodwissen vernietigt alle sleutels en berichten in minder dan een seconde.",
   "home.about.body.internet":
-    "Als jij en een contact buiten Bluetooth-bereik zijn, dienen {nostr}-relays als brug via internet, met directe berichten ingepakt volgens {nip17}, zodat de mesh wereldwijd reikt zodra jullie allebei online zijn. Ondersteuning voor {tor} is er op iOS en Android, via {arti}.",
+    "Als jij en een contact buiten Bluetooth-bereik zijn, dienen {nostr}-relays als brug via internet, met directe berichten ingepakt volgens {nip17}, zodat de mesh wereldwijd reikt zodra jullie allebei online zijn. Ondersteuning voor {tor} is er op iOS en Android, via {arti}, met {obfs4}- en {snowflake}-bridges voor netwerken die Tor blokkeren.",
   "home.about.optional.title": "Airhop heeft optionele functies die je kunt inschakelen:",
   "home.about.optional.payments.label": "Offline betalingen:",
   "home.about.optional.payments.body":

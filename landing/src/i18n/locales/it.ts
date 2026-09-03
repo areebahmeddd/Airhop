@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Legale",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Architettura",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "FAQ",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Licenza MIT · Libero e open source · Compatibile con bitchat",
   "home.hero.group.mobile": "Mobile",
   "home.hero.group.desktop": "Desktop",
-  "home.hero.option.f_droid": "Catalogo open source",
+  "home.hero.option.zapstore": "Firmato su Nostr",
   "home.hero.option.apk": "Download diretto",
   "home.hero.option.soon": "Presto disponibile",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Ogni sessione usa il protocollo {noise} per un handshake autenticato. I messaggi archiviati usano l'algoritmo {ratchet}: anche se il tuo dispositivo venisse compromesso in seguito, i messaggi passati resterebbero illeggibili. La cancellazione d'emergenza distrugge tutte le chiavi e i messaggi in meno di un secondo.",
   "home.about.body.internet":
-    "Quando tu e un contatto siete fuori dalla portata del Bluetooth, i relay {nostr} fanno da ponte via internet, con messaggi diretti incartati nel formato {nip17}, così la rete mesh si estende a tutto il mondo ogni volta che siete entrambi online. Il supporto {tor} è disponibile su iOS e Android, tramite {arti}.",
+    "Quando tu e un contatto siete fuori dalla portata del Bluetooth, i relay {nostr} fanno da ponte via internet, con messaggi diretti incartati nel formato {nip17}, così la rete mesh si estende a tutto il mondo ogni volta che siete entrambi online. Il supporto {tor} è disponibile su iOS e Android, tramite {arti}, con bridge {obfs4} e {snowflake} per le reti che bloccano Tor.",
   "home.about.optional.title": "Airhop ha funzioni opzionali che puoi attivare:",
   "home.about.optional.payments.label": "Pagamenti offline:",
   "home.about.optional.payments.body":

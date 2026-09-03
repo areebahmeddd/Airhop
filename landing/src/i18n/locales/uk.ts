@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Правове",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Архітектура",
   "footer.link.blogs": "Блог",
   "footer.link.faq": "Питання та відповіді",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Ліцензія MIT · Вільний і з відкритим кодом · Працює з bitchat",
   "home.hero.group.mobile": "Мобільні",
   "home.hero.group.desktop": "Комп’ютер",
-  "home.hero.option.f_droid": "Каталог відкритого ПЗ",
+  "home.hero.option.zapstore": "Підписано в Nostr",
   "home.hero.option.apk": "Пряме завантаження",
   "home.hero.option.soon": "Незабаром",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Кожен сеанс використовує протокол {noise} для автентифікованого рукостискання. Збережені повідомлення використовують алгоритм {ratchet}, тобто навіть якщо ваш пристрій згодом зламають, минулі повідомлення лишаться нечитними. Екстрене стирання знищує всі ключі та повідомлення менш ніж за секунду.",
   "home.about.body.internet":
-    "Коли ви та ваш контакт поза межами Bluetooth, ретранслятори {nostr} слугують мостом через інтернет із приватними повідомленнями, загорнутими у форматі {nip17}, тож mesh сягає всього світу, поки ви обоє в мережі. Підтримка {tor} доступна на iOS і Android, через {arti}.",
+    "Коли ви та ваш контакт поза межами Bluetooth, ретранслятори {nostr} слугують мостом через інтернет із приватними повідомленнями, загорнутими у форматі {nip17}, тож mesh сягає всього світу, поки ви обоє в мережі. Підтримка {tor} доступна на iOS і Android, через {arti}, з мостами {obfs4} і {snowflake} для мереж, які блокують Tor.",
   "home.about.optional.title": "В Airhop є додаткові можливості, які можна ввімкнути:",
   "home.about.optional.payments.label": "Офлайн-платежі:",
   "home.about.optional.payments.body":

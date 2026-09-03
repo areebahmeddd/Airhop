@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Kisheria",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Muundo",
   "footer.link.blogs": "Blogu",
   "footer.link.faq": "Maswali ya kawaida",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Leseni ya MIT · Bure na chanzo huria · Inafanya kazi na bitchat",
   "home.hero.group.mobile": "Simu",
   "home.hero.group.desktop": "Kompyuta",
-  "home.hero.option.f_droid": "Katalogi ya chanzo huria",
+  "home.hero.option.zapstore": "Imetiwa saini kwenye Nostr",
   "home.hero.option.apk": "Upakuaji wa moja kwa moja",
   "home.hero.option.soon": "Inakuja hivi karibuni",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Kila kipindi hutumia itifaki ya {noise} kwa uthibitishaji wa awali. Ujumbe uliohifadhiwa hutumia algoriti ya {ratchet}, yaani hata kama kifaa chako kitavamiwa baadaye, ujumbe wako wa zamani hubaki usiosomeka. Ufutaji wa dharura huharibu funguo na ujumbe wote kwa chini ya sekunde moja.",
   "home.about.body.internet":
-    "Wewe na mwenzako mkiwa nje ya masafa ya Bluetooth, vipeperushi vya {nostr} hufanya kazi kama daraja kupitia intaneti, vikitumia ujumbe wa moja kwa moja uliofungashwa kwa muundo wa {nip17}, hivyo mesh hufika dunia nzima kila mnapokuwa mtandaoni nyote wawili. Msaada wa {tor} upo kwenye iOS na Android, kupitia {arti}.",
+    "Wewe na mwenzako mkiwa nje ya masafa ya Bluetooth, vipeperushi vya {nostr} hufanya kazi kama daraja kupitia intaneti, vikitumia ujumbe wa moja kwa moja uliofungashwa kwa muundo wa {nip17}, hivyo mesh hufika dunia nzima kila mnapokuwa mtandaoni nyote wawili. Msaada wa {tor} upo kwenye iOS na Android, kupitia {arti}, na madaraja ya {obfs4} na {snowflake} kwa mitandao inayozuia Tor.",
   "home.about.optional.title": "Airhop ina vipengele vya hiari unavyoweza kuwasha:",
   "home.about.optional.payments.label": "Malipo nje ya mtandao:",
   "home.about.optional.payments.body":

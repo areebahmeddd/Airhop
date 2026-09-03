@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Ara-dalàna",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Rafitra",
   "footer.link.blogs": "Bilaogy",
   "footer.link.faq": "Fanontaniana matetika",
@@ -52,7 +52,7 @@ const strings: Strings = {
     "Fahazoan-dalana MIT · Maimaim-poana sy misokatra · Mifanaraka amin'ny bitchat",
   "home.hero.group.mobile": "Finday",
   "home.hero.group.desktop": "Solosaina",
-  "home.hero.option.f_droid": "Katalaogin'ny loharano misokatra",
+  "home.hero.option.zapstore": "Voasonia amin'ny Nostr",
   "home.hero.option.apk": "Fakana mivantana",
   "home.hero.option.soon": "Ho avy tsy ho ela",
 
@@ -70,7 +70,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Mampiasa ny fitsipika {noise} ho an'ny fifampifankahafantarana voamarina ny fivoriana tsirairay. Ny hafatra voatahiry dia mampiasa ny algoritma {ratchet}, ka na dia lasan'olona aza ny fitaovanao any aoriana, dia mijanona tsy voavaky ny hafatrao taloha. Mandrava ny lakile sy ny hafatra rehetra latsaky ny segondra iray ny famafana maika.",
   "home.about.body.internet":
-    "Rehefa lavitra ny fetran'ny Bluetooth ianao sy ny fifandraisanao, dia manjary tetezana amin'ny Internet ny mpanelanelana {nostr}, mampiasa hafatra mivantana voafono araka ny endrika {nip17}, ka miitatra manerantany ny harato rehefa samy an-tserasera ianareo. Misy ny fanohanana ny {tor} amin'ny iOS sy Android, amin'ny {arti}.",
+    "Rehefa lavitra ny fetran'ny Bluetooth ianao sy ny fifandraisanao, dia manjary tetezana amin'ny Internet ny mpanelanelana {nostr}, mampiasa hafatra mivantana voafono araka ny endrika {nip17}, ka miitatra manerantany ny harato rehefa samy an-tserasera ianareo. Misy ny fanohanana ny {tor} amin'ny iOS sy Android, amin'ny {arti}, misy tetezana {obfs4} sy {snowflake} ho an’ny tambajotra manakana ny Tor.",
   "home.about.optional.title": "Manana fiasa safidy azonao alefa ny Airhop:",
   "home.about.optional.payments.label": "Fandoavam-bola tsy misy Internet:",
   "home.about.optional.payments.body":

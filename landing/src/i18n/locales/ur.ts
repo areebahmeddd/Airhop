@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "قانونی",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "فن تعمیر",
   "footer.link.blogs": "بلاگ",
   "footer.link.faq": "عام سوالات",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT لائسنس · مفت اور اوپن سورس · bitchat کے ساتھ ہم آہنگ",
   "home.hero.group.mobile": "موبائل",
   "home.hero.group.desktop": "ڈیسک ٹاپ",
-  "home.hero.option.f_droid": "اوپن سورس کیٹلاگ",
+  "home.hero.option.zapstore": "Nostr پر دستخط شدہ",
   "home.hero.option.apk": "براہ راست ڈاؤن لوڈ",
   "home.hero.option.soon": "جلد آ رہا ہے",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "ہر سیشن تصدیق شدہ مصافحے کے لیے {noise} پروٹوکول استعمال کرتا ہے۔ محفوظ پیغامات {ratchet} الگورتھم استعمال کرتے ہیں، یعنی اگر بعد میں آپ کا آلہ غیر محفوظ ہو بھی جائے تو آپ کے پرانے پیغامات ناقابل مطالعہ رہتے ہیں۔ ہنگامی صفائی ایک سیکنڈ سے کم میں تمام کلیدیں اور پیغامات تباہ کر دیتی ہے۔",
   "home.about.body.internet":
-    "جب آپ اور آپ کا رابطہ Bluetooth کی حد سے باہر ہوں تو {nostr} ریلے انٹرنیٹ کے ذریعے پل کا کام کرتے ہیں، اور {nip17} طرز کے لپٹے ہوئے براہ راست پیغامات استعمال ہوتے ہیں، چنانچہ جب بھی آپ دونوں آن لائن ہوں میش پوری دنیا تک پھیل جاتا ہے۔ {tor} کی سہولت iOS اور Android دونوں پر {arti} کے ذریعے دستیاب ہے۔",
+    "جب آپ اور آپ کا رابطہ Bluetooth کی حد سے باہر ہوں تو {nostr} ریلے انٹرنیٹ کے ذریعے پل کا کام کرتے ہیں، اور {nip17} طرز کے لپٹے ہوئے براہ راست پیغامات استعمال ہوتے ہیں، چنانچہ جب بھی آپ دونوں آن لائن ہوں میش پوری دنیا تک پھیل جاتا ہے۔ {tor} کی سہولت iOS اور Android دونوں پر {arti} کے ذریعے دستیاب ہے، اور Tor کو روکنے والے نیٹ ورکس کے لیے {obfs4} اور {snowflake} برجز بھی ہیں۔",
   "home.about.optional.title": "Airhop میں کچھ اختیاری خصوصیات ہیں جنہیں آپ آن کر سکتے ہیں:",
   "home.about.optional.payments.label": "آف لائن ادائیگیاں:",
   "home.about.optional.payments.body":

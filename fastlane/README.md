@@ -1,6 +1,6 @@
 # Store metadata
 
-This directory contains the app store listing used for App Store, Google Play, and F-Droid.
+This directory contains the app store listing used for App Store, Google Play, and Zapstore.
 
 Keeping the metadata in the repository makes changes reviewable, versioned, and
 keeps both store listings in sync.
@@ -9,13 +9,14 @@ keeps both store listings in sync.
   these files into the App Store Connect instead of editing the listing manually.
 - **Google Play** does not. When publishing a release, copy the contents of
   these files into the Play Console instead of editing the listing manually.
-- **F-Droid** reads these files directly when generating its listing.
+- **Zapstore** does not. When publishing a release, copy the contents of
+  these files into the Zapstore listing instead of editing it manually.
 
 ## Directory layout
 
 ```text
 fastlane/metadata/android/en-US/
-├── title.txt                # App title (30 on Play, 50 on F-Droid)
+├── title.txt                # App title (30 characters on Play)
 ├── short_description.txt    # Short description (80 characters max)
 ├── full_description.txt     # Full description (4000 characters max)
 └── changelogs/

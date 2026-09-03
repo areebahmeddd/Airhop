@@ -1335,6 +1335,15 @@ export default function ArchitecturePage() {
                 ]}
               />
 
+              <p>
+                Tor hides your address from the relay, but not the fact that you are using it. On a
+                direct connection the first hop goes to a publicly listed relay, so the network you
+                are on can see Tor in use. A bridge is an unlisted entry point, and the transport in
+                front of it makes the connection look like something else. Airhop builds obfs4 and
+                Snowflake in for that, and leaves them off by default: a bridge is slower, and only
+                worth it on a network that blocks or watches for Tor.
+              </p>
+
               <Note label="Why iOS blocks mint traffic under Tor">
                 Arti on iOS wraps the Nostr socket, so an HTTP call to a mint would go around it and
                 expose your IP alongside your coins. Rather than leak that quietly, Airhop refuses

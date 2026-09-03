@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "法律",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "架構",
   "footer.link.blogs": "部落格",
   "footer.link.faq": "常見問題",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT 授權 · 免費開源 · 相容 bitchat",
   "home.hero.group.mobile": "行動裝置",
   "home.hero.group.desktop": "桌面",
-  "home.hero.option.f_droid": "開源應用程式目錄",
+  "home.hero.option.zapstore": "在 Nostr 上簽署",
   "home.hero.option.apk": "直接下載",
   "home.hero.option.soon": "即將推出",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "每個工作階段都使用 {noise} 協定完成經過驗證的交握。已儲存的訊息使用 {ratchet} 演算法，也就是說即使你的裝置日後遭到入侵，過去的訊息依然無法解讀。緊急抹除會在一秒內銷毀所有金鑰與訊息。",
   "home.about.body.internet":
-    "當你和聯絡人都超出 Bluetooth 範圍時，{nostr} 中繼會作為透過網際網路的橋樑，使用 {nip17} 形式包裝的私訊，因此只要你們雙方都在線上，網狀網路就能延伸到全世界。{tor} 支援在 iOS 與 Android 上皆可使用，透過 {arti} 實作。",
+    "當你和聯絡人都超出 Bluetooth 範圍時，{nostr} 中繼會作為透過網際網路的橋樑，使用 {nip17} 形式包裝的私訊，因此只要你們雙方都在線上，網狀網路就能延伸到全世界。{tor} 支援在 iOS 與 Android 上皆可使用，透過 {arti} 實作，並為封鎖 Tor 的網路提供 {obfs4} 與 {snowflake} 橋接。",
   "home.about.optional.title": "Airhop 提供了一些可以自行開啟的功能：",
   "home.about.optional.payments.label": "離線支付：",
   "home.about.optional.payments.body": "使用 {cashu} 協定在網狀網路上收付款項（僅限 Bitcoin）。",
