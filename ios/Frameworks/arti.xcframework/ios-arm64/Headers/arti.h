@@ -48,12 +48,25 @@
 #define AIRHOP_TOR_ERR_NOT_RUNNING -6
 
 /**
+ * A bridge line could not be parsed.
+ */
+#define AIRHOP_TOR_ERR_BRIDGE_LINE -7
+
+/**
+ * A bridge line names a transport Airhop does not ship, or one whose local
+ * proxy is not running, or carries more settings than a SOCKS5 handshake
+ * can pass to it.
+ */
+#define AIRHOP_TOR_ERR_BRIDGE_TRANSPORT -8
+
+/**
  * Bit layout of the packed status word both FFI surfaces return.
  *
  * ```text
  *   bit  0      running
  *   bit  1      ready
  *   bit  2      blocked
+ *   bit  3      bridged
  *   bits 8..15  progress, 0 to 100
  * ```
  *
@@ -71,6 +84,8 @@
 #define AIRHOP_TOR_STATUS_READY (1 << 1)
 
 #define AIRHOP_TOR_STATUS_BLOCKED (1 << 2)
+
+#define AIRHOP_TOR_STATUS_BRIDGED (1 << 3)
 
 #define AIRHOP_TOR_STATUS_PROGRESS_SHIFT 8
 
@@ -92,6 +107,25 @@ extern "C" {
 int airhop_tor_start(const char *data_dir, uint16_t socks_port);
 
 /**
+ * Start Tor through the bridges in `bridge_lines`, a newline-separated list in
+ * standard Tor format. An empty or null list is a direct connection, the same
+ * as [`airhop_tor_start`].
+ *
+ * `obfs4_port` and `snowflake_port` are where the app already has each
+ * transport listening on loopback, or `0` when it does not. A line naming a
+ * transport whose port is `0` is refused rather than started without it.
+ *
+ * Returns `0` once the listener is accepting, or one of the `AIRHOP_TOR_ERR_*`
+ * codes. A bad line stops the start: nothing binds and nothing bootstraps.
+ *
+ * # Safety
+ *
+ * `data_dir` must be a non-null, NUL-terminated C string, and `bridge_lines`
+ * either null or the same. Both must stay valid for the duration of the call.
+ */
+int airhop_tor_start_with_bridges(const char *data_dir, uint16_t socks_port, const char *bridge_lines, uint16_t obfs4_port, uint16_t snowflake_port);
+
+/**
  * Stop Tor, drop its client and release the port. Returns `0`, or
  * `AIRHOP_TOR_ERR_NOT_RUNNING` when there was nothing to stop.
  */
@@ -110,6 +144,7 @@ int airhop_tor_set_dormant(bool dormant);
  *   bit  0      running
  *   bit  1      ready
  *   bit  2      blocked
+ *   bit  3      bridged
  *   bits 8..15  progress, 0 to 100
  * ```
  *
