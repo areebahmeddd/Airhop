@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Pinned build environment for Airhop's Android Tor libraries.
+# Pinned build environment for Airhop's Android native libraries.
 #
 # The base image, Debian packages, NDK, Rust, cargo-ndk, Go, JDK, and Android
 # platform jar are pinned to keep library outputs reproducible.

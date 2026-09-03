@@ -1,23 +1,14 @@
 // Third-party package licenses.
 //
-// Versions are NOT hardcoded here: they are read from this repo's own
-// package.json at build time, so the list can never drift from what's
-// actually pinned. The curated-by-hand parts are the package name, its
-// license, its repository URL, and which group it belongs to (none of which
-// live in the root package.json, and none of which drift the way a version
-// does).
+// Versions come from this repo's package.json at build time, so the list cannot
+// drift from what is pinned. Native binaries set `version` by hand, since npm
+// does not install them. Everything else here is curated: name, license, repo
+// and group.
 //
-// To add a package: drop it in the right group below with its license and
-// repo. Its version is picked up automatically. When you change a dependency,
-// re-check its license field (node_modules/<pkg>/package.json).
-//
-// Vendored native binaries (the Arti xcframework) set `version` by hand, since
-// npm does not install them.
-//
-// A package's declared license is the default answer, not the final one: what
-// matters is the license of the code that ships in the binary. Where a thin npm
-// wrapper links a differently-licensed native library, both are named (see
-// react-native-mmkv).
+// A declared license is the default answer, not the final one: what matters is
+// the license of the code that ships in the binary. Where a thin wrapper links
+// a differently-licensed native library, both are named (see react-native-mmkv,
+// and IPtProxy with the transports inside it).
 
 import pkg from "../../package.json";
 
@@ -44,10 +35,9 @@ function versionOf(name: string): string {
   return range ? range.replace(/^[\^~]/, "") : "n/a";
 }
 
-// Curated catalog: name, license, and repo, grouped by role and kept
-// alphabetical within each group. Each group opens with a one-line plain
-// summary of what its packages are for. Versions are filled in from
-// package.json by the mapping below.
+// Curated catalog: name, license, and repo, grouped by role and alphabetical.
+// Each group starts with a one-line summary of what its packages are for.
+// Versions are filled in from package.json by the mapping below.
 const CATALOG: {
   category: string;
   description: string;
@@ -317,6 +307,24 @@ const CATALOG: {
         version: "0.46.0",
         license: "MIT OR Apache-2.0",
         repo: "https://gitlab.torproject.org/tpo/core/arti",
+      },
+      {
+        name: "IPtProxy",
+        version: "5.5.1",
+        license: "MIT",
+        repo: "https://github.com/tladesignz/IPtProxy",
+      },
+      {
+        name: "lyrebird",
+        version: "bundled with IPtProxy",
+        license: "BSD-3-Clause",
+        repo: "https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird",
+      },
+      {
+        name: "snowflake",
+        version: "bundled with IPtProxy",
+        license: "BSD-3-Clause",
+        repo: "https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake",
       },
     ],
   },

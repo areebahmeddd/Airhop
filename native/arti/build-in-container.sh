@@ -78,6 +78,13 @@ docker build \
   --tag "$IMAGE" \
   "$(host_path "$SCRIPT_DIR")"
 
+# The transport build next door reuses this image and needs a way to ask for it
+# without also rebuilding the Tor client.
+if [ "${1:-}" = "--image-only" ]; then
+  echo "==> Built $IMAGE"
+  exit 0
+fi
+
 # Mount the repository so the container can build and write the Android outputs.
 docker run --rm \
   --platform linux/amd64 \

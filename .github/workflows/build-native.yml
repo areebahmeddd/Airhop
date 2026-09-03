@@ -1,4 +1,4 @@
-name: Build Arti Libraries
+name: Build Native Libraries
 
 on:
   workflow_dispatch:
@@ -22,24 +22,30 @@ jobs:
         with:
           persist-credentials: false
 
-      # Verifies its own output: exported JNI symbols, 16 KiB page alignment on
-      # the 64-bit ABIs, and that no build-machine path survived.
+      # Both scripts verify their own output: exported symbols, 16 KiB page
+      # alignment on the 64-bit ABIs, and no surviving build-machine path.
       - name: Build in the pinned container
         run: bash native/arti/build-in-container.sh --clean
+
+      # Reuses the image the step above built.
+      - name: Build the pluggable transports
+        run: bash native/iptproxy/build-in-container.sh --clean
 
       - name: Upload Android libraries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: arti-android
-          # Two trees, so the artifact is rooted at the workspace and the commit
-          # job can copy it back verbatim.
+          name: native-android
+          # Several trees, so the artifact is rooted at the workspace and the
+          # commit job can copy it back verbatim.
           path: |
             android/app/src/main/jniLibs/*/libarti_airhop.so
+            android/app/libs/IPtProxy.aar
             native/arti/SHA256SUMS.android
+            native/iptproxy/SHA256SUMS.android
           if-no-files-found: error
 
   apple:
-    name: Build Apple xcframework
+    name: Build Apple libraries
     runs-on: macos-26
     timeout-minutes: 120
 
@@ -87,13 +93,21 @@ jobs:
       - name: Build the xcframework
         run: bash native/arti/build-apple.sh --clean
 
-      - name: Upload Apple xcframework
+      - name: Build the pluggable transports
+        run: |
+          set -euo pipefail
+          bash native/iptproxy/fetch-sources.sh --clean
+          bash native/iptproxy/build-apple.sh --clean
+
+      - name: Upload Apple libraries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: arti-apple
+          name: native-apple
           path: |
             ios/Frameworks/arti.xcframework/**
+            ios/Frameworks/IPtProxy.xcframework/**
             native/arti/SHA256SUMS.apple
+            native/iptproxy/SHA256SUMS.apple
           if-no-files-found: error
 
   commit:
@@ -113,32 +127,41 @@ jobs:
       - name: Download rebuilt libraries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: ${{ runner.temp }}/arti
+          path: ${{ runner.temp }}/native
 
       - name: Place rebuilt libraries
         run: |
           set -euo pipefail
           # Cleared first: copying over the checkout merges, it does not replace,
           # leaving old architecture files that the build no longer produces.
-          rm -rf ios/Frameworks/arti.xcframework android/app/src/main/jniLibs
-          cp -R "$RUNNER_TEMP/arti/arti-android/." .
-          cp -R "$RUNNER_TEMP/arti/arti-apple/." .
+          rm -rf ios/Frameworks/arti.xcframework \
+                 ios/Frameworks/IPtProxy.xcframework \
+                 android/app/src/main/jniLibs \
+                 android/app/libs
+          cp -R "$RUNNER_TEMP/native/native-android/." .
+          cp -R "$RUNNER_TEMP/native/native-apple/." .
 
           for abi in arm64-v8a armeabi-v7a x86_64; do
             lib="android/app/src/main/jniLibs/$abi/libarti_airhop.so"
             [ -s "$lib" ] || { echo "::error::missing $lib"; exit 1; }
           done
+          [ -s android/app/libs/IPtProxy.aar ] || { echo '::error::missing IPtProxy.aar'; exit 1; }
           slices=$(find ios/Frameworks/arti.xcframework -name '*.a' | wc -l)
-          [ "$slices" -eq 2 ] || { echo "::error::expected 2 xcframework slices, found $slices"; exit 1; }
+          [ "$slices" -eq 2 ] || { echo "::error::expected 2 arti slices, found $slices"; exit 1; }
+          # gomobile emits a framework bundle rather than a bare archive.
+          slices=$(find ios/Frameworks/IPtProxy.xcframework -name 'IPtProxy.framework' | wc -l)
+          [ "$slices" -eq 2 ] || { echo "::error::expected 2 IPtProxy slices, found $slices"; exit 1; }
 
       - name: Record hashes
         run: |
           set -euo pipefail
           # Staged first: verify-vendored.js hashes the files git knows about, so
           # a binary that has never been added is invisible to it.
-          git add android/app/src/main/jniLibs ios/Frameworks
+          git add android/app/src/main/jniLibs android/app/libs ios/Frameworks
           node scripts/verify-vendored.js --write
-          git add vendor.lock.json native/arti/SHA256SUMS.android native/arti/SHA256SUMS.apple
+          git add vendor.lock.json \
+            native/arti/SHA256SUMS.android native/arti/SHA256SUMS.apple \
+            native/iptproxy/SHA256SUMS.android native/iptproxy/SHA256SUMS.apple
           node scripts/verify-vendored.js
 
       - name: Check for changes
@@ -164,11 +187,11 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore(arti): rebuild the embedded Tor client" \
+          git commit -m "chore(native): rebuild the Tor client and pluggable transports" \
             -m "Android in the pinned container on ubuntu, Apple on macOS. Versions and toolchain: native/arti/TOOLCHAIN.env."
 
           # Buffer the pack instead of streaming it chunked: this push carries
-          # about 128 MB of static libraries.
+          # a few hundred MB of static libraries.
           git config http.postBuffer 524288000
           git push origin "HEAD:$TARGET_REF"
 
@@ -178,5 +201,7 @@ jobs:
             echo '```'
             find android/app/src/main/jniLibs -name '*.so' -exec ls -lh {} \; | awk '{ print $5, $9 }'
             find ios/Frameworks/arti.xcframework -name '*.a' -exec ls -lh {} \; | awk '{ print $5, $9 }'
+            ls -lh android/app/libs/IPtProxy.aar | awk '{ print $5, $9 }'
+            find ios/Frameworks/IPtProxy.xcframework -name IPtProxy -type f -exec ls -lh {} \; | awk '{ print $5, $9 }'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

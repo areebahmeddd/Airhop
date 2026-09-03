@@ -34,7 +34,13 @@ const LOCK_FILE = "vendor.lock.json";
 // tracked file underneath is hashed, so a new file appearing is caught too:
 // adding a file is as effective an attack as modifying one, and a manifest that
 // only lists what it already knows about would miss it.
-const VENDORED_PATHS = ["ios/Frameworks", "android/app/src/main/jniLibs"];
+const VENDORED_PATHS = [
+  "ios/Frameworks",
+  "android/app/src/main/jniLibs",
+  // The transports ship as an aar, not a bare .so: gomobile emits the Java
+  // bindings the Kotlin side calls alongside the native code.
+  "android/app/libs",
+];
 
 function trackedFiles(prefix) {
   const out = execFileSync("git", ["ls-files", "-z", "--", prefix], {
