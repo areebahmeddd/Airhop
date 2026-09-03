@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Teruskan",
   "common.try_again": "Cuba lagi",
   "common.settings": "Tetapan",
+  "common.on": "Hidup",
   "common.off": "Mati",
 
   // ---- Dates ----
@@ -1817,6 +1818,22 @@ export const strings: Strings = {
     "Tor mengambil masa lebih daripada seminit untuk menyambung. Ia kekal hidup dan terus mencuba; tab Mesh akan memberitahu bila ia mula menghala, atau kalau rangkaian ini menyekatnya.",
   "settings.conn.tor_failed":
     "Tor tidak dapat dihidupkan. Pastikan aplikasi mempunyai capaian rangkaian.",
+  "settings.tor.connection": "Sambungan",
+  "settings.tor.mode_off": "Terus",
+  "settings.tor.mode_off_desc":
+    "Menyambung terus ke Tor. Paling laju, tetapi sesiapa yang memerhati rangkaian ini nampak anda menggunakan Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Menyembunyikan penggunaan Tor, dan tetap berfungsi di tempat jambatan disekat. Paling perlahan untuk menyambung.",
+  "settings.tor.mode_obfs4": "Jambatan",
+  "settings.tor.mode_obfs4_desc":
+    "Menyembunyikan penggunaan Tor. Lebih laju daripada Snowflake, tetapi jambatan ini awam dan sesetengah rangkaian menyekatnya.",
+  "settings.tor.mode_custom": "Jambatan sendiri",
+  "settings.tor.mode_custom_desc":
+    "Gunakan jambatan dari bridges.torproject.org. Cuba ini apabila yang lain gagal.",
+  "settings.tor.custom_placeholder": "Tampal satu baris jambatan setiap baris",
+  "settings.tor.custom_empty":
+    "Tambah sekurang-kurangnya satu baris jambatan dahulu.",
   "settings.conn.mint_clearnet":
     "Benarkan trafik mint melalui rangkaian terbuka",
   "settings.conn.mint_clearnet_desc":

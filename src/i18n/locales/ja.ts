@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "続ける",
   "common.try_again": "もう一度試す",
   "common.settings": "設定",
+  "common.on": "オン",
   "common.off": "オフ",
 
   // ---- Dates ----
@@ -1787,6 +1788,21 @@ export const strings: Strings = {
     "Torの接続に1分以上かかっています。オンのまま試み続けます。中継が始まったか、このネットワークが遮断しているかは、メッシュタブでお知らせします。",
   "settings.conn.tor_failed":
     "Torを起動できませんでした。アプリにネットワークへのアクセスがあるか確認してください。",
+  "settings.tor.connection": "接続方法",
+  "settings.tor.mode_off": "直接",
+  "settings.tor.mode_off_desc":
+    "Tor に直接接続します。最速ですが、このネットワークを見ている人には Tor の利用がわかります。",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Tor の利用を隠し、ブリッジが遮断された場所でも動きます。接続は最も遅くなります。",
+  "settings.tor.mode_obfs4": "ブリッジ",
+  "settings.tor.mode_obfs4_desc":
+    "Tor の利用を隠します。Snowflake より速いものの、これらのブリッジは公開されており遮断する回線もあります。",
+  "settings.tor.mode_custom": "カスタムブリッジ",
+  "settings.tor.mode_custom_desc":
+    "bridges.torproject.org で取得したブリッジを使います。他が使えないときに試してください。",
+  "settings.tor.custom_placeholder": "1 行につき 1 つのブリッジ行を貼り付け",
+  "settings.tor.custom_empty": "まず 1 つ以上のブリッジ行を追加してください。",
   "settings.conn.mint_clearnet": "素のネットワークでのミント通信を許可",
   "settings.conn.mint_clearnet_desc":
     "iOSではTorはNostrしか覆いません。オフのままにするとミントへのリクエストを遮断します。メッシュ経由のecashはどちらでも使えます。",

@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "계속",
   "common.try_again": "다시 시도",
   "common.settings": "설정",
+  "common.on": "켜짐",
   "common.off": "끔",
 
   // ---- Dates ----
@@ -1762,6 +1763,21 @@ export const strings: Strings = {
     "Tor 연결이 1분 넘게 걸리고 있습니다. 계속 켜진 채로 시도하며, 경로 설정이 되었는지 또는 이 네트워크가 차단하고 있는지는 메시 탭에서 알려줍니다.",
   "settings.conn.tor_failed":
     "Tor를 시작하지 못했습니다. 앱에 네트워크 접근 권한이 있는지 확인하세요.",
+  "settings.tor.connection": "연결 방식",
+  "settings.tor.mode_off": "직접",
+  "settings.tor.mode_off_desc":
+    "Tor에 바로 연결합니다. 가장 빠르지만 이 네트워크를 지켜보는 쪽에서 Tor 사용 사실을 알 수 있습니다.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Tor 사용 사실을 숨기고, 브리지가 차단된 곳에서도 작동합니다. 연결이 가장 느립니다.",
+  "settings.tor.mode_obfs4": "브리지",
+  "settings.tor.mode_obfs4_desc":
+    "Tor 사용 사실을 숨깁니다. Snowflake보다 빠르지만 이 브리지는 공개되어 있어 차단하는 망도 있습니다.",
+  "settings.tor.mode_custom": "사용자 브리지",
+  "settings.tor.mode_custom_desc":
+    "bridges.torproject.org에서 받은 브리지를 사용합니다. 다른 방식이 안 될 때 시도하세요.",
+  "settings.tor.custom_placeholder": "한 줄에 브리지 한 줄씩 붙여넣기",
+  "settings.tor.custom_empty": "먼저 브리지 줄을 하나 이상 추가하세요.",
   "settings.conn.mint_clearnet": "민트 트래픽을 일반 네트워크로 허용",
   "settings.conn.mint_clearnet_desc":
     "iOS의 Tor는 Nostr만 감쌉니다. 민트 요청을 막으려면 꺼두세요. 어느 쪽이든 메시를 통한 ecash는 계속 작동합니다.",

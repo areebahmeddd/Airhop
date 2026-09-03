@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "جاری رکھیں",
   "common.try_again": "دوبارہ کوشش کریں",
   "common.settings": "ترتیبات",
+  "common.on": "آن",
   "common.off": "بند",
 
   // ---- Dates ----
@@ -1776,6 +1777,21 @@ export const strings: Strings = {
     "Tor کو جڑنے میں ایک منٹ سے زیادہ لگ رہا ہے۔ وہ چالو رہتا ہے اور کوشش جاری رکھتا ہے؛ میش ٹیب بتا دے گا کہ وہ کب رخ بندی کر رہا ہے، یا اگر یہ نیٹ ورک اسے روک رہا ہو۔",
   "settings.conn.tor_failed":
     "Tor شروع نہیں ہو سکا۔ یقینی بنائیں کہ ایپ کو نیٹ ورک تک رسائی حاصل ہے۔",
+  "settings.tor.connection": "کنکشن",
+  "settings.tor.mode_off": "براہِ راست",
+  "settings.tor.mode_off_desc":
+    "براہِ راست Tor سے جڑتا ہے۔ سب سے تیز، مگر اس نیٹ ورک کو دیکھنے والا کوئی بھی جان سکتا ہے کہ آپ Tor استعمال کر رہے ہیں۔",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "چھپاتا ہے کہ آپ Tor استعمال کر رہے ہیں، اور جہاں پل بند ہوں وہاں بھی کام کرتا ہے۔ جڑنے میں سب سے سست۔",
+  "settings.tor.mode_obfs4": "پل",
+  "settings.tor.mode_obfs4_desc":
+    "چھپاتا ہے کہ آپ Tor استعمال کر رہے ہیں۔ Snowflake سے تیز، مگر یہ پل عوامی ہیں اور کچھ نیٹ ورک انہیں بلاک کرتے ہیں۔",
+  "settings.tor.mode_custom": "اپنے پل",
+  "settings.tor.mode_custom_desc":
+    "bridges.torproject.org سے حاصل کیے گئے پل استعمال کریں۔ باقی ناکام ہوں تو یہ آزمائیں۔",
+  "settings.tor.custom_placeholder": "ہر سطر میں ایک پل کی سطر چسپاں کریں",
+  "settings.tor.custom_empty": "پہلے کم از کم ایک پل کی سطر شامل کریں۔",
   "settings.conn.mint_clearnet": "ٹکسال کی ٹریفک کھلے نیٹ پر جانے دیں",
   "settings.conn.mint_clearnet_desc":
     "iOS پر Tor صرف Nostr کو ڈھانپتا ہے۔ ٹکسال کی درخواستیں روکنے کے لیے بند رہنے دیں؛ میش پر ecash بہرحال کام کرتا ہے۔",

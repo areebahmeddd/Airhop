@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Continuar",
   "common.try_again": "Tentar de novo",
   "common.settings": "Configurações",
+  "common.on": "Ligado",
   "common.off": "Desligado",
 
   // ---- Dates ----
@@ -1819,6 +1820,21 @@ export const strings: Strings = {
     "O Tor está demorando mais de um minuto para conectar. Ele continua ligado e tentando; a aba Malha vai dizer quando estiver roteando, ou se esta rede o estiver bloqueando.",
   "settings.conn.tor_failed":
     "Não foi possível iniciar o Tor. Verifique se o app tem acesso à rede.",
+  "settings.tor.connection": "Conexão",
+  "settings.tor.mode_off": "Direta",
+  "settings.tor.mode_off_desc":
+    "Conecta direto ao Tor. O mais rápido, mas quem observa esta rede vê que você usa Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Esconde que você usa Tor e continua funcionando onde as pontes estão bloqueadas. O mais lento para conectar.",
+  "settings.tor.mode_obfs4": "Ponte",
+  "settings.tor.mode_obfs4_desc":
+    "Esconde que você usa Tor. Mais rápido que o Snowflake, mas estas pontes são públicas e algumas redes as bloqueiam.",
+  "settings.tor.mode_custom": "Pontes próprias",
+  "settings.tor.mode_custom_desc":
+    "Use pontes obtidas em bridges.torproject.org. Tente isto quando as outras falharem.",
+  "settings.tor.custom_placeholder": "Cole uma linha de ponte por linha",
+  "settings.tor.custom_empty": "Adicione ao menos uma linha de ponte primeiro.",
   "settings.conn.mint_clearnet":
     "Permitir o tráfego com a casa de emissão pela rede aberta",
   "settings.conn.mint_clearnet_desc":

@@ -82,6 +82,7 @@ import SecurityScreen from "./sections/security-screen";
 import StorageScreen from "./sections/storage-screen";
 import SupportScreen from "./sections/support-screen";
 import TermsScreen from "./sections/terms-screen";
+import TorScreen from "./sections/tor-screen";
 import VersionScreen from "./sections/version-screen";
 import {
   GroupDivider,
@@ -233,6 +234,7 @@ type SettingsView =
   | "general"
   | "security"
   | "network"
+  | "tor"
   | "permissions"
   | "storage"
   | "diagnostics"
@@ -598,6 +600,9 @@ export default function ProfileScreen({
   if (view === "network") {
     return <NetworkScreen onBack={() => setView("root")} />;
   }
+  if (view === "tor") {
+    return <TorScreen onBack={() => setView("root")} />;
+  }
   if (view === "permissions") {
     return <PermissionsScreen onBack={() => setView("root")} />;
   }
@@ -729,7 +734,7 @@ export default function ProfileScreen({
           controls, so they read as chrome on the first screen and have moved
           under General; these four are the switches people open Settings to
           flip, and they belong where the thumb already is. */}
-      <ConnectivityGroup />
+      <ConnectivityGroup onOpenTor={() => openSection("tor")} />
 
       {/* Settings nav: each row drills into its own sub-screen */}
       <View style={shared.section}>

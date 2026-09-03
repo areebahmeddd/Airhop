@@ -268,7 +268,19 @@ public final class AirhopTorManager: ObservableObject {
         }
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if ArtiStatus.current.ready { return true }
+            let status = ArtiStatus.current
+            if status.ready { return true }
+            // Give up as soon as the answer is known. A bridge deadline runs to
+            // three minutes, and Arti reporting a blockage, or an attempt that
+            // failed before it began, is that answer already. Waiting out the
+            // rest would leave the user on a spinner for a refused bridge line.
+            //
+            // `isStarting` covers the window between dispatching a start and
+            // the client existing, where `running` is legitimately false.
+            if status.blocked { return false }
+            if !status.running, await !MainActor.run(body: { self.isStarting }) {
+                return false
+            }
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
         return ArtiStatus.current.ready

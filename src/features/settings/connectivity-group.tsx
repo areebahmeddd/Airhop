@@ -18,8 +18,6 @@
 import { useT, type TranslationKey } from "@i18n";
 import { requestLocationPermission } from "@services/location-service";
 import { getMeshService } from "@services/mesh-service";
-import { setTorRouting } from "@services/tor-routing";
-import { showAlert } from "@store/alert-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import BottomSheet from "@ui/components/bottom-sheet";
@@ -28,12 +26,13 @@ import React, { useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import {
   GroupDivider,
+  SettingLinkRow,
   SettingRow,
   SettingSwitch,
   useSharedStyles,
 } from "./settings-primitives";
 
-type ToggleKey = "liveVoice" | "background" | "tor" | "gateway" | "bridge";
+type ToggleKey = "liveVoice" | "background" | "gateway" | "bridge";
 
 // Keys rather than text: this is a module constant, so it cannot call a hook,
 // and building it once at module load would freeze the copy in whichever
@@ -73,18 +72,6 @@ const CONFIRM: Record<ToggleKey, { on: ConfirmCopy; off: ConfirmCopy }> = {
       action: "settings.conn.turn_off",
     },
   },
-  tor: {
-    on: {
-      title: "settings.conn.tor_on_title",
-      body: "settings.conn.tor_on_body",
-      action: "settings.conn.turn_on",
-    },
-    off: {
-      title: "settings.conn.tor_off_title",
-      body: "settings.conn.tor_off_body",
-      action: "settings.conn.turn_off",
-    },
-  },
   gateway: {
     on: {
       title: "settings.conn.gateway_on_title",
@@ -119,13 +106,16 @@ interface Pending {
   next: boolean;
 }
 
-export default function ConnectivityGroup(): React.JSX.Element {
+interface Props {
+  onOpenTor: () => void;
+}
+
+export default function ConnectivityGroup({
+  onOpenTor,
+}: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
   const T = useT();
-  // The switch reflects the persisted preference (user intent), which
-  // setTorRouting owns. torStarting only disables the switch while a toggle is
-  // in flight, so it can't be double-tapped mid-operation.
   const torEnabled = useSettingsStore((s) => s.torEnabled);
   const liveVoiceEnabled = useSettingsStore((s) => s.liveVoiceEnabled);
   const setLiveVoiceEnabled = useSettingsStore((s) => s.setLiveVoiceEnabled);
@@ -150,7 +140,24 @@ export default function ConnectivityGroup(): React.JSX.Element {
   const setAllowMintOverClearnet = useSettingsStore(
     (s) => s.setAllowMintOverClearnet,
   );
-  const [torStarting, setTorStarting] = useState(false);
+  const bridgeMode = useSettingsStore((s) => s.torBridgeMode);
+
+  // Off, or on and how it reaches the network. The bridge is worth naming here:
+  // it is the difference between hiding the traffic and hiding that there is
+  // any, and a user who chose one wants to see it held.
+  function torSummary(): string {
+    if (!torEnabled) return T("common.off");
+    switch (bridgeMode) {
+      case "snowflake":
+        return T("settings.tor.mode_snowflake");
+      case "obfs4":
+        return T("settings.tor.mode_obfs4");
+      case "custom":
+        return T("settings.tor.mode_custom");
+      case "off":
+        return T("common.on");
+    }
+  }
   // What the sheet is asking about, and whether it is up. Two pieces of state
   // rather than one nullable: the sheet slides out over ~200ms, and it still
   // has to draw its own words on the way down. `pending` is therefore never
@@ -174,43 +181,12 @@ export default function ConnectivityGroup(): React.JSX.Element {
       case "background":
         setBackgroundMeshEnabled(next);
         break;
-      case "tor":
-        void handleTorToggle(next);
-        break;
       case "gateway":
         setGatewayEnabled(next);
         break;
       case "bridge":
         setBridgeEnabled(next);
         break;
-    }
-  }
-
-  // Route the Tor toggle through tor-routing.setTorRouting, the single place
-  // that starts and stops the embedded Tor client, points the app's sockets at
-  // it, persists the preference and rebuilds the Nostr transport. The switch
-  // itself is driven by the persisted preference, so it always reflects the real
-  // routing state rather than a copy that can drift.
-  //
-  // One message per outcome, and none of them is "try again": a bootstrap that
-  // ran out its deadline may still land, and the Mesh banner carries that. What
-  // the sheet says is what happened.
-  async function handleTorToggle(value: boolean): Promise<void> {
-    try {
-      setTorStarting(true);
-      const result = await setTorRouting(value);
-      if (value && !result.ok) {
-        showAlert(
-          T("settings.conn.tor_short"),
-          result.reason === "unavailable"
-            ? T("settings.conn.tor_unavailable")
-            : result.reason === "timeout"
-              ? T("settings.conn.tor_timeout")
-              : T("settings.conn.tor_failed"),
-        );
-      }
-    } finally {
-      setTorStarting(false);
     }
   }
 
@@ -305,19 +281,16 @@ export default function ConnectivityGroup(): React.JSX.Element {
           }
         />
         <GroupDivider />
-        <SettingRow
+        {/* A drill-in, not a switch. Tor carries a second choice, how it
+            reaches the network, and a row that both toggles and navigates is
+            two controls in one place. The value keeps the answer visible
+            without opening the screen. */}
+        <SettingLinkRow
           icon="globe"
           label={T("settings.conn.tor")}
-          // Standard description regardless of on/off; the switch and the Mesh
-          // banner communicate state.
           description={T("settings.conn.tor_desc")}
-          control={
-            <SettingSwitch
-              value={torEnabled}
-              onValueChange={(v) => requestToggle("tor", v)}
-              disabled={torStarting || !internetEnabled}
-            />
-          }
+          control={<Text style={styles.settingValue}>{torSummary()}</Text>}
+          onPress={onOpenTor}
         />
         {/* iOS only, and the reason is a platform limit rather than a policy.
             There, Tor is wired into the Nostr WebSocket alone, so a Cashu mint

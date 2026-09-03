@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Tiếp tục",
   "common.try_again": "Thử lại",
   "common.settings": "Cài đặt",
+  "common.on": "Bật",
   "common.off": "Tắt",
 
   // ---- Dates ----
@@ -1796,6 +1797,21 @@ export const strings: Strings = {
     "Tor đang mất hơn một phút để kết nối. Nó vẫn bật và tiếp tục thử; thẻ Mạng lưới sẽ báo khi nó bắt đầu định tuyến, hoặc khi mạng này đang chặn nó.",
   "settings.conn.tor_failed":
     "Không khởi động được Tor. Hãy bảo đảm ứng dụng có quyền truy cập mạng.",
+  "settings.tor.connection": "Kết nối",
+  "settings.tor.mode_off": "Trực tiếp",
+  "settings.tor.mode_off_desc":
+    "Kết nối thẳng tới Tor. Nhanh nhất, nhưng ai theo dõi mạng này đều thấy bạn dùng Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Che giấu việc bạn dùng Tor và vẫn chạy ở nơi cầu nối bị chặn. Kết nối chậm nhất.",
+  "settings.tor.mode_obfs4": "Cầu nối",
+  "settings.tor.mode_obfs4_desc":
+    "Che giấu việc bạn dùng Tor. Nhanh hơn Snowflake, nhưng các cầu nối này công khai và một số mạng chặn chúng.",
+  "settings.tor.mode_custom": "Cầu nối riêng",
+  "settings.tor.mode_custom_desc":
+    "Dùng cầu nối lấy từ bridges.torproject.org. Thử cách này khi các cách khác không được.",
+  "settings.tor.custom_placeholder": "Dán mỗi dòng một dòng cầu nối",
+  "settings.tor.custom_empty": "Hãy thêm ít nhất một dòng cầu nối trước.",
   "settings.conn.mint_clearnet": "Cho phép lưu lượng nhà đúc qua mạng trần",
   "settings.conn.mint_clearnet_desc":
     "Tor trên iOS chỉ bao được Nostr. Hãy để tắt để chặn các yêu cầu tới nhà đúc; dù thế nào ecash qua mạng lưới vẫn chạy.",

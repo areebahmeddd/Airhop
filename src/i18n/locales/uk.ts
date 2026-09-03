@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Далі",
   "common.try_again": "Спробувати ще раз",
   "common.settings": "Налаштування",
+  "common.on": "Увімкнено",
   "common.off": "Вимкнено",
 
   // ---- Dates ----
@@ -1802,6 +1803,21 @@ export const strings: Strings = {
     "Tor з’єднується довше за хвилину. Він лишається увімкненим і продовжує спроби; вкладка Mesh скаже, коли маршрутизація запрацює або якщо ця мережа її блокує.",
   "settings.conn.tor_failed":
     "Не вдалося запустити Tor. Переконайтеся, що застосунок має доступ до мережі.",
+  "settings.tor.connection": "Підключення",
+  "settings.tor.mode_off": "Напряму",
+  "settings.tor.mode_off_desc":
+    "Підключається прямо до Tor. Найшвидше, але той, хто стежить за цією мережею, побачить, що ви користуєтесь Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Приховує, що ви користуєтесь Tor, і працює там, де мости заблоковані. Підключається найповільніше.",
+  "settings.tor.mode_obfs4": "Міст",
+  "settings.tor.mode_obfs4_desc":
+    "Приховує, що ви користуєтесь Tor. Швидше за Snowflake, але ці мости загальнодоступні й частина мереж їх блокує.",
+  "settings.tor.mode_custom": "Власні мости",
+  "settings.tor.mode_custom_desc":
+    "Використайте мости з bridges.torproject.org. Спробуйте, коли інше не працює.",
+  "settings.tor.custom_placeholder": "Вставте по одному рядку моста в рядок",
+  "settings.tor.custom_empty": "Спершу додайте хоча б один рядок моста.",
   "settings.conn.mint_clearnet": "Дозволити трафік мінта через відкриту мережу",
   "settings.conn.mint_clearnet_desc":
     "Tor на iOS охоплює лише Nostr. Лишіть вимкненим, щоб блокувати запити до мінта; ecash через mesh працює в будь-якому разі.",

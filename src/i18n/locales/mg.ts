@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Tohizo",
   "common.try_again": "Andramo indray",
   "common.settings": "Fandrindrana",
+  "common.on": "Mandeha",
   "common.off": "Vonoina",
 
   // ---- Dates ----
@@ -1852,6 +1853,23 @@ export const strings: Strings = {
     "Mihoatra ny iray minitra i Tor vao mifandray. Mijanona mandeha izy ary manohy manandrana; hilaza ny takelaka Harato rehefa mitondra izy, na raha misakana azy ity tambajotra ity.",
   "settings.conn.tor_failed":
     "Tsy afaka nandefa ny Tor. Hamarino fa manana fidirana amin'ny tambajotra ny rindranasa.",
+  "settings.tor.connection": "Fifandraisana",
+  "settings.tor.mode_off": "Mivantana",
+  "settings.tor.mode_off_desc":
+    "Mifandray mivantana amin'ny Tor. Haingana indrindra, saingy hitan'izay manara-maso ity tambajotra ity fa mampiasa Tor ianao.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Manafina fa mampiasa Tor ianao, ary mandeha na dia voasakana aza ny tetezana. Miadana indrindra ny fifandraisana.",
+  "settings.tor.mode_obfs4": "Tetezana",
+  "settings.tor.mode_obfs4_desc":
+    "Manafina fa mampiasa Tor ianao. Haingana noho ny Snowflake, saingy ampahibemaso ireo tetezana ireo ka sakanan'ny tambajotra sasany.",
+  "settings.tor.mode_custom": "Tetezana manokana",
+  "settings.tor.mode_custom_desc":
+    "Ampiasao ny tetezana azo avy ao amin'ny bridges.torproject.org. Andramo ity rehefa tsy mandeha ny hafa.",
+  "settings.tor.custom_placeholder":
+    "Apetaho tsipika tetezana iray isaky ny andalana",
+  "settings.tor.custom_empty":
+    "Ampio tsipika tetezana iray farafahakeliny aloha.",
   "settings.conn.mint_clearnet":
     "Avelao ny fifamoivoizan'ny mpamoaka amin'ny tambajotra misokatra",
   "settings.conn.mint_clearnet_desc":

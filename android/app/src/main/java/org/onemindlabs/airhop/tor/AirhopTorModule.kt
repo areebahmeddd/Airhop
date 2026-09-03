@@ -208,8 +208,17 @@ class AirhopTorModule(
         val deadline = System.nanoTime() + (timeoutSeconds * 1e9).toLong()
         waiters.execute {
             while (System.nanoTime() < deadline) {
-                if (ArtiNative.status().ready) {
+                val status = ArtiNative.status()
+                if (status.ready) {
                     promise.resolve(true)
+                    return@execute
+                }
+                // Give up as soon as the answer is known. A bridge deadline runs
+                // to three minutes, and Arti reporting a blockage, or a client
+                // that is gone, is that answer already. startTor resolves only
+                // after the client is running, so neither is a startup window.
+                if (status.blocked || !status.running) {
+                    promise.resolve(false)
                     return@execute
                 }
                 try {

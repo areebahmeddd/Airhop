@@ -19,8 +19,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # `compression` is the one upstream default worth keeping: uncompressed
 # directory downloads cost bandwidth on a phone.
 #
-# Bridge support is compiled in but not configured yet. This keeps enabling
-# bridges a configuration change rather than a separate binary rebuild.
+# `bridge-client` and `pt-client` are what let src/bridges.rs reach an unlisted
+# entry point through a transport. See native/iptproxy for the transports.
 #
 # The version is duplicated from ARTI_CLIENT_VERSION in TOOLCHAIN.env because
 # cargo cannot read it from there. Nowhere else restates it.

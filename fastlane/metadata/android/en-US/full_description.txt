@@ -20,23 +20,19 @@ Airhop speaks the same protocol as bitchat. Airhop and bitchat users automatical
 
 ## Optional internet mode
 
-- Enable internet bridging to reach people outside Bluetooth range when internet access is available.
-- Tor routing is built in for users who want to route internet traffic through Tor. No separate app to install.
+- Enable internet bridging via Nostr relays to reach people beyond Bluetooth range when internet access is available.
+- Tor routing and bridges are built in, helping route traffic through Tor and connect on networks that block or monitor Tor. No separate app required.
 
 ## Privacy and security
 
 - Open source under the MIT License
 - Every message is digitally signed to prevent impersonation
 - Attachments are automatically deleted after seven days
-- Notification previews are hidden by default
 - Panic wipe permanently deletes all messages and cryptographic keys stored on the device
-
-Every release includes source hashes and build provenance, allowing anyone to verify that the published source matches the released application.
 
 ## What Airhop doesn't promise
 
 - Public rooms are exactly that: public. Anyone within Bluetooth range can read messages sent there.
-- Tor hides your IP address from relays, but it does not hide that you're using Tor. Bridge support is not yet available.
 - We document the system's limits instead of implying guarantees we cannot make.
 
 ## About

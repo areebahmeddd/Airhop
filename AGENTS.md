@@ -51,6 +51,7 @@ You must read these four documents before making any code suggestions:
 | iOS native                                                    | `ios/`                            |
 | Android native                                                | `android/`                        |
 | Embedded Tor client (Rust, both platforms)                    | `native/arti/`                    |
+| Pluggable transports (Go, both platforms)                     | `native/iptproxy/`                |
 | All protocol constants                                        | `docs/spec/PROTOCOLS.md`          |
 
 ## Rules Every Agent Must Follow
@@ -95,7 +96,7 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 Two things in the tree are pinned by hash and checked in CI. Both fail the build
 rather than drifting quietly, so a change to either has to be deliberate.
 
-- **Native binaries** (`ios/Frameworks/` and `android/app/src/main/jniLibs/`, the embedded Tor client). Built here from `native/arti/`, not vendored, but committed rather than compiled on every CI run, and nobody reviews a binary diff. Rebuild with `native/arti/build-in-container.sh` (Android, Docker) or `native/arti/build-apple.sh` (iOS, macOS only), then re-record in the same commit: `node scripts/verify-vendored.js --write`. CI runs `npm run verify:vendored`. Never hand-edit a binary or a hash.
+- **Native binaries** (`ios/Frameworks/`, `android/app/src/main/jniLibs/` and `android/app/libs/`: the embedded Tor client and its pluggable transports). Built here from `native/arti/` and `native/iptproxy/`, not vendored, but committed rather than compiled on every CI run, and nobody reviews a binary diff. Rebuild with each tree's `build-in-container.sh` (Android, Docker) or `build-apple.sh` (iOS, macOS only), then re-record in the same commit: `node scripts/verify-vendored.js --write`. CI runs `npm run verify:vendored`. Never hand-edit a binary or a hash.
 - **Gradle dependencies** (`android/app/gradle.lockfile`). Adding or bumping an npm package with an Android side can change what Gradle resolves. Regenerate in the same commit: `./gradlew dependencies --write-locks` then `./gradlew :app:dependencies --write-locks`.
 
 ### User-Facing Copy

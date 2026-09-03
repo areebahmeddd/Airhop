@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "চালিয়ে যান",
   "common.try_again": "আবার চেষ্টা করুন",
   "common.settings": "সেটিংস",
+  "common.on": "চালু",
   "common.off": "বন্ধ",
 
   // ---- Dates ----
@@ -1773,6 +1774,21 @@ export const strings: Strings = {
     "Tor যুক্ত হতে এক মিনিটের বেশি নিচ্ছে। এটি চালু থেকে চেষ্টা করে যায়; মেশ ট্যাব জানাবে কখন এটি ঘোরাচ্ছে, বা এই নেটওয়ার্ক এটি আটকাচ্ছে কিনা।",
   "settings.conn.tor_failed":
     "Tor চালু করা গেল না। অ্যাপের নেটওয়ার্কে ঢোকার অনুমতি আছে কিনা দেখুন।",
+  "settings.tor.connection": "সংযোগ",
+  "settings.tor.mode_off": "সরাসরি",
+  "settings.tor.mode_off_desc":
+    "সরাসরি Tor-এ যুক্ত হয়। সবচেয়ে দ্রুত, তবে এই নেটওয়ার্ক যে দেখছে সে বুঝতে পারবে আপনি Tor ব্যবহার করছেন।",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "আপনি Tor ব্যবহার করছেন তা লুকায়, এবং ব্রিজ বন্ধ থাকলেও কাজ করে। যুক্ত হতে সবচেয়ে ধীর।",
+  "settings.tor.mode_obfs4": "ব্রিজ",
+  "settings.tor.mode_obfs4_desc":
+    "আপনি Tor ব্যবহার করছেন তা লুকায়। Snowflake-এর চেয়ে দ্রুত, তবে এই ব্রিজগুলি প্রকাশ্য এবং কিছু নেটওয়ার্ক সেগুলি আটকায়।",
+  "settings.tor.mode_custom": "নিজের ব্রিজ",
+  "settings.tor.mode_custom_desc":
+    "bridges.torproject.org থেকে পাওয়া ব্রিজ ব্যবহার করুন। অন্যগুলি কাজ না করলে এটি চেষ্টা করুন।",
+  "settings.tor.custom_placeholder": "প্রতি লাইনে একটি ব্রিজ লাইন পেস্ট করুন",
+  "settings.tor.custom_empty": "প্রথমে অন্তত একটি ব্রিজ লাইন যোগ করুন।",
   "settings.conn.mint_clearnet": "খোলা নেটে মিন্টের যাতায়াতের অনুমতি দিন",
   "settings.conn.mint_clearnet_desc":
     "iOS-এ Tor কেবল Nostr ঢাকে। মিন্টের অনুরোধ আটকাতে বন্ধ রাখুন; যেভাবেই হোক মেশে ecash চলতেই থাকে।",

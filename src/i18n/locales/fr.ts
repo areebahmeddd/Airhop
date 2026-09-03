@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Continuer",
   "common.try_again": "Réessayer",
   "common.settings": "Réglages",
+  "common.on": "Activé",
   "common.off": "Désactivé",
 
   // ---- Dates ----
@@ -1833,6 +1834,21 @@ export const strings: Strings = {
     "Tor met plus d’une minute à se connecter. Il reste actif et continue d’essayer ; l’onglet Maillage indiquera quand il route, ou si ce réseau le bloque.",
   "settings.conn.tor_failed":
     "Impossible de démarrer Tor. Vérifie que l’app a accès au réseau.",
+  "settings.tor.connection": "Connexion",
+  "settings.tor.mode_off": "Directe",
+  "settings.tor.mode_off_desc":
+    "Se connecte directement à Tor. Le plus rapide, mais quiconque observe ce réseau voit que vous utilisez Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Masque que vous utilisez Tor et fonctionne là où les ponts sont bloqués. Le plus lent à se connecter.",
+  "settings.tor.mode_obfs4": "Pont",
+  "settings.tor.mode_obfs4_desc":
+    "Masque que vous utilisez Tor. Plus rapide que Snowflake, mais ces ponts sont publics et certains réseaux les bloquent.",
+  "settings.tor.mode_custom": "Ponts personnalisés",
+  "settings.tor.mode_custom_desc":
+    "Utilisez des ponts obtenus sur bridges.torproject.org. À essayer quand les autres échouent.",
+  "settings.tor.custom_placeholder": "Collez une ligne de pont par ligne",
+  "settings.tor.custom_empty": "Ajoutez d’abord au moins une ligne de pont.",
   "settings.conn.mint_clearnet":
     "Autoriser le trafic vers le mint sur le réseau en clair",
   "settings.conn.mint_clearnet_desc":

@@ -24,11 +24,12 @@
 import NativeAirhopTor, { subscribeTorStatus } from "@bridge/NativeAirhopTor";
 import { isTorSocketNativeAvailable } from "@bridge/NativeAirhopTorSocket";
 import { setTorTeardown } from "@core/nostr/tor-teardown-handle";
+import { OBFS4_BRIDGE_LINES, SNOWFLAKE_BRIDGE_LINES } from "@data/bridges";
 import {
   useMeshStateStore,
   type TorBootstrapPhase,
 } from "@store/mesh-state-store";
-import { useSettingsStore } from "@store/settings-store";
+import { useSettingsStore, type TorBridgeMode } from "@store/settings-store";
 import { useWebSocketImplementation } from "nostr-tools/pool";
 import { Platform } from "react-native";
 import { getMeshService } from "./mesh-service";
@@ -38,9 +39,6 @@ import { TorWebSocket } from "./tor-websocket";
 // restored when Tor is turned off.
 const DirectWebSocket = WebSocket;
 
-// How long to wait for Arti to bootstrap when enabling Tor, in seconds.
-const TOR_READY_TIMEOUT_S = 60;
-
 let torActive = false;
 
 export interface TorRoutingResult {
@@ -48,8 +46,9 @@ export interface TorRoutingResult {
   // Why enabling failed, for the UI to explain:
   //   unavailable  the native Tor client is missing from this build
   //   timeout      Arti did not bootstrap in time
+  //   no-bridges   the chosen mode needs bridge lines and has none
   //   error        Arti failed to start
-  reason?: "unavailable" | "timeout" | "error";
+  reason?: "unavailable" | "timeout" | "no-bridges" | "error";
 }
 
 export function isTorRoutingActive(): boolean {
@@ -110,13 +109,40 @@ function installDirectSocket(): void {
   useWebSocketImplementation(DirectWebSocket);
 }
 
-// The bridge configuration a start should use.
+// How long a bootstrap may run before it is called blocked, per mode.
 //
-// Empty for now: the settings that choose a mode land with the Bridges screen.
-// It exists already so both start paths read the same source, which is what
-// stops a startup and a toggle disagreeing about how the client came up.
+// A bridge is slower than a direct connection by construction, and Snowflake
+// slowest of all: it finds a volunteer proxy through a broker before any Tor
+// traffic moves. Holding every mode to the direct deadline would report a
+// working Snowflake connection as blocked.
+const TOR_READY_TIMEOUT_S: Record<TorBridgeMode, number> = {
+  off: 60,
+  obfs4: 120,
+  snowflake: 180,
+  custom: 120,
+};
+
+// The bridge configuration a start should use, from the persisted mode.
+//
+// One reader, so a startup and a toggle cannot disagree about how the client
+// came up. Custom lines are passed through unvalidated: Arti owns the grammar
+// and refuses a bad line at start rather than here.
 function bridgeLinesForStart(): string {
-  return "";
+  const { torBridgeMode, torBridgeLines } = useSettingsStore.getState();
+  switch (torBridgeMode) {
+    case "obfs4":
+      return OBFS4_BRIDGE_LINES;
+    case "snowflake":
+      return SNOWFLAKE_BRIDGE_LINES;
+    case "custom":
+      return torBridgeLines.trim();
+    case "off":
+      return "";
+  }
+}
+
+function needsBridgeLines(): boolean {
+  return useSettingsStore.getState().torBridgeMode !== "off";
 }
 
 // Arti reports its own progress and whether it has stopped making any. Without
@@ -197,9 +223,41 @@ export async function setTorRouting(
   return { ok: true };
 }
 
+// Change which bridges Tor uses, restarting the client when one is running.
+//
+// Bridges are fixed when the client is built, so there is no way to apply this
+// to a live client. The restart is the existing disable and enable in sequence
+// rather than a third path, so the socket swap, the blocked gate and the relay
+// rebuild all behave as they already do.
+//
+// Persisting before the restart matters: enableTorRouting reads the mode back
+// through bridgeLinesForStart, so the new client comes up on the new choice.
+export async function setTorBridgeMode(
+  mode: TorBridgeMode,
+  customLines?: string,
+): Promise<TorRoutingResult> {
+  const settings = useSettingsStore.getState();
+  settings.setTorBridgeMode(mode);
+  if (customLines !== undefined) settings.setTorBridgeLines(customLines);
+
+  if (!settings.torEnabled) return { ok: true };
+  if (needsBridgeLines() && bridgeLinesForStart() === "") return { ok: true };
+
+  await disableTorRouting();
+  return enableTorRouting();
+}
+
 async function enableTorRouting(): Promise<TorRoutingResult> {
   if (NativeAirhopTor == null) {
     return { ok: false, reason: "unavailable" };
+  }
+
+  // A mode that needs lines but has none would start a direct connection while
+  // the screen says bridges are on. Refuse instead: this is the failure the
+  // whole path exists to prevent, and it is the answer Arti gives to an empty
+  // bridge list too.
+  if (needsBridgeLines() && bridgeLinesForStart() === "") {
+    return { ok: false, reason: "no-bridges" };
   }
 
   try {
@@ -222,7 +280,9 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
     await NativeAirhopTor.startTor(bridgeLinesForStart());
     getMeshService()?.restartNostr();
 
-    const ready = await NativeAirhopTor.awaitTorReady(TOR_READY_TIMEOUT_S);
+    const ready = await NativeAirhopTor.awaitTorReady(
+      TOR_READY_TIMEOUT_S[useSettingsStore.getState().torBridgeMode],
+    );
     if (!ready) {
       // Deliberately not undone: a bootstrap can still land after this deadline,
       // and the status watcher reports it terminally if it does not. Reverting

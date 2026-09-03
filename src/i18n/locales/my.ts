@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "ဆက်လုပ်ပါ",
   "common.try_again": "ထပ်စမ်းကြည့်ပါ",
   "common.settings": "ဆက်တင်များ",
+  "common.on": "ဖွင့်",
   "common.off": "ပိတ်",
 
   // ---- Dates ----
@@ -1837,6 +1838,22 @@ export const strings: Strings = {
     "Tor ချိတ်ဆက်ရန် တစ်မိနစ်ကျော် ကြာနေပါသည်။ ၎င်းသည် ဖွင့်ထားဆဲဖြစ်ပြီး ဆက်ကြိုးစားနေပါသည်။ လမ်းကြောင်းရသည့်အခါ သို့မဟုတ် ဤကွန်ရက်က ပိတ်ဆို့နေသည်ဆိုပါက မက်ရှ်တဘ်က အသိပေးပါလိမ့်မည်။",
   "settings.conn.tor_failed":
     "Tor ကို မစတင်နိုင်ပါ။ အက်ပ်တွင် ကွန်ရက်အသုံးပြုခွင့် ရှိမရှိ စစ်ဆေးပါ။",
+  "settings.tor.connection": "ချိတ်ဆက်မှု",
+  "settings.tor.mode_off": "တိုက်ရိုက်",
+  "settings.tor.mode_off_desc":
+    "Tor သို့ တိုက်ရိုက်ချိတ်ဆက်သည်။ အမြန်ဆုံးဖြစ်သော်လည်း ဤကွန်ရက်ကို စောင့်ကြည့်သူများ သင် Tor သုံးနေကြောင်း မြင်နိုင်သည်။",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Tor သုံးနေကြောင်း ဖုံးကွယ်ပေးပြီး တံတားများ ပိတ်ဆို့ခံရသည့်နေရာတွင်လည်း အလုပ်လုပ်သည်။ ချိတ်ဆက်ရန် အနှေးဆုံး။",
+  "settings.tor.mode_obfs4": "တံတား",
+  "settings.tor.mode_obfs4_desc":
+    "Tor သုံးနေကြောင်း ဖုံးကွယ်ပေးသည်။ Snowflake ထက် မြန်သော်လည်း ဤတံတားများမှာ အများသိဖြစ်ပြီး အချို့ကွန်ရက်များက ပိတ်ဆို့သည်။",
+  "settings.tor.mode_custom": "ကိုယ်ပိုင်တံတားများ",
+  "settings.tor.mode_custom_desc":
+    "bridges.torproject.org မှ ရယူထားသော တံတားများကို သုံးပါ။ အခြားနည်းများ မအောင်မြင်လျှင် စမ်းကြည့်ပါ။",
+  "settings.tor.custom_placeholder":
+    "တစ်ကြောင်းလျှင် တံတားတစ်ကြောင်း ကူးထည့်ပါ",
+  "settings.tor.custom_empty": "ဦးစွာ တံတားလိုင်း အနည်းဆုံးတစ်ခု ထည့်ပါ။",
   "settings.conn.mint_clearnet":
     "မင့်အသွားအလာကို ပွင့်လင်းကွန်ရက်ပေါ်တွင် ခွင့်ပြုပါ",
   "settings.conn.mint_clearnet_desc":

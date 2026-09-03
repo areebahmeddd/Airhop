@@ -41,6 +41,13 @@ export const UPLOAD_QUALITY_VALUES: Record<UploadQuality, number> = {
 export const MEDIA_RETENTION_DAY_OPTIONS = [7, 14, 30] as const;
 export type MediaRetentionDays = (typeof MEDIA_RETENTION_DAY_OPTIONS)[number];
 
+// Which bridge configuration Tor uses.
+//
+// "off" is a direct connection to a public relay: fastest, and what an
+// uncensored network wants. The rest trade speed for hiding that Tor is in use
+// at all, which is why none of them is the default.
+export type TorBridgeMode = "off" | "obfs4" | "snowflake" | "custom";
+
 interface SettingsState {
   theme: ThemePreference;
   // The language the app is read in.
@@ -126,6 +133,13 @@ interface SettingsState {
   // Persisted so the choice is applied before the first relay connects at
   // startup (see tor-routing.ts), never leaking the clear net for a Tor user.
   torEnabled: boolean;
+  // Which bridge configuration Tor uses, and the lines behind "custom".
+  //
+  // Bridges are fixed when the client is built, so changing either while Tor is
+  // running restarts it; tor-routing.ts owns that. Persisted for the same reason
+  // torEnabled is: a relaunch has to come back on the route the user chose.
+  torBridgeMode: TorBridgeMode;
+  torBridgeLines: string;
   // Whether Cashu mint HTTP calls may go out over the clear net while Tor is
   // on. Tor covers only Nostr WebSockets on iOS, and mint calls are plain fetch,
   // so with Tor enabled a mint request would reveal this device's IP to the mint
@@ -190,6 +204,8 @@ interface SettingsState {
   addCustomRelay: (url: string) => void;
   removeCustomRelay: (url: string) => void;
   setTorEnabled: (enabled: boolean) => void;
+  setTorBridgeMode: (mode: TorBridgeMode) => void;
+  setTorBridgeLines: (lines: string) => void;
   setBitcoinUnit: (unit: BitcoinUnit) => void;
   setAllowMintOverClearnet: (allowed: boolean) => void;
   setMonoFont: (font: MonoFont) => void;
@@ -222,6 +238,8 @@ const DEFAULTS = {
   geoRelayDiscovery: true,
   customRelays: [] as string[],
   torEnabled: false,
+  torBridgeMode: "off" as TorBridgeMode,
+  torBridgeLines: "",
   allowMintOverClearnet: false,
   // Sats by default: it is the unit people actually quote amounts in, and it
   // avoids showing a new user a balance that reads 0.00000000.
@@ -326,6 +344,12 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setTorEnabled(enabled) {
         set({ torEnabled: enabled });
+      },
+      setTorBridgeMode(mode) {
+        set({ torBridgeMode: mode });
+      },
+      setTorBridgeLines(lines) {
+        set({ torBridgeLines: lines });
       },
       setBitcoinUnit(unit) {
         set({ bitcoinUnit: unit });

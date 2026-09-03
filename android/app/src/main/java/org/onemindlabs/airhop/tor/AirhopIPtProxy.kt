@@ -136,28 +136,9 @@ object AirhopIPtProxy {
             return null
         }
 
-        // Snowflake's rendezvous settings, which a bridge line may also carry.
-        // IPtProxy applies these only where the line left a value empty, so a
-        // pasted line still wins.
-        created.snowflakeBrokerUrl = AirhopSnowflake.BROKER_URL
-        created.snowflakeFrontDomains = AirhopSnowflake.FRONT_DOMAINS
-        created.snowflakeIceServers = AirhopSnowflake.ICE_SERVERS
 
         controller = created
         return created
     }
 }
 
-// Snowflake rendezvous defaults, matching what Tor Browser ships.
-//
-// Set on the controller rather than written into a bridge line, so the line
-// stays short: Arti passes settings through the SOCKS5 handshake, which allows
-// 510 bytes, and a full Snowflake line comes close to that on its own.
-object AirhopSnowflake {
-    const val BROKER_URL = "https://1098762253.rsc.cdn77.org/"
-    const val FRONT_DOMAINS = "www.cdn77.com,www.phpmyadmin.net"
-    const val ICE_SERVERS =
-        "stun:stun.l.google.com:19302,stun:stun.antisip.com:3478," +
-            "stun:stun.bluesip.net:3478,stun:stun.dus.net:3478," +
-            "stun:stun.epygi.com:3478"
-}

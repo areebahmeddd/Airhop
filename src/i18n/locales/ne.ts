@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "जारी राख्नुहोस्",
   "common.try_again": "फेरि प्रयास गर्नुहोस्",
   "common.settings": "सेटिङ",
+  "common.on": "सक्रिय",
   "common.off": "बन्द",
 
   // ---- Dates ----
@@ -1772,6 +1773,21 @@ export const strings: Strings = {
     "Tor लाई जोडिन एक मिनेटभन्दा बढी लाग्दै छ। यो खुला रहन्छ र प्रयास गरिरहन्छ; मेश ट्याबले भन्नेछ कि यो कहिले बाटो दिँदै छ, वा यो सञ्जालले रोकेको छ कि।",
   "settings.conn.tor_failed":
     "Tor सुरु हुन सकेन। एपसँग सञ्जाल पहुँच छ भन्ने पक्का गर्नुहोस्।",
+  "settings.tor.connection": "जडान",
+  "settings.tor.mode_off": "सिधा",
+  "settings.tor.mode_off_desc":
+    "सिधै Tor मा जोडिन्छ। सबैभन्दा छिटो, तर यो नेटवर्क हेर्ने जो कोहीले तपाईंले Tor चलाएको देख्न सक्छ।",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "तपाईंले Tor चलाएको लुकाउँछ, र ब्रिज रोकिएको ठाउँमा पनि चल्छ। जोडिन सबैभन्दा ढिलो।",
+  "settings.tor.mode_obfs4": "ब्रिज",
+  "settings.tor.mode_obfs4_desc":
+    "तपाईंले Tor चलाएको लुकाउँछ। Snowflake भन्दा छिटो, तर यी ब्रिज सार्वजनिक छन् र केही नेटवर्कले रोक्छन्।",
+  "settings.tor.mode_custom": "आफ्ना ब्रिज",
+  "settings.tor.mode_custom_desc":
+    "bridges.torproject.org बाट लिएका ब्रिज चलाउनुहोस्। अरू नचलेमा यो प्रयास गर्नुहोस्।",
+  "settings.tor.custom_placeholder": "प्रति लाइन एउटा ब्रिज लाइन टाँस्नुहोस्",
+  "settings.tor.custom_empty": "पहिले कम्तीमा एउटा ब्रिज लाइन थप्नुहोस्।",
   "settings.conn.mint_clearnet": "टकसारको ट्राफिक खुला सञ्जालबाट जान दिनुहोस्",
   "settings.conn.mint_clearnet_desc":
     "iOS मा Tor ले Nostr मात्र ढाक्छ। टकसारका अनुरोध रोक्न बन्दै छाड्नुहोस्; मेशमा ecash जसरी भए पनि चल्छ।",

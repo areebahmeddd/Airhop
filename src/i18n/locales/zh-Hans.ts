@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "继续",
   "common.try_again": "再试一次",
   "common.settings": "设置",
+  "common.on": "开启",
   "common.off": "关",
 
   // ---- Dates ----
@@ -1676,6 +1677,21 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor 连接已经花了一分多钟。它会保持开启并继续尝试；网状网络标签页会告诉你它何时开始转发，或者这个网络是否在拦截它。",
   "settings.conn.tor_failed": "无法启动 Tor。请确认应用有网络访问权限。",
+  "settings.tor.connection": "连接方式",
+  "settings.tor.mode_off": "直连",
+  "settings.tor.mode_off_desc":
+    "直接连接 Tor。最快，但监看这个网络的人能看出你在使用 Tor。",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "隐藏你在使用 Tor，在网桥被封锁的地方也能用。连接最慢。",
+  "settings.tor.mode_obfs4": "网桥",
+  "settings.tor.mode_obfs4_desc":
+    "隐藏你在使用 Tor。比 Snowflake 快，但这些网桥是公开的，有些网络会封锁。",
+  "settings.tor.mode_custom": "自定义网桥",
+  "settings.tor.mode_custom_desc":
+    "使用你从 bridges.torproject.org 获取的网桥。其他方式都不行时试试这个。",
+  "settings.tor.custom_placeholder": "每行粘贴一条网桥",
+  "settings.tor.custom_empty": "请先添加至少一条网桥。",
   "settings.conn.mint_clearnet": "允许铸币厂流量走明网",
   "settings.conn.mint_clearnet_desc":
     "iOS 上的 Tor 只覆盖 Nostr。保持关闭即可拦截铸币厂请求；无论如何，通过网状网络收发 ecash 都照常可用。",

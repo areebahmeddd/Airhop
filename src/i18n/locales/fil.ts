@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Magpatuloy",
   "common.try_again": "Subukan ulit",
   "common.settings": "Mga Setting",
+  "common.on": "Naka-on",
   "common.off": "Naka-off",
 
   // ---- Dates ----
@@ -1851,6 +1852,21 @@ export const strings: Strings = {
     "Mahigit isang minuto nang kumokonekta ang Tor. Mananatili itong naka-on at patuloy na susubok; sasabihin ng tab na Mesh kung kailan ito nagruruta, o kung hinaharangan ito ng network na ito.",
   "settings.conn.tor_failed":
     "Hindi nasimulan ang Tor. Tiyaking may access sa network ang app.",
+  "settings.tor.connection": "Koneksyon",
+  "settings.tor.mode_off": "Direkta",
+  "settings.tor.mode_off_desc":
+    "Direktang kumokonekta sa Tor. Pinakamabilis, pero makikita ng sinumang nagmamasid sa network na gumagamit ka ng Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Itinatago na gumagamit ka ng Tor, at gumagana kahit naka-block ang mga bridge. Pinakamabagal kumonekta.",
+  "settings.tor.mode_obfs4": "Bridge",
+  "settings.tor.mode_obfs4_desc":
+    "Itinatago na gumagamit ka ng Tor. Mas mabilis kaysa Snowflake, pero pampubliko ang mga bridge na ito at hinaharangan ng ilang network.",
+  "settings.tor.mode_custom": "Sariling bridge",
+  "settings.tor.mode_custom_desc":
+    "Gumamit ng bridge mula sa bridges.torproject.org. Subukan ito kapag hindi gumana ang iba.",
+  "settings.tor.custom_placeholder": "I-paste ang isang bridge line kada linya",
+  "settings.tor.custom_empty": "Magdagdag muna ng kahit isang bridge line.",
   "settings.conn.mint_clearnet": "Payagan ang trapiko ng mint sa bukas na net",
   "settings.conn.mint_clearnet_desc":
     "Nostr lang ang sakop ng Tor sa iOS. Iwang naka-off para harangan ang mga hiling sa mint; gumagana pa rin ang ecash sa mesh.",

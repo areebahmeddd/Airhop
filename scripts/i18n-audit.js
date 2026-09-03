@@ -81,6 +81,9 @@ const SKIP_FILES = [
   // Vendored relay directory and release metadata: data, not copy.
   "src/data/relays.ts",
   "src/data/releases.ts",
+  // Bridge lines, quoted verbatim from upstream. Wire-visible: a translated
+  // word here would be a bridge that does not resolve.
+  "src/data/bridges.ts",
   // The catalog itself.
   "src/i18n/",
   // Protocol internals: every string here is a `throw` aimed at a stack trace,

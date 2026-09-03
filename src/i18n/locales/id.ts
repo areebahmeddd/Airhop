@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Lanjut",
   "common.try_again": "Coba lagi",
   "common.settings": "Pengaturan",
+  "common.on": "Aktif",
   "common.off": "Mati",
 
   // ---- Dates ----
@@ -1809,6 +1810,21 @@ export const strings: Strings = {
     "Tor butuh lebih dari semenit untuk menyambung. Ia tetap menyala dan terus mencoba; tab Mesh akan memberi tahu saat perutean berjalan, atau kalau jaringan ini memblokirnya.",
   "settings.conn.tor_failed":
     "Tor tidak bisa dinyalakan. Pastikan aplikasi punya akses jaringan.",
+  "settings.tor.connection": "Koneksi",
+  "settings.tor.mode_off": "Langsung",
+  "settings.tor.mode_off_desc":
+    "Terhubung langsung ke Tor. Tercepat, tetapi siapa pun yang mengawasi jaringan ini bisa melihat Anda memakai Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Menyembunyikan bahwa Anda memakai Tor, dan tetap bekerja di tempat bridge diblokir. Paling lambat terhubung.",
+  "settings.tor.mode_obfs4": "Bridge",
+  "settings.tor.mode_obfs4_desc":
+    "Menyembunyikan bahwa Anda memakai Tor. Lebih cepat dari Snowflake, tetapi bridge ini publik dan sebagian jaringan memblokirnya.",
+  "settings.tor.mode_custom": "Bridge sendiri",
+  "settings.tor.mode_custom_desc":
+    "Pakai bridge dari bridges.torproject.org. Coba ini bila yang lain gagal.",
+  "settings.tor.custom_placeholder": "Tempel satu baris bridge per baris",
+  "settings.tor.custom_empty": "Tambahkan setidaknya satu baris bridge dahulu.",
   "settings.conn.mint_clearnet":
     "Izinkan lalu lintas mint lewat jaringan terbuka",
   "settings.conn.mint_clearnet_desc":

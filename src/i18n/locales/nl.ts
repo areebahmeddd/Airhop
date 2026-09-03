@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Doorgaan",
   "common.try_again": "Opnieuw proberen",
   "common.settings": "Instellingen",
+  "common.on": "Aan",
   "common.off": "Uit",
 
   // ---- Dates ----
@@ -1813,6 +1814,21 @@ export const strings: Strings = {
     "Tor doet er langer dan een minuut over om te verbinden. Het blijft aan en blijft proberen; het Mesh-tabblad laat weten wanneer het routeert, of dat dit netwerk het blokkeert.",
   "settings.conn.tor_failed":
     "Tor kon niet starten. Controleer of de app netwerktoegang heeft.",
+  "settings.tor.connection": "Verbinding",
+  "settings.tor.mode_off": "Direct",
+  "settings.tor.mode_off_desc":
+    "Verbindt rechtstreeks met Tor. Het snelst, maar wie dit netwerk bekijkt ziet dat je Tor gebruikt.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Verbergt dat je Tor gebruikt en werkt ook waar bridges geblokkeerd zijn. Traagst om te verbinden.",
+  "settings.tor.mode_obfs4": "Bridge",
+  "settings.tor.mode_obfs4_desc":
+    "Verbergt dat je Tor gebruikt. Sneller dan Snowflake, maar deze bridges zijn openbaar en sommige netwerken blokkeren ze.",
+  "settings.tor.mode_custom": "Eigen bridges",
+  "settings.tor.mode_custom_desc":
+    "Gebruik bridges van bridges.torproject.org. Probeer dit als de rest niet werkt.",
+  "settings.tor.custom_placeholder": "Plak één bridge-regel per regel",
+  "settings.tor.custom_empty": "Voeg eerst minstens één bridge-regel toe.",
   "settings.conn.mint_clearnet": "Mintverkeer over het open net toestaan",
   "settings.conn.mint_clearnet_desc":
     "Tor op iOS dekt alleen Nostr. Laat dit uit om mintverzoeken te blokkeren; ecash over de mesh blijft hoe dan ook werken.",

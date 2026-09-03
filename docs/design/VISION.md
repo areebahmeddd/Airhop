@@ -10,6 +10,7 @@ It is a **spiritual fork of bitchat** ([permissionlesstech/bitchat](https://gith
 
 - One TypeScript codebase in place of two native apps that drift apart and break cross-platform compat
 - Two WiFi transports beside Bluetooth: WiFi Aware as the same-platform fast path, and LAN over mDNS and TCP, which carries the mesh between an iPhone and an Android as no direct-WiFi stack can
+- Bridges and pluggable transports on top of Tor, so the internet half still works where Tor itself is blocked; bitchat routes through Tor but has neither
 - A full Cashu wallet, not a token decoder: balances, mints, Lightning in and out, and value moving device to device with no internet
 - Double Ratchet on live DMs, and one-time prekeys for mail left with a courier, so waiting mail survives a key leaking later
 - Video that plays inline; bitchat carries it across the wire but opens it on neither platform

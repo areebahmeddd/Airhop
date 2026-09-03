@@ -29,7 +29,7 @@ const mockGetTorStatus = jest.fn<
   }>,
   []
 >();
-const mockStartTor = jest.fn<Promise<void>, []>();
+const mockStartTor = jest.fn<Promise<void>, [string]>();
 const mockStopTor = jest.fn<Promise<void>, []>();
 const mockAwaitTorReady = jest.fn<Promise<boolean>, [number]>();
 const mockSetTorActive = jest.fn();
@@ -42,6 +42,14 @@ const mockSetNostrBlockedByTor = jest.fn((next: boolean) => {
   mockNostrBlocked = next;
 });
 let mockTorEnabled = false;
+let mockBridgeMode = "off";
+let mockBridgeLines = "";
+const mockSetTorBridgeMode = jest.fn((next: string) => {
+  mockBridgeMode = next;
+});
+const mockSetTorBridgeLines = jest.fn((next: string) => {
+  mockBridgeLines = next;
+});
 
 // Writes back, the way the real store does. A mock that lets code persist a
 // preference and then read the old value hides exactly the bug this suite is
@@ -77,7 +85,7 @@ jest.mock("@bridge/NativeAirhopBLE", () => ({
 jest.mock("@bridge/NativeAirhopTor", () => ({
   __esModule: true,
   default: {
-    startTor: () => mockStartTor(),
+    startTor: (lines: string) => mockStartTor(lines),
     stopTor: () => mockStopTor(),
     getTorStatus: () => mockGetTorStatus(),
     awaitTorReady: (s: number) => mockAwaitTorReady(s),
@@ -125,6 +133,14 @@ jest.mock("@store/settings-store", () => ({
         return mockTorEnabled;
       },
       setTorEnabled: mockSetTorEnabled,
+      get torBridgeMode() {
+        return mockBridgeMode;
+      },
+      get torBridgeLines() {
+        return mockBridgeLines;
+      },
+      setTorBridgeMode: mockSetTorBridgeMode,
+      setTorBridgeLines: mockSetTorBridgeLines,
     }),
   },
 }));
@@ -151,6 +167,8 @@ function status(over: Partial<{ isReady: boolean; isStarting: boolean }> = {}) {
 beforeEach(async () => {
   jest.clearAllMocks();
   mockTorEnabled = false;
+  mockBridgeMode = "off";
+  mockBridgeLines = "";
   mockNostrBlocked = false;
   mockStartTor.mockResolvedValue(undefined);
   mockStopTor.mockResolvedValue(undefined);

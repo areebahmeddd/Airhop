@@ -40,20 +40,21 @@
 
 export const strings = {
   // ---- Common vocabulary ----
-  "common.cancel": "Cancel",
-  "common.done": "Done",
-  "common.ok": "OK",
-  "common.close": "Close",
   "common.back": "Back",
-  "common.delete": "Delete",
-  "common.remove": "Remove",
+  "common.close": "Close",
+  "common.cancel": "Cancel",
+  "common.ok": "OK",
+  "common.done": "Done",
+  "common.continue": "Continue",
+  "common.try_again": "Try again",
   "common.add": "Add",
+  "common.remove": "Remove",
+  "common.delete": "Delete",
   "common.copy": "Copy",
   "common.copied": "Copied",
   "common.share": "Share",
-  "common.continue": "Continue",
-  "common.try_again": "Try again",
   "common.settings": "Settings",
+  "common.on": "On",
   "common.off": "Off",
 
   // ---- Dates ----
@@ -1798,6 +1799,21 @@ export const strings = {
     "Tor is taking longer than a minute to connect. It stays on and keeps trying; the Mesh tab will say when it is routing, or if this network is blocking it.",
   "settings.conn.tor_failed":
     "Could not start Tor. Ensure the app has network access.",
+  "settings.tor.connection": "Connection",
+  "settings.tor.mode_off": "Direct",
+  "settings.tor.mode_off_desc":
+    "Connects straight to Tor. Fastest, but anyone watching this network can see that you use Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Hides that you use Tor, and keeps working where bridges are blocked. Slowest to connect.",
+  "settings.tor.mode_obfs4": "Bridge",
+  "settings.tor.mode_obfs4_desc":
+    "Hides that you use Tor. Faster than Snowflake, but these bridges are public and some networks block them.",
+  "settings.tor.mode_custom": "Custom bridges",
+  "settings.tor.mode_custom_desc":
+    "Use bridges you got from bridges.torproject.org. Try this when the others fail.",
+  "settings.tor.custom_placeholder": "Paste one bridge line per line",
+  "settings.tor.custom_empty": "Add at least one bridge line first.",
   "settings.conn.mint_clearnet": "Allow mint traffic over clear net",
   "settings.conn.mint_clearnet_desc":
     "Tor on iOS only covers Nostr. Leave off to block mint requests; ecash over the mesh keeps working either way.",

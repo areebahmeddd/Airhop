@@ -23,7 +23,7 @@ const mockGetTorStatus = jest.fn<
   }>,
   []
 >();
-const mockStartTor = jest.fn<Promise<void>, []>();
+const mockStartTor = jest.fn<Promise<void>, [string]>();
 const mockStopTor = jest.fn<Promise<void>, []>();
 const mockAwaitTorReady = jest.fn<Promise<boolean>, [number]>();
 const mockSetAppForeground = jest.fn<Promise<void>, [boolean]>();
@@ -39,6 +39,14 @@ const mockSetNostrBlockedByTor = jest.fn((next: boolean) => {
 const mockRestartNostr = jest.fn();
 const mockUseWebSocketImplementation = jest.fn();
 let mockTorEnabled = false;
+let mockBridgeMode = "off";
+let mockBridgeLines = "";
+const mockSetTorBridgeMode = jest.fn((next: string) => {
+  mockBridgeMode = next;
+});
+const mockSetTorBridgeLines = jest.fn((next: string) => {
+  mockBridgeLines = next;
+});
 
 // Writes back, the way the real store does. A mock that lets code persist a
 // preference and then read the old value hides exactly the bug this suite is
@@ -73,7 +81,7 @@ jest.mock("@bridge/NativeAirhopBLE", () => ({
 jest.mock("@bridge/NativeAirhopTor", () => ({
   __esModule: true,
   default: {
-    startTor: () => mockStartTor(),
+    startTor: (lines: string) => mockStartTor(lines),
     stopTor: () => mockStopTor(),
     getTorStatus: () => mockGetTorStatus(),
     awaitTorReady: (s: number) => mockAwaitTorReady(s),
@@ -120,6 +128,14 @@ jest.mock("@store/settings-store", () => ({
         return mockTorEnabled;
       },
       setTorEnabled: mockSetTorEnabled,
+      get torBridgeMode() {
+        return mockBridgeMode;
+      },
+      get torBridgeLines() {
+        return mockBridgeLines;
+      },
+      setTorBridgeMode: mockSetTorBridgeMode,
+      setTorBridgeLines: mockSetTorBridgeLines,
     }),
   },
 }));
@@ -130,6 +146,7 @@ import {
   notifyTorAppForeground,
   primeTorRoutingOnStartup,
   revalidateTorRouting,
+  setTorBridgeMode,
   setTorRouting,
 } from "../tor-routing";
 
@@ -147,6 +164,8 @@ function status(over: Partial<{ isReady: boolean; isStarting: boolean }> = {}) {
 beforeEach(async () => {
   jest.clearAllMocks();
   mockTorEnabled = false;
+  mockBridgeMode = "off";
+  mockBridgeLines = "";
   mockNostrBlocked = false;
   mockStartTor.mockResolvedValue(undefined);
   mockStopTor.mockResolvedValue(undefined);
@@ -491,5 +510,108 @@ describe("app foreground on Android", () => {
   test("is safe to call with Tor off", () => {
     mockTorEnabled = false;
     expect(() => notifyTorAppForeground(false)).not.toThrow();
+  });
+});
+
+describe("bridge modes", () => {
+  test("off starts the client with no bridge lines", async () => {
+    await setTorRouting(true);
+    expect(mockStartTor).toHaveBeenCalledWith("");
+  });
+
+  test("snowflake starts with lines carrying the rendezvous and utls", async () => {
+    mockBridgeMode = "snowflake";
+    await setTorRouting(true);
+
+    const lines = mockStartTor.mock.calls[0][0] as string;
+    expect(lines.split("\n")).toHaveLength(2);
+    for (const line of lines.split("\n")) {
+      expect(line.startsWith("snowflake ")).toBe(true);
+      // Dropping any of these leaves a connection that works but is easier to
+      // pick out, which is the whole point of the mode.
+      expect(line).toContain("url=");
+      expect(line).toContain("fronts=");
+      expect(line).toContain("ice=");
+      expect(line).toContain("utls-imitate=hellorandomizedalpn");
+    }
+  });
+
+  test("custom passes the pasted lines through, trimmed", async () => {
+    mockBridgeMode = "custom";
+    mockBridgeLines = "  obfs4 192.0.2.1:443 ABCD cert=x iat-mode=0  ";
+    await setTorRouting(true);
+    expect(mockStartTor).toHaveBeenCalledWith(
+      "obfs4 192.0.2.1:443 ABCD cert=x iat-mode=0",
+    );
+  });
+
+  test("a slower mode gets a longer bootstrap deadline", async () => {
+    await setTorRouting(true);
+    const direct = mockAwaitTorReady.mock.calls[0][0];
+
+    jest.clearAllMocks();
+    mockTorEnabled = false;
+    mockBridgeMode = "snowflake";
+    await setTorRouting(true);
+    const snowflake = mockAwaitTorReady.mock.calls[0][0];
+
+    // Snowflake finds a volunteer proxy through a broker before any Tor traffic
+    // moves. Held to the direct deadline it would be reported as blocked while
+    // still working.
+    expect(snowflake).toBeGreaterThan(direct);
+  });
+
+  test("changing mode while Tor runs restarts the client on the new lines", async () => {
+    await setTorRouting(true);
+    jest.clearAllMocks();
+
+    await setTorBridgeMode("snowflake");
+
+    // Bridges are fixed when the client is built, so the only way to apply a
+    // change is to take the old client down first.
+    expect(mockStopTor).toHaveBeenCalled();
+    expect(mockStartTor).toHaveBeenCalledWith(
+      expect.stringContaining("snowflake "),
+    );
+    expect(mockSetTorBridgeMode).toHaveBeenCalledWith("snowflake");
+  });
+
+  test("changing mode while Tor is off persists without starting anything", async () => {
+    mockTorEnabled = false;
+    await setTorBridgeMode("custom", "obfs4 192.0.2.1:443 ABCD");
+
+    expect(mockSetTorBridgeMode).toHaveBeenCalledWith("custom");
+    expect(mockSetTorBridgeLines).toHaveBeenCalledWith(
+      "obfs4 192.0.2.1:443 ABCD",
+    );
+    expect(mockStartTor).not.toHaveBeenCalled();
+  });
+});
+
+describe("a bridge mode with nothing to apply", () => {
+  test("refuses to start rather than connecting directly", async () => {
+    mockBridgeMode = "custom";
+    mockBridgeLines = "";
+
+    const result = await setTorRouting(true);
+
+    // Starting here would give a direct connection while the screen says
+    // bridges are on, which is the failure this whole path exists to prevent.
+    expect(result.ok).toBe(false);
+    // Its own reason, so the screen can say which bridges are missing rather
+    // than blaming the network.
+    expect(result.reason).toBe("no-bridges");
+    expect(mockStartTor).not.toHaveBeenCalled();
+  });
+
+  test("selecting it while Tor runs reveals its input without a restart", async () => {
+    await setTorRouting(true);
+    jest.clearAllMocks();
+
+    await setTorBridgeMode("custom", "");
+
+    expect(mockSetTorBridgeMode).toHaveBeenCalledWith("custom");
+    expect(mockStopTor).not.toHaveBeenCalled();
+    expect(mockStartTor).not.toHaveBeenCalled();
   });
 });

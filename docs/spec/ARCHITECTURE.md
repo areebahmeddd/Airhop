@@ -690,13 +690,32 @@ Tor covers internet traffic only. BLE, WiFi Aware and LAN are local radios and
 have nothing to route.
 
 Tor hides the device IP from the relay and DM metadata from the relay operator.
-It does not conceal that Tor is in use, since the first hop is a direct
-connection to a publicly listed relay on both platforms. That is why it is off
-by default, which is a safety decision rather than a convenience one. Bridges
-and pluggable transports would close it; the build already compiles
-`bridge-client` and `pt-client` in, so that is a configuration and UI change
-rather than another binary rebuild. Tracked in
-[PROGRESS.md](../dev/PROGRESS.md#known-issues).
+On a direct connection it does not conceal that Tor is in use, since the first
+hop goes to a publicly listed relay. Settings, Tor, Connection closes that: a
+bridge is an unlisted entry point, and the transport in front of it disguises
+the connection.
+
+| Connection | What it hides                             | Cost                                   |
+| ---------- | ----------------------------------------- | -------------------------------------- |
+| Direct     | The IP, from the relay                    | None. The default                      |
+| Snowflake  | That Tor is in use, with no list to block | Slowest to connect                     |
+| Bridge     | That Tor is in use, over obfs4            | Public lines, some networks block them |
+| Custom     | The same, from lines you supply           | You fetch them yourself                |
+
+Bridges stay off by default: one is slower than a direct connection and only
+earns that cost on a network that blocks or watches for Tor.
+
+obfs4 and Snowflake are Go, and Arti would normally run them as the child
+processes iOS forbids, so they are compiled into the app
+([`native/iptproxy`](../../native/iptproxy)) and reached over loopback as
+unmanaged transports. Built-in lines are synced from the Tor Project by
+`.github/workflows/sync-bridges.yml`, because a list frozen at release time goes
+stale between store updates and would fail exactly where a user needed it.
+
+The client refuses to start rather than fall back: a line that does not parse, a
+transport Airhop does not ship, or one whose local proxy is not running stops
+the start before anything binds. A user who asked for a bridge is likely
+somewhere a direct connection is unsafe.
 
 ### Building the Tor client
 
@@ -779,7 +798,7 @@ cannot break Ed25519, X25519, ChaCha20-Poly1305, or SHA-256 preimage resistance.
 - **A location you chose to send.** A location pin carries real coordinates. It is encrypted inside the recipient's Noise session, so no relay can read it, but the recipient holds it and can do what they like with it, including screenshotting it. Sent only on an explicit tap, to one contact, never automatically, never as a reply in kind, and never forwarded onward by the app.
 - **A stable peer ID.** It derives from the long-term Noise key and does not rotate, so the same device is linkable across sessions until the identity is regenerated. Only per-cell geohash identities are ephemeral.
 - **Attachment confidentiality in a public room.** A photo posted to `#bluetooth` is signed but not encrypted, exactly like the text beside it. A private attachment is sealed inside the recipient's Noise session (payload `0x20`) whenever they have proven they can read one; the signed cleartext form survives only for peers that have not, and it is the wire form bitchat is retiring. Media stays restricted to `#bluetooth` and mesh DMs, and is never bridged.
-- **The fact that Tor is in use.** There are no bridges or pluggable transports on either platform, so the first hop is a direct connection and deep packet inspection sees it. See [section 8](#8-privacy-and-tor).
+- **The fact that Tor is in use, on a direct connection.** The first hop then goes to a publicly listed relay and deep packet inspection sees it. A bridge closes this and is a setting rather than the default, because it costs speed. See [section 8](#8-privacy-and-tor).
 - **Traffic timing correlation.** An observer watching several BLE radios could infer communication patterns.
 - **Courier mail linkability.** The courier recipient tag is keyed on the recipient's public Noise key, which every announce broadcasts, so anyone in radio range can compute a peer's tags for any day and follow their mail. Inherited from bitchat, which documents the same flaw. Fixing it needs a coordinated v2 tag. See [PROTOCOLS.md section 6](PROTOCOLS.md#6-store-and-forward-courier-constants).
 - **Public message authorship, some of the time.** Origin TTL for public messages is drawn from 5 to 7 rather than fixed at the maximum, which removes the deterministic "this radio authored it" marker but not the top of the range.
@@ -889,23 +908,24 @@ Text is identical everywhere because it is compiled in. Three things are not:
 Anything that compiles to JS lives in `src/`. Anything that touches hardware
 lives in `android/` or `ios/`.
 
-| Path             | Holds                                                                    |
-| ---------------- | ------------------------------------------------------------------------ |
-| `android/`       | Kotlin BLE module and the foreground service that keeps the mesh alive   |
-| `ios/`           | Swift BLE module built on CoreBluetooth                                  |
-| `native/arti/`   | The embedded Tor client in Rust, and the pinned build that produces it   |
-| `src/app/`       | The root component and the four-tab state machine                        |
-| `src/bridge/`    | TurboModule specs, the only place native and TypeScript meet             |
-| `src/core/`      | The protocol in pure TypeScript: crypto, mesh, nostr, payments, routing  |
-| `src/services/`  | Long-lived runtime wiring, chiefly the mesh service that owns the radios |
-| `src/features/`  | Screens and screen-level logic                                           |
-| `src/store/`     | Zustand state with MMKV persistence                                      |
-| `src/ui/`        | Shared components, hooks, and theme tokens                               |
-| `src/platform/`  | Thin wrappers over OS APIs: permissions, haptics, battery settings       |
-| `src/utils/`     | Stateless helpers, free of side effects                                  |
-| `src/i18n/`      | Translation runtime and the bundled English catalog                      |
-| `src/__tests__/` | Whole-app suites: the device harness, lifecycle, and the simulator       |
-| `assets/data/`   | Bundled relay list, refreshed by CI                                      |
+| Path               | Holds                                                                             |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `android/`         | Kotlin BLE module and the foreground service that keeps the mesh alive            |
+| `ios/`             | Swift BLE module built on CoreBluetooth                                           |
+| `native/arti/`     | The embedded Tor client in Rust, and the pinned build that produces it            |
+| `native/iptproxy/` | The obfs4 and Snowflake transports in Go, and the pinned build that produces them |
+| `src/app/`         | The root component and the four-tab state machine                                 |
+| `src/bridge/`      | TurboModule specs, the only place native and TypeScript meet                      |
+| `src/core/`        | The protocol in pure TypeScript: crypto, mesh, nostr, payments, routing           |
+| `src/services/`    | Long-lived runtime wiring, chiefly the mesh service that owns the radios          |
+| `src/features/`    | Screens and screen-level logic                                                    |
+| `src/store/`       | Zustand state with MMKV persistence                                               |
+| `src/ui/`          | Shared components, hooks, and theme tokens                                        |
+| `src/platform/`    | Thin wrappers over OS APIs: permissions, haptics, battery settings                |
+| `src/utils/`       | Stateless helpers, free of side effects                                           |
+| `src/i18n/`        | Translation runtime and the bundled English catalog                               |
+| `src/__tests__/`   | Whole-app suites: the device harness, lifecycle, and the simulator                |
+| `assets/data/`     | Bundled relay list, refreshed by CI                                               |
 
 ### Inside the mesh engine
 

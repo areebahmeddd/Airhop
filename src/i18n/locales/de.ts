@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "Weiter",
   "common.try_again": "Erneut versuchen",
   "common.settings": "Einstellungen",
+  "common.on": "An",
   "common.off": "Aus",
 
   // ---- Dates ----
@@ -1832,6 +1833,22 @@ export const strings: Strings = {
     "Tor braucht länger als eine Minute zum Verbinden. Es bleibt an und versucht es weiter; der Mesh-Tab meldet, wenn es leitet, oder wenn dieses Netzwerk es blockiert.",
   "settings.conn.tor_failed":
     "Tor konnte nicht gestartet werden. Stelle sicher, dass die App Netzwerkzugriff hat.",
+  "settings.tor.connection": "Verbindung",
+  "settings.tor.mode_off": "Direkt",
+  "settings.tor.mode_off_desc":
+    "Verbindet direkt mit Tor. Am schnellsten, aber wer dieses Netzwerk beobachtet, sieht dass du Tor nutzt.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "Verbirgt, dass du Tor nutzt, und funktioniert auch dort, wo Bridges blockiert sind. Verbindet am langsamsten.",
+  "settings.tor.mode_obfs4": "Bridge",
+  "settings.tor.mode_obfs4_desc":
+    "Verbirgt, dass du Tor nutzt. Schneller als Snowflake, aber diese Bridges sind öffentlich und manche Netzwerke blockieren sie.",
+  "settings.tor.mode_custom": "Eigene Bridges",
+  "settings.tor.mode_custom_desc":
+    "Bridges von bridges.torproject.org verwenden. Nimm das, wenn die anderen nicht funktionieren.",
+  "settings.tor.custom_placeholder": "Eine Bridge-Zeile pro Zeile einfügen",
+  "settings.tor.custom_empty":
+    "Füge zuerst mindestens eine Bridge-Zeile hinzu.",
   "settings.conn.mint_clearnet": "Mint-Verkehr über das offene Netz erlauben",
   "settings.conn.mint_clearnet_desc":
     "Tor deckt unter iOS nur Nostr ab. Lass es aus, um Mint-Anfragen zu blockieren; Ecash über das Mesh funktioniert so oder so weiter.",

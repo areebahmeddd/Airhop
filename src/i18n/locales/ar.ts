@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "متابعة",
   "common.try_again": "حاول مرة أخرى",
   "common.settings": "الإعدادات",
+  "common.on": "مفعّل",
   "common.off": "معطّل",
 
   // ---- Dates ----
@@ -1734,6 +1735,21 @@ export const strings: Strings = {
     "يستغرق Tor أكثر من دقيقة للاتصال. يبقى مفعّلًا ويواصل المحاولة؛ وسيخبرك تبويب الشبكة متى بدأ التوجيه، أو إن كانت هذه الشبكة تحجبه.",
   "settings.conn.tor_failed":
     "تعذّر تشغيل Tor. تأكد من أن التطبيق يملك وصولًا إلى الشبكة.",
+  "settings.tor.connection": "الاتصال",
+  "settings.tor.mode_off": "مباشر",
+  "settings.tor.mode_off_desc":
+    "يتصل بـ Tor مباشرة. الأسرع، لكن يمكن لأي مراقب لهذه الشبكة أن يرى أنك تستخدم Tor.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "يخفي استخدامك لـ Tor، ويظل يعمل حيث تُحجب الجسور. الأبطأ في الاتصال.",
+  "settings.tor.mode_obfs4": "جسر",
+  "settings.tor.mode_obfs4_desc":
+    "يخفي استخدامك لـ Tor. أسرع من Snowflake، لكن هذه الجسور علنية وبعض الشبكات تحجبها.",
+  "settings.tor.mode_custom": "جسور مخصصة",
+  "settings.tor.mode_custom_desc":
+    "استخدم جسورًا حصلت عليها من bridges.torproject.org. جرّب هذا عند فشل الخيارات الأخرى.",
+  "settings.tor.custom_placeholder": "الصق سطر جسر واحد في كل سطر",
+  "settings.tor.custom_empty": "أضف سطر جسر واحدًا على الأقل أولًا.",
   "settings.conn.mint_clearnet": "السماح بحركة دار السك عبر الشبكة المكشوفة",
   "settings.conn.mint_clearnet_desc":
     "لا يغطي Tor على iOS سوى Nostr. اتركه معطّلًا لحجب طلبات دار السك؛ والنقد الإلكتروني عبر الشبكة يعمل في الحالتين.",

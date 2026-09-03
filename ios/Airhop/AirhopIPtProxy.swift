@@ -160,28 +160,9 @@ final class AirhopIPtProxy: @unchecked Sendable {
             transportEvents: nil
         ) else { return nil }
 
-        // Snowflake's rendezvous settings, which a bridge line may also carry.
-        // IPtProxy applies these only where the line left a value empty, so a
-        // pasted line still wins.
-        created.snowflakeBrokerUrl = AirhopSnowflake.brokerURL
-        created.snowflakeFrontDomains = AirhopSnowflake.frontDomains
-        created.snowflakeIceServers = AirhopSnowflake.iceServers
 
         controller = created
         return created
     }
 }
 
-/// Snowflake rendezvous defaults, matching what Tor Browser ships.
-///
-/// Set on the controller rather than written into a bridge line, so the line
-/// stays short: Arti passes settings through the SOCKS5 handshake, which allows
-/// 510 bytes, and a full Snowflake line comes close to that on its own.
-enum AirhopSnowflake {
-    static let brokerURL = "https://1098762253.rsc.cdn77.org/"
-    static let frontDomains = "www.cdn77.com,www.phpmyadmin.net"
-    static let iceServers =
-        "stun:stun.l.google.com:19302,stun:stun.antisip.com:3478,"
-        + "stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,"
-        + "stun:stun.epygi.com:3478"
-}

@@ -22,6 +22,7 @@ export const strings: Strings = {
   "common.continue": "தொடர்",
   "common.try_again": "மீண்டும் முயலுங்கள்",
   "common.settings": "அமைப்புகள்",
+  "common.on": "இயக்கத்தில்",
   "common.off": "முடக்கம்",
 
   // ---- Dates ----
@@ -1850,6 +1851,22 @@ export const strings: Strings = {
     "Tor இணைக்க ஒரு நிமிடத்துக்கு மேல் எடுக்கிறது. அது இயக்கத்திலேயே இருந்து முயன்றுகொண்டிருக்கும்; எப்போது திசைவழி தொடங்குகிறது, அல்லது இந்த வலையமைப்பு அதைத் தடுக்கிறதா என்பதை மெஷ் தாவல் சொல்லும்.",
   "settings.conn.tor_failed":
     "Tor ஐத் தொடங்க முடியவில்லை. செயலிக்கு வலையமைப்பு அணுகல் உள்ளதா என உறுதிசெய்யுங்கள்.",
+  "settings.tor.connection": "இணைப்பு",
+  "settings.tor.mode_off": "நேரடி",
+  "settings.tor.mode_off_desc":
+    "Tor உடன் நேரடியாக இணைக்கிறது. மிக வேகமானது, ஆனால் இந்த நெட்வொர்க்கைக் கவனிப்பவர் நீங்கள் Tor பயன்படுத்துவதைப் பார்க்க முடியும்.",
+  "settings.tor.mode_snowflake": "Snowflake",
+  "settings.tor.mode_snowflake_desc":
+    "நீங்கள் Tor பயன்படுத்துவதை மறைக்கிறது, பாலங்கள் தடுக்கப்பட்ட இடத்திலும் வேலை செய்யும். இணைய மிக மெதுவானது.",
+  "settings.tor.mode_obfs4": "பாலம்",
+  "settings.tor.mode_obfs4_desc":
+    "நீங்கள் Tor பயன்படுத்துவதை மறைக்கிறது. Snowflake ஐ விட வேகமானது, ஆனால் இந்தப் பாலங்கள் பொதுவானவை, சில நெட்வொர்க்குகள் தடுக்கின்றன.",
+  "settings.tor.mode_custom": "சொந்தப் பாலங்கள்",
+  "settings.tor.mode_custom_desc":
+    "bridges.torproject.org இல் பெற்ற பாலங்களைப் பயன்படுத்தவும். மற்றவை வேலை செய்யாதபோது இதை முயற்சிக்கவும்.",
+  "settings.tor.custom_placeholder": "ஒரு வரிக்கு ஒரு பாலம் வரியை ஒட்டவும்",
+  "settings.tor.custom_empty":
+    "முதலில் குறைந்தது ஒரு பாலம் வரியைச் சேர்க்கவும்.",
   "settings.conn.mint_clearnet":
     "நாணயச்சாலைப் போக்குவரத்தைத் திறந்த வலையில் அனுமதி",
   "settings.conn.mint_clearnet_desc":
