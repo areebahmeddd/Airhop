@@ -78,17 +78,13 @@ object ArtiNative {
     // Returns once the SOCKS listener is accepting, which is before the first
     // circuit exists. Blocks while the client is built and the port bound, so
     // callers keep it off the main thread.
-    @JvmStatic
-    fun start(dataDir: String, socksPort: Int): Int =
-        if (isAvailable) nativeStart(dataDir, socksPort) else ERR_CLIENT
-
-    // The same, reaching the network through bridges. See start_with_bridges in
-    // native/arti/src/lib.rs for why they are an argument and not a setter.
     //
-    // A transport port of 0 says that transport is not running, and a line
-    // naming it is refused rather than started without it.
+    // Bridges are passed here rather than set separately; see start in
+    // native/arti/src/lib.rs for why. A transport port of 0 says that transport
+    // is not running, and a line naming it is refused rather than started
+    // without it.
     @JvmStatic
-    fun startWithBridges(
+    fun start(
         dataDir: String,
         socksPort: Int,
         bridgeLines: String,
@@ -96,7 +92,7 @@ object ArtiNative {
         snowflakePort: Int,
     ): Int =
         if (isAvailable) {
-            nativeStartWithBridges(dataDir, socksPort, bridgeLines, obfs4Port, snowflakePort)
+            nativeStart(dataDir, socksPort, bridgeLines, obfs4Port, snowflakePort)
         } else {
             ERR_CLIENT
         }
@@ -120,8 +116,7 @@ object ArtiNative {
     @JvmStatic
     fun summary(): String = if (isAvailable) nativeSummary().orEmpty() else ""
 
-    private external fun nativeStart(dataDir: String, socksPort: Int): Int
-    private external fun nativeStartWithBridges(
+    private external fun nativeStart(
         dataDir: String,
         socksPort: Int,
         bridgeLines: String,

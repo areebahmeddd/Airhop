@@ -130,8 +130,8 @@ done
 for slice in "${EXPECTED_SLICES[@]}"; do
   binary="$XCFRAMEWORK/$slice/IPtProxy.framework/IPtProxy"
   [ -f "$binary" ] || fail "$slice: no framework binary"
-  # Printed on failure: whether a match is a real leak or a string that merely
-  # looks like a path is not decidable from the exit code alone.
+  # Printed, because whether a match is a real path is not decidable from an
+  # exit code.
   leaked="$(strings "$binary" | grep -E '/Users/[a-z]' | sort -u | head -5 || true)"
   if [ -n "$leaked" ]; then
     printf '%s\n' "$leaked" >&2

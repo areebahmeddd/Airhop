@@ -98,15 +98,36 @@ class AirhopTorModule(
     // the alternative is traffic going out in the clear after the user asked
     // for Tor.
     @ReactMethod
-    fun startTor(promise: Promise) {
+    fun startTor(bridgeLines: String, promise: Promise) {
         AirhopTorProxy.route(SOCKS_PORT)
         val epoch = attemptEpoch.incrementAndGet()
         worker.execute {
             val dir = dataDir()
             dir.mkdirs()
-            val rc = ArtiNative.start(dir.absolutePath, SOCKS_PORT)
+
+            // Transports first: Arti needs the ports they landed on, and they
+            // are assigned by the library rather than chosen.
+            val wanted = AirhopTransport.namedIn(bridgeLines)
+            val ports = AirhopIPtProxy.start(reactContext, wanted)
+            if (ports == null) {
+                // Fail closed. Starting Arti now would drop the bridge and take
+                // a direct route for a user who asked not to have one.
+                Log.w(TAG, "pluggable transports did not start")
+                emitStatus()
+                promise.reject("tor_transport_failed", "pluggable transports did not start")
+                return@execute
+            }
+
+            val rc = ArtiNative.start(
+                dir.absolutePath,
+                SOCKS_PORT,
+                bridgeLines,
+                ports[AirhopTransport.OBFS4] ?: 0,
+                ports[AirhopTransport.SNOWFLAKE] ?: 0,
+            )
             if (rc != ArtiNative.OK && rc != ArtiNative.ERR_ALREADY_RUNNING) {
                 Log.w(TAG, "arti start failed (rc=$rc)")
+                AirhopIPtProxy.stop()
                 emitStatus()
                 // Rejected, not resolved, so the caller learns now.
                 //
@@ -131,6 +152,7 @@ class AirhopTorModule(
         stopPolling()
         worker.execute {
             ArtiNative.stop()
+            AirhopIPtProxy.stop()
             // Ordered after the stop, so there is no instant in which the proxy
             // is gone while something might still believe it is covered.
             AirhopTorProxy.route(null)
@@ -151,6 +173,7 @@ class AirhopTorModule(
         stopPolling()
         worker.execute {
             ArtiNative.stop()
+            AirhopIPtProxy.wipeState(reactContext)
             AirhopTorProxy.route(null)
             val removed = dataDir().deleteRecursively()
             if (!removed) Log.w(TAG, "Arti data directory was not fully removed")

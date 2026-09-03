@@ -28,6 +28,14 @@
     native <methods>;
 }
 
+# The gomobile bindings for the pluggable transports.
+#
+# Go calls back into these generated classes by name, the same way the Arti JNI
+# above is resolved, so R8 renaming them would break the transports only in
+# release and only once a user turns bridges on.
+-keep class IPtProxy.** { *; }
+-keep class go.** { *; }
+
 # Drop debug logging from release builds.
 #
 # Minifying does not remove a Log call: every line compiled in still prints to a

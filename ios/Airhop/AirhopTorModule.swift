@@ -46,11 +46,12 @@ final class AirhopTorModule: RCTEventEmitter {
     /// Enable and start Arti. Resolves when the start has been initiated
     /// (not necessarily when bootstrap is complete; use awaitTorReady for that).
     @objc
-    func startTor(_ resolve: @escaping RCTPromiseResolveBlock,
+    func startTor(_ bridgeLines: NSString,
+                  resolver resolve: @escaping RCTPromiseResolveBlock,
                   rejecter reject: @escaping RCTPromiseRejectBlock) {
         Task { @MainActor in
             let manager = AirhopTorManager.shared
-            manager.enableAutoStart()
+            manager.enableAutoStart(bridgeLines: bridgeLines as String)
             manager.startIfNeeded()
             resolve(nil)
         }

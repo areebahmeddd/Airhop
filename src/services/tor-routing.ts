@@ -110,6 +110,15 @@ function installDirectSocket(): void {
   useWebSocketImplementation(DirectWebSocket);
 }
 
+// The bridge configuration a start should use.
+//
+// Empty for now: the settings that choose a mode land with the Bridges screen.
+// It exists already so both start paths read the same source, which is what
+// stops a startup and a toggle disagreeing about how the client came up.
+function bridgeLinesForStart(): string {
+  return "";
+}
+
 // Arti reports its own progress and whether it has stopped making any. Without
 // a subscriber a bootstrap that never lands is silent: every relay socket fails
 // closed behind a circuit that does not exist, and the internet half quietly
@@ -210,7 +219,7 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
     useSettingsStore.getState().setTorEnabled(true);
     // Native points its own HTTP client at the proxy inside startTor, before the
     // client is even built, so there is no window on either platform.
-    await NativeAirhopTor.startTor();
+    await NativeAirhopTor.startTor(bridgeLinesForStart());
     getMeshService()?.restartNostr();
 
     const ready = await NativeAirhopTor.awaitTorReady(TOR_READY_TIMEOUT_S);
@@ -290,7 +299,7 @@ export function primeTorRoutingOnStartup(): void {
   // "starting" for the whole session with nothing behind it. The native side
   // rejects only when Tor cannot run at all rather than merely not being ready:
   // no library for this ABI, or an unwritable state directory.
-  void NativeAirhopTor.startTor().catch(() => {
+  void NativeAirhopTor.startTor(bridgeLinesForStart()).catch(() => {
     setTorActive(false);
     setTorBootstrap("blocked");
   });

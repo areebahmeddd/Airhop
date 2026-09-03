@@ -19,6 +19,9 @@ pub extern "system" fn Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStart(
     _class: JClass,
     data_dir: JString,
     socks_port: jint,
+    bridge_lines: JString,
+    obfs4_port: jint,
+    snowflake_port: jint,
 ) -> jint {
     let Ok(dir) = env.get_string(&data_dir) else {
         return crate::AIRHOP_TOR_ERR_DATA_DIR;
@@ -29,32 +32,11 @@ pub extern "system" fn Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStart(
     if !(1..=65535).contains(&socks_port) {
         return crate::AIRHOP_TOR_ERR_BIND;
     }
-    crate::start(&dir, socks_port as u16)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStartWithBridges(
-    mut env: JNIEnv,
-    _class: JClass,
-    data_dir: JString,
-    socks_port: jint,
-    bridge_lines: JString,
-    obfs4_port: jint,
-    snowflake_port: jint,
-) -> jint {
-    let Ok(dir) = env.get_string(&data_dir) else {
-        return crate::AIRHOP_TOR_ERR_DATA_DIR;
-    };
-    let dir: String = dir.into();
-    if !(1..=65535).contains(&socks_port) {
-        return crate::AIRHOP_TOR_ERR_BIND;
-    }
     // A transport port of 0 is meaningful: it says that transport is not
-    // running. Anything outside the u16 range is a caller bug.
+    // running.
     if !(0..=65535).contains(&obfs4_port) || !(0..=65535).contains(&snowflake_port) {
         return crate::AIRHOP_TOR_ERR_BRIDGE_TRANSPORT;
     }
-    // A null JString is how Kotlin passes "no bridges".
     let lines: String = if bridge_lines.is_null() {
         String::new()
     } else {
@@ -63,7 +45,7 @@ pub extern "system" fn Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStartWit
             Err(_) => return crate::AIRHOP_TOR_ERR_BRIDGE_LINE,
         }
     };
-    crate::start_with_bridges(
+    crate::start(
         &dir,
         socks_port as u16,
         &lines,

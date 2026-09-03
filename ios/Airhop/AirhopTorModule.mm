@@ -9,7 +9,8 @@
 
 @interface RCT_EXTERN_MODULE(AirhopTorModule, RCTEventEmitter)
 
-RCT_EXTERN_METHOD(startTor:(RCTPromiseResolveBlock)resolve
+RCT_EXTERN_METHOD(startTor:(NSString *)bridgeLines
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(stopTor:(RCTPromiseResolveBlock)resolve

@@ -15,11 +15,10 @@ FETCHED="$REPO_ROOT/.native-build/iptproxy-src/iptproxy"
 LIBS_DIR="$REPO_ROOT/android/app/libs"
 AAR="$LIBS_DIR/IPtProxy.aar"
 
-# Go records the main module and every local `replace` target in the binary's
-# build info by absolute path, and -trimpath does not reach those. Built from
-# the checkout, that bakes in whoever built it and makes the output differ
-# between machines. Building from a fixed path outside the repository is what
-# keeps the result identical everywhere and free of anyone's home directory.
+# Built from a fixed path, not the checkout. Go records the main module and
+# every local `replace` target in build info by absolute path, and -trimpath
+# does not reach those, so building in place would bake in whoever built it and
+# differ between machines.
 BUILD_ROOT=/tmp/airhop-iptproxy
 SRC_DIR="$BUILD_ROOT/IPtProxy.go"
 
@@ -166,8 +165,9 @@ for abi in "${EXPECTED_ABIS[@]}"; do
       ;;
   esac
 
-  # An absolute path from a developer's disk is both a reproducibility failure
-  # and a small leak about whoever built it.
+  # A path from a developer's disk is a reproducibility failure and a small leak
+  # about whoever built it. Printed, because whether a match is a real path is
+  # not decidable from an exit code.
   leaked="$(strings "$lib" | grep -E '/home/[a-z]|/Users/' | sort -u | head -5 || true)"
   if [ -n "$leaked" ]; then
     printf '%s\n' "$leaked" >&2

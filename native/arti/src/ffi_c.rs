@@ -10,43 +10,25 @@
 
 use std::ffi::{c_char, c_int, CStr};
 
-/// Start Tor and bind its SOCKS5 listener on `127.0.0.1:socks_port`.
+/// Start Tor and bind its SOCKS5 listener on `127.0.0.1:socks_port`,
+/// reaching the network through `bridge_lines` when any are given.
+///
+/// `bridge_lines` is a newline-separated list in standard Tor format; empty or
+/// null is a direct connection to a public relay. `obfs4_port` and
+/// `snowflake_port` are where the app already has each transport listening on
+/// loopback, or `0` when it does not, and a line naming a transport whose port
+/// is `0` is refused rather than started without it.
 ///
 /// Returns `0` once the listener is accepting, which is before the first
-/// circuit exists. Any other value is one of the `AIRHOP_TOR_ERR_*` codes.
-///
-/// # Safety
-///
-/// `data_dir` must be a non-null, NUL-terminated C string that stays valid for
-/// the duration of the call.
-#[no_mangle]
-pub unsafe extern "C" fn airhop_tor_start(data_dir: *const c_char, socks_port: u16) -> c_int {
-    if data_dir.is_null() {
-        return crate::AIRHOP_TOR_ERR_DATA_DIR;
-    }
-    let Ok(dir) = unsafe { CStr::from_ptr(data_dir) }.to_str() else {
-        return crate::AIRHOP_TOR_ERR_DATA_DIR;
-    };
-    crate::start(dir, socks_port)
-}
-
-/// Start Tor through the bridges in `bridge_lines`, a newline-separated list in
-/// standard Tor format. An empty or null list is a direct connection, the same
-/// as [`airhop_tor_start`].
-///
-/// `obfs4_port` and `snowflake_port` are where the app already has each
-/// transport listening on loopback, or `0` when it does not. A line naming a
-/// transport whose port is `0` is refused rather than started without it.
-///
-/// Returns `0` once the listener is accepting, or one of the `AIRHOP_TOR_ERR_*`
-/// codes. A bad line stops the start: nothing binds and nothing bootstraps.
+/// circuit exists. Any other value is one of the `AIRHOP_TOR_ERR_*` codes. A bad
+/// line stops the start: nothing binds and nothing bootstraps.
 ///
 /// # Safety
 ///
 /// `data_dir` must be a non-null, NUL-terminated C string, and `bridge_lines`
 /// either null or the same. Both must stay valid for the duration of the call.
 #[no_mangle]
-pub unsafe extern "C" fn airhop_tor_start_with_bridges(
+pub unsafe extern "C" fn airhop_tor_start(
     data_dir: *const c_char,
     socks_port: u16,
     bridge_lines: *const c_char,
@@ -67,7 +49,7 @@ pub unsafe extern "C" fn airhop_tor_start_with_bridges(
             Err(_) => return crate::AIRHOP_TOR_ERR_BRIDGE_LINE,
         }
     };
-    crate::start_with_bridges(
+    crate::start(
         dir,
         socks_port,
         lines,

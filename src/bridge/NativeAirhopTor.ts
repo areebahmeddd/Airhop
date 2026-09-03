@@ -34,7 +34,13 @@ export interface TorStatus {
 export interface Spec extends TurboModule {
   // Resolves once startup has been initiated, not once Tor is usable. Use
   // awaitTorReady for that.
-  startTor(): Promise<void>;
+  //
+  // `bridgeLines` is a newline-separated list in standard Tor format; empty is a
+  // direct connection to a public relay. Passed per start rather than set
+  // separately, so a client cannot come up without stating which it is. Native
+  // starts the transports the lines name before Arti, and rejects when they do
+  // not come up rather than falling back to a direct route.
+  startTor(bridgeLines: string): Promise<void>;
   stopTor(): Promise<void>;
 
   // Stop Arti and delete everything it has written to disk. Panic wipe only.

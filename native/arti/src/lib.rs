@@ -192,16 +192,12 @@ fn state() -> &'static Mutex<Option<Running>> {
     STATE.get_or_init(|| Mutex::new(None))
 }
 
-/// Start Tor with a direct connection to a public relay.
+/// Start Tor and bind a SOCKS5 listener on `127.0.0.1:socks_port`, reaching the
+/// network through `bridge_lines` when any are given, and a public relay
+/// directly when there are none.
 ///
 /// Returns once the listener is accepting, which is before bootstrap completes.
 /// Poll [`status`] for the rest.
-pub fn start(data_dir: &str, socks_port: u16) -> i32 {
-    start_with_bridges(data_dir, socks_port, "", TransportPorts::default())
-}
-
-/// Start Tor and bind a SOCKS5 listener on `127.0.0.1:socks_port`, reaching the
-/// network through `bridge_lines` when any are given.
 ///
 /// Bridges are fixed when the client is constructed, so they are an argument
 /// rather than a setter beside it: a setter could be called afterwards and
@@ -211,7 +207,7 @@ pub fn start(data_dir: &str, socks_port: u16) -> i32 {
 /// Fails rather than falling back. A line that does not parse, names a transport
 /// Airhop does not ship, or names one whose port is 0 stops the start before
 /// anything binds or bootstraps.
-pub fn start_with_bridges(
+pub fn start(
     data_dir: &str,
     socks_port: u16,
     bridge_lines: &str,

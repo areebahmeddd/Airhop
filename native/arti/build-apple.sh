@@ -101,7 +101,6 @@ NM="$(find_llvm_nm)"
 # C entry points bound by AirhopTorManager.swift.
 EXPECTED_SYMBOLS=(
   _airhop_tor_start
-  _airhop_tor_start_with_bridges
   _airhop_tor_stop
   _airhop_tor_set_dormant
   _airhop_tor_status

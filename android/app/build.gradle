@@ -213,6 +213,11 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // The pluggable transports, built by native/iptproxy and committed under
+    // libs/. A file dependency rather than a Maven coordinate, because the
+    // artifact is one this repository produces and hashes.
+    implementation(files("libs/IPtProxy.aar"))
+
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
     def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";

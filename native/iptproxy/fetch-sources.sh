@@ -60,11 +60,8 @@ fetch_at iptproxy "$IPTPROXY_REPO" "$IPTPROXY_COMMIT"
 fetch_at dnstt "$DNSTT_REPO" "$DNSTT_COMMIT"
 
 # IPtProxy reaches dnstt through `replace ... => ../dnstt`, so it has to sit
-# beside IPtProxy.go rather than come from the module proxy.
-#
-# Exported rather than copied. Only the tracked tree is wanted, and copying the
-# checkout would carry git's read-only object directories, which macOS refuses
-# to reproduce.
+# beside IPtProxy.go. Exported rather than copied: only the tracked tree is
+# wanted, and git's read-only object directories defeat cp on macOS.
 info "Placing dnstt beside IPtProxy.go"
 rm -rf "$SRC_DIR/iptproxy/dnstt"
 mkdir -p "$SRC_DIR/iptproxy/dnstt"

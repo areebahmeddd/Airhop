@@ -31,6 +31,10 @@ target 'Airhop' do
   # The framework binary lives at ios/Frameworks/arti.xcframework (bundled with Airhop).
   pod 'Arti', :path => './'
 
+  # IPtProxy xcframework: the pluggable transports Arti dials to reach a bridge,
+  # linked by AirhopIPtProxy.swift. Built by native/iptproxy/build-apple.sh.
+  pod 'IPtProxy', :path => './'
+
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else

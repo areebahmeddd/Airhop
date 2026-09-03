@@ -27,10 +27,7 @@ import Network
 // absent from a simulator slice, which build-apple.sh checks for.
 
 @_silgen_name("airhop_tor_start")
-private func airhop_tor_start(_ dataDir: UnsafePointer<CChar>, _ socksPort: UInt16) -> Int32
-
-@_silgen_name("airhop_tor_start_with_bridges")
-private func airhop_tor_start_with_bridges(
+private func airhop_tor_start(
     _ dataDir: UnsafePointer<CChar>,
     _ socksPort: UInt16,
     _ bridgeLines: UnsafePointer<CChar>?,
@@ -151,6 +148,15 @@ public final class AirhopTorManager: ObservableObject {
 #endif
     private(set) public var allowAutoStart: Bool = false
 
+    /// The bridge lines the current session was started with, empty for a direct
+    /// connection.
+    ///
+    /// Held because startIfNeeded is also reached from the path monitor and from
+    /// a foreground resume, and a restart has to use the configuration the user
+    /// chose rather than silently dropping to a direct route. Cleared by
+    /// shutdownCompletely, which is the withdrawal of that choice.
+    private var bridgeLines: String = ""
+
     /// A poll loop belonging to a superseded attempt can still be alive, and
     /// would otherwise stomp the new attempt's flags and post a second stall.
     private var attemptEpoch = 0
@@ -164,8 +170,10 @@ public final class AirhopTorManager: ObservableObject {
 
     // MARK: - Public API
 
-    /// Allow automatic startup on the next `startIfNeeded()` call.
-    public func enableAutoStart() {
+    /// Allow automatic startup on the next `startIfNeeded()` call, reaching the
+    /// network through `bridgeLines` when any are given.
+    public func enableAutoStart(bridgeLines: String) {
+        self.bridgeLines = bridgeLines
         allowAutoStart = true
     }
 
@@ -189,11 +197,39 @@ public final class AirhopTorManager: ObservableObject {
             at: URL(fileURLWithPath: dir), withIntermediateDirectories: true
         )
 
+        let lines = bridgeLines
+
         // Off the main actor: building the client touches the filesystem and
-        // acquires Arti's state-directory lock, and neither belongs on the
-        // thread drawing the settings screen.
+        // acquires Arti's state-directory lock, and starting a transport opens a
+        // listener and may reach the network. None of that belongs on the thread
+        // drawing the settings screen.
         Task.detached(priority: .userInitiated) { [weak self] in
-            let rc = dir.withCString { airhop_tor_start($0, UInt16(AirhopTorEndpoint.socksPort)) }
+            // Transports first, because Arti needs the ports they landed on and
+            // those are assigned by the library rather than chosen.
+            //
+            // Fail closed when they do not come up: starting Arti anyway would
+            // drop the bridge and take a direct route for a user who asked not
+            // to have one.
+            guard let ports = AirhopIPtProxy.shared.start(AirhopTransport.named(in: lines)) else {
+                await MainActor.run { self?.failAttempt(epoch) }
+                return
+            }
+            let rc = dir.withCString { dirPtr in
+                lines.withCString { linesPtr in
+                    airhop_tor_start(
+                        dirPtr,
+                        UInt16(AirhopTorEndpoint.socksPort),
+                        linesPtr,
+                        ports[.obfs4] ?? 0,
+                        ports[.snowflake] ?? 0
+                    )
+                }
+            }
+            // Wound back here rather than on the main actor below, because
+            // stopping a transport is a blocking call into Go.
+            if rc != AirhopTorRC.ok, rc != AirhopTorRC.alreadyRunning {
+                AirhopIPtProxy.shared.stop()
+            }
             await MainActor.run {
                 guard let self, epoch == self.attemptEpoch else { return }
                 // Already running is a success. startIfNeeded reads the
@@ -286,6 +322,7 @@ public final class AirhopTorManager: ObservableObject {
     /// `startTor` re-grants it.
     public func shutdownCompletely() {
         allowAutoStart = false
+        bridgeLines = ""
 #if canImport(Network)
         pathMonitor?.cancel()
         pathMonitor = nil
@@ -301,6 +338,8 @@ public final class AirhopTorManager: ObservableObject {
         // the toggle the user just tapped.
         Task.detached(priority: .userInitiated) {
             _ = airhop_tor_stop()
+            // After Arti, so nothing is left dialling a transport that has gone.
+            AirhopIPtProxy.shared.stop()
         }
     }
 
@@ -333,6 +372,7 @@ public final class AirhopTorManager: ObservableObject {
         // handover seconds later would restart Arti and repopulate exactly the
         // evidence this exists to destroy.
         allowAutoStart = false
+        bridgeLines = ""
 #if canImport(Network)
         pathMonitor?.cancel()
         pathMonitor = nil
@@ -349,6 +389,9 @@ public final class AirhopTorManager: ObservableObject {
         // whole appeal is that it is instant.
         await Task.detached(priority: .userInitiated) {
             _ = airhop_tor_stop()
+            // The transports write state too: which of them ran is the same
+            // class of evidence as Arti's cached consensus.
+            AirhopIPtProxy.shared.wipeState()
             // Deleted whether or not the stop reported success. A directory
             // unlinked under a still-running Arti is worse than one deleted
             // cleanly, and far better than leaving the consensus and guard
