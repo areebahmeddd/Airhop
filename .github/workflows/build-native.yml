@@ -62,6 +62,7 @@ jobs:
           source native/arti/TOOLCHAIN.env
           echo "rust=$RUST_VERSION" >> "$GITHUB_OUTPUT"
           echo "cbindgen=$CBINDGEN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "go=$GO_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Rust and Apple targets
         env:
@@ -79,6 +80,12 @@ jobs:
             aarch64-apple-ios-sim \
             x86_64-apple-ios
           cargo install cbindgen --version "$CBINDGEN_VERSION" --locked
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ steps.toolchain.outputs.go }}
+          cache: false
 
       - name: Record the Xcode version
         run: |

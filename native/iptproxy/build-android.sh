@@ -34,11 +34,13 @@ fail() { printf '\033[0;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 command -v go >/dev/null || fail "go is not on PATH"
 command -v javac >/dev/null || fail "javac is not on PATH"
 
+# Set before the version check: left on its default, Go silently downloads
+# whatever compiler a go directive asks for, and the check below would then be
+# reading a version that is not the one doing the building.
+export GOTOOLCHAIN=local
+
 actual_go="$(go env GOVERSION)"
 [ "$actual_go" = "go$GO_VERSION" ] || fail "go is $actual_go, TOOLCHAIN.env pins go$GO_VERSION"
-
-# Left on its default, Go downloads whatever compiler a go directive asks for.
-[ "$(go env GOTOOLCHAIN)" = "local" ] || fail "GOTOOLCHAIN must be 'local', got '$(go env GOTOOLCHAIN)'"
 
 [ -n "${ANDROID_NDK_HOME:-}" ] || fail "ANDROID_NDK_HOME is not set"
 ndk_revision="$(sed -n 's/^Pkg.Revision *= *//p' "$ANDROID_NDK_HOME/source.properties" | tr -d '\r')"
