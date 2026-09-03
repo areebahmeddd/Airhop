@@ -61,10 +61,14 @@ fetch_at dnstt "$DNSTT_REPO" "$DNSTT_COMMIT"
 
 # IPtProxy reaches dnstt through `replace ... => ../dnstt`, so it has to sit
 # beside IPtProxy.go rather than come from the module proxy.
+#
+# Exported rather than copied. Only the tracked tree is wanted, and copying the
+# checkout would carry git's read-only object directories, which macOS refuses
+# to reproduce.
 info "Placing dnstt beside IPtProxy.go"
 rm -rf "$SRC_DIR/iptproxy/dnstt"
-cp -a "$SRC_DIR/dnstt" "$SRC_DIR/iptproxy/dnstt"
-rm -rf "$SRC_DIR/iptproxy/dnstt/.git"
+mkdir -p "$SRC_DIR/iptproxy/dnstt"
+git -C "$SRC_DIR/dnstt" archive HEAD | tar -x -C "$SRC_DIR/iptproxy/dnstt"
 
 # Upstream commits a prebuilt xcframework, and their build script skips the
 # build when one is present. Airhop ships only what it compiled.

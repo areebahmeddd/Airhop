@@ -11,7 +11,7 @@ documentation = true
 documentation_style = "doxy"
 
 [export]
-# Export only the five public C entry points.
+# Only the public C entry points reach the header.
 # Android-only JNI functions are excluded by their target cfg.
 prefix = ""
 

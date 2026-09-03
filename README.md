@@ -124,8 +124,8 @@ Airhop chooses a transport per message. Bluetooth is the only one that needs no 
 Notes on the numbers:
 
 - Text messages (channel and DM) are tiny and effectively instant on any transport. Throughput only matters for files.
-- The **~18 KiB/s** figure is 467 bytes per fragment sent one every 25 ms. The delay is required: without it the radio drops fragments and the transfer never completes.
-- A channel attachment paces at 30 ms instead (**~15 KiB/s**), since each broadcast fragment requires one radio write per connected peer, increasing airtime usage as the room grows.
+- The ~18 KiB/s figure is 467 bytes per fragment sent one every 25 ms. The delay is required: without it the radio drops fragments and the transfer never completes.
+- A channel attachment paces at 30 ms instead (~15 KiB/s), since each broadcast fragment requires one radio write per connected peer, increasing airtime usage as the room grows.
 - A 1 MiB file (the per-file cap) takes about 56 seconds to one peer. bitchat rejects anything larger as it decodes the packet, so the cap is not ours to raise and chunking above it was dropped. An Airhop-only path stays possible, but it cannot be the default without losing bitchat compatibility.
 - LAN needs no such pacing, since the 25 ms delay is a Bluetooth requirement rather than a protocol one. The 467-byte fragment size stays regardless: the receiver reassembles by index and a peer may be relaying to Bluetooth next.
 - Wi-Fi Aware doesn’t work across platforms. Apple requires pairing that Android can’t complete, so connections are limited to Android-to-Android (Android 10+) or iPhone-to-iPhone (iOS 26+, paired once).

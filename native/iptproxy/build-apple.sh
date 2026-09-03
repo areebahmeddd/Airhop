@@ -119,7 +119,11 @@ done
 for slice in "${EXPECTED_SLICES[@]}"; do
   binary="$XCFRAMEWORK/$slice/IPtProxy.framework/IPtProxy"
   [ -f "$binary" ] || fail "$slice: no framework binary"
-  if strings "$binary" | grep -Eq '/Users/[a-z]'; then
+  # Printed on failure: whether a match is a real leak or a string that merely
+  # looks like a path is not decidable from the exit code alone.
+  leaked="$(strings "$binary" | grep -E '/Users/[a-z]' | sort -u | head -5 || true)"
+  if [ -n "$leaked" ]; then
+    printf '%s\n' "$leaked" >&2
     fail "$slice: a build-machine path survived into the binary"
   fi
   info "  $slice: $(du -h "$binary" | cut -f1), no build-machine paths"
