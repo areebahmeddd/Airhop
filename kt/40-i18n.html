@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 40: Localization. Thirty five languages, plural rules, RTL, and bidi isolation." />
+    <title>40 Localization · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 40 · The device</p>
+          <h1>Localization</h1>
+          <p class="kt-lede">
+            Thirty five languages, three of them right to left, with no i18n
+            library and no network. This chapter is why localization sits in the
+            protocol spec rather than in a style guide, and where getting it wrong
+            is a correctness bug rather than a cosmetic one.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#why-spec">Why this is in the spec</a></li>
+              <li><a href="#decisions">The decisions</a></li>
+              <li><a href="#plurals">Plural rules, by hand</a></li>
+              <li><a href="#rtl">Right to left</a></li>
+              <li><a href="#bidi">Bidi isolation</a></li>
+              <li><a href="#unicode">Word boundaries and normalisation</a></li>
+              <li><a href="#surfaces">Which language each surface follows</a></li>
+              <li><a href="#never">What never gets translated</a></li>
+              <li><a href="#varies">What varies between devices</a></li>
+              <li><a href="#pseudo">The pseudolocale</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              The app knows how to say everything in thirty five languages, and it
+              carries all of them inside itself rather than downloading them,
+              because it has to work when there is no internet. Some languages
+              count differently: English has one and many, Arabic has six ways.
+              Some are written right to left, so the whole screen has to flip. And
+              if you put an Arabic name in an English sentence, the punctuation
+              jumps to the wrong side unless you tell it not to.
+            </p>
+          </div>
+
+          <h2 id="why-spec">Why this is in the spec</h2>
+          <p>
+            <code>ARCHITECTURE.md</code> puts localization in section 10, beside
+            the threat model, and that placement is an argument rather than an
+            accident.
+          </p>
+          <p>
+            The app is scoped to blackouts, protests and disasters. The languages
+            spoken there are Persian, Arabic, Urdu, Hindi, Bengali, Punjabi,
+            Tamil, Indonesian, Filipino, Nepali, Ukrainian and Russian. An
+            English-only UI during a shutdown in Tehran or Dhaka does not reach the
+            person it was built for.
+          </p>
+          <p>
+            Three of those read right to left, and several are written in scripts
+            with rendering rules the code has to know about. So this is a
+            correctness concern, not a presentation one:
+          </p>
+          <div class="box bad">
+            <p class="box-title">Three silent failures</p>
+            <ul>
+              <li>
+                <strong>A mention that never fires.</strong> If the word-boundary
+                check uses an ASCII punctuation class, "@name。" does not count as
+                a mention, so it passes no mute and raises no notification. Nothing
+                looks broken. The feature simply does not work.
+              </li>
+              <li>
+                <strong>A name that reorders the punctuation around it.</strong>
+                Without bidi isolation, an Arabic name in an English sentence drags
+                the comma to the wrong side.
+              </li>
+              <li>
+                <strong>A row frozen in last week's language.</strong> A translated
+                string written into storage keeps the language of the day it was
+                stored, forever.
+              </li>
+            </ul>
+          </div>
+
+          <h2 id="decisions">The decisions</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Decision</th><th>Rationale</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Catalogs bundled, never fetched</strong></td>
+                  <td>A translation download is a network call and a fingerprint, and it would fail in exactly the conditions this app exists for. 1,535 strings and 27 plural keys per language, compiled into the bundle, byte-identical on every device.</td>
+                </tr>
+                <tr>
+                  <td><strong>No i18n library</strong></td>
+                  <td>i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys, none of which suits an offline-first app with a bundled catalog.</td>
+                </tr>
+                <tr>
+                  <td><strong>Completeness enforced by <code>tsc</code></strong></td>
+                  <td>Every locale is <code>Record&lt;TranslationKey, string&gt;</code> derived from <code>en.ts</code>, so a partial locale <strong>does not compile</strong>. No coverage threshold, no partial state, no runtime fallback.</td>
+                </tr>
+                <tr>
+                  <td><strong>Plural rules hand-written</strong></td>
+                  <td>Hermes has no <code>Intl.PluralRules</code>. 35 languages reduce to nine CLDR rule shapes, so <code>plurals.ts</code> is nine functions rather than a dependency plus a locale-data module per language plus a patched global.</td>
+                </tr>
+                <tr>
+                  <td><strong>Device language read through <code>Intl</code></strong></td>
+                  <td><code>Intl.DateTimeFormat().resolvedOptions().locale</code> is present on Hermes on both platforms. <code>expo-localization</code> would mean a config plugin against native trees that must never see <code>prebuild</code>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Translation at display, never at storage</strong></td>
+                  <td>A <code>t()</code> result written into MMKV freezes in the language of the day it was stored. Persisted rows keep a <code>systemKey</code> and translate on render.</td>
+                </tr>
+                <tr>
+                  <td><strong>An RTL switch waits for the next launch</strong></td>
+                  <td>React Native fixes layout direction at process start and iOS has no sanctioned self-restart. Both facts it depends on are <em>read</em> rather than assumed: <code>I18nManager.isRTL</code> for the direction in force, <code>frameLanguage</code> for the language it belongs to.</td>
+                </tr>
+                <tr>
+                  <td><strong>Every substituted value is bidi-isolated</strong></td>
+                  <td>One wrap in <code>interpolate</code> covers every key. See below.</td>
+                </tr>
+                <tr>
+                  <td><strong>Word boundaries are Unicode, not ASCII</strong></td>
+                  <td>A closing <code>[\s.,!?;:]</code> is the punctuation of a third of these languages. Comparisons normalise to NFC, since two keyboards spell the same accented character differently.</td>
+                </tr>
+                <tr>
+                  <td><strong>One digit system, locale grouping</strong></td>
+                  <td>Every number the app renders uses Latin digits, prose counts included, and <code>catalog.test.ts</code> forbids a catalog its own. Grouping still follows the locale, which is the half that helps: Hindi and Tamil group by lakh.</td>
+                </tr>
+                <tr>
+                  <td><strong>Strings the OS renders stay where it reads them</strong></td>
+                  <td>Passing them through the app would mean a native shim on both platforms for a permission dialog and a notification. <code>npm run i18n:native</code> holds them to the shipped set instead.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="plurals">Plural rules, by hand</h2>
+          <p>
+            English has two forms. Russian has four. Arabic has six. CLDR defines
+            six categories (<code>zero</code>, <code>one</code>, <code>two</code>,
+            <code>few</code>, <code>many</code>, <code>other</code>) and every
+            language uses a subset with its own selection rule.
+          </p>
+          <pre class="ascii">
+  THE NINE SHAPES
+
+  otherOnly        no inflection for number at all. One boat and five
+                   boats are the same word.       zh, ja, ko, th, vi, id, ms...
+
+  oneIsOne         singular is exactly 1.         en, de, es, nl, sv, sw...
+
+  oneIsZeroOrOne   zero takes the singular too. This is the difference
+                   that makes "0 messages" wrong in Hindi and right in
+                   English.                        hi, bn, fa, mg...
+
+  filipino         the LAST DIGIT decides rather than the magnitude, so
+                   4, 6 and 9 take the plural and 24 and 25 differ.
+
+  frenchLike       zero is singular, and `many` exists only for round
+                   millions, where the language says "million" rather
+                   than the digits.
+
+  spanishLike      as above but zero is PLURAL. The single point where
+                   pt-PT parts company with pt-BR.
+
+  polish           four categories chosen by the last digit, with a hole
+                   punched in it for the teens, which are `many`
+                   regardless of how they end.
+
+  russianLike      similar shape, different holes.  ru, uk
+
+  arabic           six categories, the full set.
+</pre>
+          <div class="box">
+            <p class="box-title">Two implementation choices worth knowing</p>
+            <p>
+              <strong>Which language takes which rule is a table at the bottom,
+              not a comment on each function.</strong> So adding a language never
+              edits a rule.
+            </p>
+            <p>
+              <strong>Integers only.</strong> CLDR's fractional rules key off the
+              number of <em>visible decimal places</em>, which is a property of the
+              formatting rather than the value, and every count here is a countable
+              thing. A fraction returns <code>other</code>, which CLDR guarantees
+              in every language.
+            </p>
+            <p>
+              And the verification: Node ships full ICU, so
+              <code>plurals.test.ts</code> checks every rule against
+              <code>Intl.PluralRules</code> itself. Nine hand-written functions
+              are only defensible because they are tested against the reference
+              implementation.
+            </p>
+          </div>
+
+          <h2 id="rtl">Right to left</h2>
+          <p>
+            Three shipped languages read right to left: Arabic, Persian and Urdu.
+            RTL is not a text property, it is a
+            <strong>layout direction</strong>: the entire interface mirrors.
+            Back arrows point the other way, list rows flip, sheets slide from the
+            other side, progress fills the other direction.
+          </p>
+          <pre class="ascii">
+  LTR                                RTL
+
+  ┌────────────────────────┐        ┌────────────────────────┐
+  │ ←  Chat name        ⋮  │        │  ⋮        Chat name  → │
+  ├────────────────────────┤        ├────────────────────────┤
+  │ [them]                 │        │                 [them] │
+  │                 [me]   │        │   [me]                 │
+  ├────────────────────────┤        ├────────────────────────┤
+  │ Type a message     ➤   │        │   ➤     Type a message │
+  └────────────────────────┘        └────────────────────────┘
+</pre>
+          <div class="box warn">
+            <p class="box-title">Why switching to Arabic needs a relaunch</p>
+            <p>
+              React Native fixes <code>I18nManager.isRTL</code> at process start.
+              Changing it mid-session leaves half the tree laid out one way and
+              half the other, and iOS has no sanctioned way for an app to restart
+              itself. So the preference is stored and applied on the next launch,
+              and the UI says so.
+            </p>
+            <p>
+              The implementation reads both facts rather than assuming them:
+              <code>I18nManager.isRTL</code> for the direction currently in force,
+              and <code>frameLanguage</code> for the language that direction
+              belongs to. Assuming either produces a screen that is mirrored for
+              the wrong language.
+            </p>
+          </div>
+          <p>
+            Layout uses <strong>logical properties</strong> (start and end rather
+            than left and right) plus the helpers in
+            <code>src/i18n/layout.ts</code>, so most components need no
+            direction-specific code at all.
+          </p>
+
+          <h2 id="bidi">Bidi isolation</h2>
+          <p>
+            The most subtle problem in the whole chapter, and the one that is
+            invisible until somebody with an Arabic name uses the app.
+          </p>
+          <pre class="ascii">
+  THE PROBLEM
+
+  Template:  "{name} joined the channel."
+  Name:      an Arabic string, which reads right to left
+
+  Without isolation, the Unicode bidirectional algorithm resolves the
+  punctuation NEXT TO the placeholder against the direction of whatever
+  text landed in it. The full stop attaches to the Arabic run and
+  renders on the WRONG SIDE:
+
+      .‏محمد‎ joined the channel
+
+  THE FIX
+
+  Wrap every substituted value in isolation marks:
+
+      U+2068  FIRST STRONG ISOLATE   (FSI)
+      ...the value...
+      U+2069  POP DIRECTIONAL ISOLATE (PDI)
+
+  The algorithm now treats the value as one opaque neutral unit and
+  leaves the surrounding punctuation alone.
+</pre>
+          <p>
+            The important design point: this is done once, in
+            <code>interpolate</code>, so <strong>every key gets it</strong>.
+            Doing it per call site would mean remembering it 1,535 times, and the
+            failure is invisible to anyone testing in English.
+          </p>
+
+          <h2 id="unicode">Word boundaries and normalisation</h2>
+          <h3>Mentions</h3>
+          <p>
+            A mention is <code>@name</code> followed by a word boundary. The naive
+            implementation closes on <code>[\s.,!?;:]</code>, which is
+            <strong>the punctuation of a third of these languages</strong>. A
+            Japanese full stop is <code>。</code>, an Arabic comma is
+            <code>،</code>, a Devanagari danda is <code>।</code>. With an ASCII
+            class, "@name。" is not a mention, so it passes no mute filter and
+            raises no notification, silently.
+          </p>
+          <p>
+            So boundaries use Unicode property escapes rather than an ASCII
+            class.
+          </p>
+          <h3>Normalisation</h3>
+          <p>
+            The same visible string has more than one encoding. "José" is either
+            <code>U+00E9</code> or <code>U+0065</code> followed by the combining
+            acute <code>U+0301</code>. They render identically and compare
+            unequal.
+          </p>
+          <p>
+            Two keyboards genuinely produce different forms, so every comparison
+            normalises to <strong>NFC</strong>. This applies at the wire boundary
+            too: nicknames in ANNOUNCE TLV <code>0x01</code> are normalised on both
+            encode and decode, so everything downstream compares one form. Without
+            it, an accented name typed on one platform and announced from another
+            fails to match: an at-mention never fires, and one person occupies two
+            rows of a participant list.
+          </p>
+          <p>
+            That is a <em>local</em> canonicalisation, not a wire change. The
+            packet still carries whatever bytes the sender chose, peer IDs derive
+            from keys rather than names, and no signature covers the normalised
+            form, so a peer that normalises differently stays fully
+            interoperable.
+          </p>
+          <h3>Truncation</h3>
+          <p>
+            The nickname budget is 32 <strong>UTF-8 bytes</strong>, and truncation
+            drops whole code points. Counting UTF-16 units is wrong twice over: 32
+            emoji is 128 bytes, four times the budget, and a slice can land inside
+            a surrogate pair and emit a lone half that decodes to a replacement
+            character on the far side.
+          </p>
+          <p>
+            The cut also backs off past a trailing combining mark or zero-width
+            joiner, so a name never ends in a mark rendered on a dotted circle or
+            half a split emoji. 32 bytes is about ten Devanagari characters, so the
+            budget is reached most often in exactly the scripts that write with
+            marks.
+          </p>
+
+          <h2 id="surfaces">Which language each surface follows</h2>
+          <p>
+            Both platforms offer a per-app language of their own: Android 13's
+            picker, which <code>res/xml/locales_config.xml</code> opts into, and
+            iOS's, which appears once a bundle carries more than one localization.
+            Airhop ships its own as well, because neither exists below Android 13
+            and because <strong>changing a system setting is not something to ask
+            of somebody using this app under duress</strong>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Surface</th><th>Follows</th></tr></thead>
+              <tbody>
+                <tr><td>Everything rendered by React Native</td><td>The in-app picker</td></tr>
+                <tr><td>iOS permission dialogs, Android's foreground notice</td><td>The OS per-app value</td></tr>
+                <tr><td>Reverse-geocoded place names</td><td>The OS per-app value</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            On the default "system" preference the two agree, because the device
+            language is re-sampled on every foreground edge. Android needs that: it
+            recreates the Activity for a language change while keeping the
+            JavaScript context alive.
+          </p>
+          <p>
+            Picking a language explicitly pins the app and leaves the OS-rendered
+            strings on the system value. Writing through to
+            <code>LocaleManager.setApplicationLocales</code> would close that gap
+            and is deliberately not done: it recreates the Activity underneath a
+            live mesh, in-flight transfers and possibly live voice,
+            <strong>for five notification strings</strong>.
+          </p>
+
+          <h2 id="never">What never gets translated</h2>
+          <p>
+            Some strings cross the wire or derive an identity, so a translated
+            variant is an interop bug rather than a cosmetic one.
+            <code>catalog.test.ts</code> enforces the full list.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>String</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td><strong>The username word lists</strong> (<code>src/utils/username.ts</code>)</td><td>A generated name must resolve identically on every device, <strong>and in bitchat</strong>. Translating them would mean the same key produced a different name on a French phone.</td></tr>
+                <tr><td><strong>The transmitted <code>/hug</code> and <code>/slap</code> text</strong></td><td>bitchat-iOS recognises an incoming emote by matching the English substrings. A translated emote is a plain message on their side.</td></tr>
+                <tr><td>Protocol constants, channel names, geohashes</td><td>They are identifiers.</td></tr>
+                <tr><td>Terms of Service and Privacy Policy</td><td>English is the authoritative version, with the reader chrome around them translated.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">Nothing on the wire carries a language</p>
+            <p>
+              No locale, no script, no language tag appears in any packet. A
+              Persian reader and an English one are
+              <strong>indistinguishable at the protocol layer</strong>, and a
+              courier holding sealed mail for either cannot tell them apart. That
+              is a privacy property, and it is why localization belongs in the
+              spec: a naive implementation that sent a locale header would leak
+              something about who you are to every relay you cross.
+            </p>
+          </div>
+
+          <h2 id="varies">What varies between devices</h2>
+          <p>
+            Text is identical everywhere because it is compiled in. Three things
+            are not.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Varies</th><th>Handling</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>Intl</code> date and number output, per OS and OEM</td>
+                  <td>Centralised in <code>src/utils/format.ts</code>, formatted in the <em>app's</em> language rather than the device's, with cached formatters and Latin digits throughout.</td>
+                </tr>
+                <tr>
+                  <td>Font glyph coverage for non-Latin scripts</td>
+                  <td>JetBrains Mono covers Latin, Greek and Cyrillic and <strong>none of the other ten scripts shipped</strong>. So the monospace face is reserved for machine data: a value from a formatter or a constant may use it, a value that came through a catalog key is prose and uses the system face.</td>
+                </tr>
+                <tr>
+                  <td>Cached reverse-geocoded place names</td>
+                  <td>The OS geocoder answers in the device's language. Both native APIs accept a locale and <code>expo-location</code> exposes neither, and a native shim for a room-header label is not worth it, so <code>place-names-store.ts</code> keys its cache on that language and re-resolves.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="pseudo">The pseudolocale</h2>
+          <p>
+            A generated locale, <code>qps-ploc</code>, available in debug builds
+            only. It accents every string, brackets it, and pads it past the
+            longest real translation of the same key.
+          </p>
+          <pre class="code">
+  en:        "Send"
+  qps-ploc:  "[Šéñð ‥‥‥‥‥‥]"
+</pre>
+          <p>Three bugs it catches in one pass, without reading any language:</p>
+          <ul>
+            <li>
+              <strong>Hardcoded strings.</strong> Anything that does not change is
+              not going through the catalog.
+            </li>
+            <li>
+              <strong>Layouts that break on longer text.</strong> German and
+              Finnish routinely run 30 to 50 percent longer than English. Padding
+              past the longest real translation proves the layout against all 35 at
+              once.
+            </li>
+            <li>
+              <strong>Concatenation.</strong> A string assembled from fragments
+              shows its seams immediately.
+            </li>
+          </ul>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why are translations bundled rather than downloaded?</span>
+              <span class="a">Because a translation download is a network call, which is both a fingerprint and a dependency that fails in exactly the conditions this app exists for. A user in a blackout would get an English interface at the moment they most need their own language. The cost is bundle size, 1,535 strings times 35 languages, which is a few hundred kilobytes of text and entirely affordable.</span>
+            </li>
+            <li>
+              <span class="q">Why write plural rules by hand instead of using a polyfill?</span>
+              <span class="a">Hermes has no <code>Intl.PluralRules</code>, so something has to provide it. The usual answer, FormatJS, brings a dependency, a locale-data module per language, a patched global <code>Intl</code>, and a documented Android startup cost. The 35 shipped languages reduce to nine distinct rule shapes, so nine small functions replace all of that. It is only defensible because <code>plurals.test.ts</code> checks every rule against Node's full-ICU <code>Intl.PluralRules</code>, which is the reference implementation.</span>
+            </li>
+            <li>
+              <span class="q">What is bidi isolation and why is it done in one place?</span>
+              <span class="a">A placeholder holds text of unknown direction. Without isolation, the Unicode bidirectional algorithm resolves the punctuation around it against whichever way that text reads, so an Arabic name in an English sentence drags the full stop to the wrong side. Wrapping every substituted value in FSI and PDI marks makes it one opaque neutral unit. It is done once in <code>interpolate</code> so every key gets it, because doing it per call site means remembering it 1,535 times and the failure is invisible to anyone testing in English.</span>
+            </li>
+            <li>
+              <span class="q">Why is a translated string never written to storage?</span>
+              <span class="a">Because it freezes in the language of the day it was stored. A user who switches from English to Arabic would find their old system rows still in English forever, and there is no way to tell which stored strings came from a catalog. Persisted rows keep a <code>systemKey</code> instead and translate on render, so the whole history changes language with the setting.</span>
+            </li>
+            <li>
+              <span class="q">Why does the mention parser matter for security or correctness?</span>
+              <span class="a">Because a mention drives muting and notifications. If the closing boundary is an ASCII punctuation class, then "@name。" in Japanese, "@name،" in Arabic, or "@name।" in Hindi is not recognised as a mention. The user is not notified, their mute rules do not apply, and nothing looks broken. It is a feature that silently does not work for a third of the shipped languages, which is exactly the kind of failure that never gets reported as a bug.</span>
+            </li>
+            <li>
+              <span class="q">Why is the monospace font restricted to "machine data"?</span>
+              <span class="a">Because JetBrains Mono covers Latin, Greek and Cyrillic and none of the other ten scripts shipped. Setting it on prose means a Bengali or Amharic user gets fallback glyphs or tofu boxes. The rule that follows is mechanical: a value from a formatter or a constant may use the mono face, a value that came through a catalog key is prose and uses the system face.</span>
+            </li>
+            <li>
+              <span class="q">Someone proposes sending a locale tag in the announce so peers can localise system messages. Respond.</span>
+              <span class="a">No. Nothing on the wire carries a language today, which means a Persian reader and an English one are indistinguishable at the protocol layer, and a courier holding sealed mail for either cannot tell them apart. A locale tag would be a persistent identifying attribute broadcast to every device in radio range and every relay, narrowing who someone is in exactly the situations where that matters most. System messages are rendered from a key locally, which achieves the same result with no wire change.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 04: Networking from scratch. Bits to the internet: IP, TCP, ports, DNS, mDNS, LAN, WAN, NAT." />
+    <title>04 Networking from scratch · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 04 · Foundations</p>
+          <h1>Networking from scratch</h1>
+          <p class="kt-lede">
+            Airhop exists because the normal way computers talk has a set of
+            hidden dependencies. To understand what it removes, you first have to
+            see what is normally there. This chapter builds the internet from
+            nothing, then shows exactly which parts Airhop keeps.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#layers">The layer cake</a></li>
+              <li><a href="#addresses">Addresses: MAC, IP, port</a></li>
+              <li><a href="#tcpudp">TCP and UDP</a></li>
+              <li><a href="#dns">DNS, and what it costs you</a></li>
+              <li><a href="#mdns">mDNS, the local cousin</a></li>
+              <li><a href="#lanwan">LAN, WAN, NAT</a></li>
+              <li><a href="#http">HTTP, TLS, WebSocket</a></li>
+              <li><a href="#server">What a "server" actually is</a></li>
+              <li><a href="#failures">Every way a network fails</a></li>
+              <li><a href="#airhop">Which parts Airhop uses</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Sending a message on the internet is like posting a letter, except
+              the postal system has several separate jobs. One part writes the
+              address on the envelope. One part decides which roads the van
+              takes. One part checks the letter arrived and asks again if it did
+              not. And one part looks up a person's street address when all you
+              know is their name. Each job is done by a different set of rules,
+              and they are stacked on top of each other. Airhop keeps the top job,
+              the actual letter, and throws away almost everything below it.
+            </p>
+          </div>
+
+          <h2 id="layers">The layer cake</h2>
+          <p>
+            Networking is built in layers. Each layer only talks to the one
+            directly above and below it, and each one adds its own header to the
+            front of whatever it was handed.
+          </p>
+          <pre class="ascii">
+  WHAT YOU SEND                    "hello"
+        │
+        ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │ 7  APPLICATION   HTTP, WebSocket, Nostr, Airhop's own packets │
+  │                  "what does this data MEAN"                   │
+  ├──────────────────────────────────────────────────────────────┤
+  │ 6  PRESENTATION  TLS encryption, compression                  │
+  ├──────────────────────────────────────────────────────────────┤
+  │ 5  SESSION       "are we still talking?"                      │
+  ├──────────────────────────────────────────────────────────────┤
+  │ 4  TRANSPORT     TCP or UDP. PORTS live here.                 │
+  │                  "which PROGRAM on that machine"              │
+  ├──────────────────────────────────────────────────────────────┤
+  │ 3  NETWORK       IP. ADDRESSES and ROUTING live here.         │
+  │                  "which MACHINE, anywhere on Earth"           │
+  ├──────────────────────────────────────────────────────────────┤
+  │ 2  DATA LINK     Ethernet, WiFi, BLUETOOTH. MAC addresses.    │
+  │                  "which device on THIS cable or radio"        │
+  ├──────────────────────────────────────────────────────────────┤
+  │ 1  PHYSICAL      copper, fibre, RADIO WAVES                   │
+  │                  "how a 1 differs from a 0"                   │
+  └──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+  WHAT GOES ON THE WIRE   [L2 hdr][L3 hdr][L4 hdr][L7 data][L2 tail]
+</pre>
+          <p>
+            The OSI model above is a teaching tool rather than a description of
+            real code. What actually ships is four layers: link, internet,
+            transport, application. But the seven-layer version is useful here
+            because it makes one point clearly: <strong>Airhop deletes layers 3,
+            4 and 5 entirely on its offline path.</strong>
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Layer</th><th>A normal messenger</th><th>Airhop over Bluetooth</th></tr></thead>
+              <tbody>
+                <tr><td>Application</td><td>Its own protocol over HTTPS</td><td><strong>Airhop's own packet format</strong></td></tr>
+                <tr><td>Presentation</td><td>TLS</td><td><strong>Noise XX, its own encryption</strong></td></tr>
+                <tr><td>Session</td><td>HTTP keep-alive, a socket</td><td><strong>A Noise session, transport-independent</strong></td></tr>
+                <tr><td>Transport</td><td>TCP with ports</td><td><span class="pill bad">absent</span> There are no ports.</td></tr>
+                <tr><td>Network</td><td>IP with global routing</td><td><span class="pill bad">absent</span> There are no IP addresses.</td></tr>
+                <tr><td>Data link</td><td>WiFi or Ethernet</td><td>Bluetooth LE, GATT</td></tr>
+                <tr><td>Physical</td><td>Fibre, copper, radio</td><td>2.4 GHz radio</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The insight worth carrying forward</p>
+            <p>
+              Airhop's mesh is <strong>layer 2 plus layer 7</strong>, with
+              nothing in between. There is no IP address for a peer, no port to
+              connect to, and no routing table anywhere. A peer ID is not an
+              address in the network sense: it is a name, and delivery works by
+              flooding rather than by routing. That is why the whole system
+              survives when "the internet" is gone, because it was never using
+              the internet's layers in the first place.
+            </p>
+          </div>
+
+          <h2 id="addresses">Addresses: MAC, IP, port</h2>
+          <p>
+            Three different kinds of address exist, at three different layers, and
+            they answer three different questions.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Address</th><th>Layer</th><th>Looks like</th><th>Question it answers</th><th>Scope</th></tr></thead>
+              <tbody>
+                <tr><td><strong>MAC</strong></td><td>2</td><td><code>a4:83:e7:1c:9f:02</code></td><td>Which device on this cable or radio?</td><td>One network segment. Never routed.</td></tr>
+                <tr><td><strong>IP</strong></td><td>3</td><td><code>93.184.216.34</code> or <code>2606:2800:220:1::</code></td><td>Which machine, anywhere on Earth?</td><td>Global (or private, see NAT)</td></tr>
+                <tr><td><strong>Port</strong></td><td>4</td><td><code>443</code></td><td>Which program on that machine?</td><td>One machine</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  A FULL DESTINATION IS ALL THREE
+
+     93.184.216.34 : 443
+     └──────┬─────┘  └┬┘
+       which machine   which program on it
+
+  and to actually get the first packet out of your house, your machine
+  also needs the MAC address of the router, which it learns by shouting
+  "who has 192.168.1.1?" onto the local network (ARP).
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Well-known port</th><th>Service</th></tr></thead>
+              <tbody>
+                <tr><td>53</td><td>DNS</td></tr>
+                <tr><td>80</td><td>HTTP</td></tr>
+                <tr><td>443</td><td>HTTPS, and therefore <code>wss://</code> WebSockets</td></tr>
+                <tr><td>5353</td><td><strong>mDNS</strong></td></tr>
+                <tr><td>9050</td><td>Tor SOCKS, the C implementation's default. Airhop uses 39050 for its own embedded client so the two cannot be confused.</td></tr>
+                <tr><td>39050</td><td><strong>Arti's SOCKS, which Airhop uses on iOS</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Bluetooth has a MAC address (and iOS deliberately rotates it, which
+            is why a returning iPhone can appear as a brand new advertiser and why
+            Airhop has a 15 second duplicate-link reaper). It has
+            <strong>no IP address and no ports at all</strong>. The equivalent of
+            a port in GATT is the characteristic UUID, and Airhop uses exactly
+            one.
+          </p>
+
+          <h2 id="tcpudp">TCP and UDP</h2>
+          <p>Two transports, and the difference is entirely about promises.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>TCP</th><th>UDP</th></tr></thead>
+              <tbody>
+                <tr><td>Connection</td><td>Yes, a three-way handshake first</td><td>No. Just send.</td></tr>
+                <tr><td>Delivery</td><td><strong>Guaranteed</strong>, or it errors</td><td>Best effort. May vanish silently.</td></tr>
+                <tr><td>Order</td><td><strong>Guaranteed</strong></td><td>None</td></tr>
+                <tr><td>Duplicates</td><td>Removed</td><td>Possible</td></tr>
+                <tr><td>Flow control</td><td>Yes, it slows down when the receiver is full</td><td>None</td></tr>
+                <tr><td>Overhead</td><td>20+ byte header, plus acknowledgements</td><td>8 byte header</td></tr>
+                <tr><td>Head-of-line blocking</td><td><strong>Yes.</strong> One lost packet stalls everything behind it.</td><td>No</td></tr>
+                <tr><td>Used for</td><td>Web, email, WebSocket, anything that must arrive</td><td>DNS, video calls, games, mDNS</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  TCP THREE-WAY HANDSHAKE, before any data moves
+
+     client ──── SYN ─────────▶ server
+     client ◀─── SYN, ACK ───── server
+     client ──── ACK ─────────▶ server
+     ... now data ...
+
+  That is one full round trip before a single byte of your message.
+  Add TLS and it is two or three. On a slow link this is why a page
+  feels slow before anything has been downloaded.
+</pre>
+          <div class="box">
+            <p class="box-title">Where this shows up in Airhop</p>
+            <p>
+              Bluetooth GATT is closer to TCP in behaviour: a link is
+              established, and writes on a given link arrive in order. The
+              simulation's radio fabric encodes exactly that, with reordering
+              <strong>off by default</strong> because GATT does not do it, while
+              loss, duplication and corruption are modelled and also off by
+              default.
+            </p>
+            <p>
+              But GATT is unreliable in a way TCP is not: a write can simply be
+              refused when the queue is full, which is why Airhop's fragment
+              sender backs off 60 ms and retries rather than treating a refusal as
+              a dead link. The mesh <em>above</em> that behaves like UDP: packets
+              may be lost, duplicated by multiple paths, and arrive out of order,
+              which is why there is a deduplicator and why the Noise transport
+              carries a sliding replay window that tolerates 1024 messages of
+              reordering.
+            </p>
+          </div>
+
+          <h2 id="dns">DNS, and what it costs you</h2>
+          <p>
+            You type a name. Something has to turn it into an IP address. That
+            something is DNS, and it is a global, hierarchical, mostly plaintext
+            lookup system.
+          </p>
+          <pre class="ascii">
+  YOU ASK FOR relay.damus.io
+
+  1. your machine asks its RESOLVER (usually your ISP's, or 8.8.8.8)
+  2. resolver asks a ROOT server:     "who handles .io?"
+  3. resolver asks the .io server:    "who handles damus.io?"
+  4. resolver asks damus.io's server: "what is relay.damus.io?"
+  5. answer: 1.2.3.4, cached for a while (the TTL)
+
+  FOUR PARTIES now know you asked for that name, at that time,
+  from your IP address. Classic DNS is UNENCRYPTED UDP on port 53.
+</pre>
+          <div class="box bad">
+            <p class="box-title">DNS is a surveillance and censorship chokepoint</p>
+            <ul>
+              <li><strong>Your ISP sees every name you look up.</strong> Even with HTTPS everywhere, the lookup itself is usually in the clear.</li>
+              <li><strong>Blocking a name is the cheapest censorship there is.</strong> The resolver simply answers "no such name" or points somewhere else. This is the most common form of national-level blocking.</li>
+              <li><strong>It is a dependency you did not choose.</strong> If DNS is down, everything is down, even though the servers are fine.</li>
+            </ul>
+            <p>
+              DNS over HTTPS and DNS over TLS encrypt the query, which hides it
+              from the ISP and moves the same knowledge to whoever runs the
+              encrypted resolver.
+            </p>
+          </div>
+          <p>
+            This is one of the three hidden dependencies chapter
+            <a href="01-what-is-airhop.html">01</a> names: a company's servers,
+            reachable over an ISP's network, <strong>resolved by DNS</strong>.
+            Airhop's Bluetooth path has no names to resolve, so DNS cannot break
+            it, block it, or observe it. Its Nostr path does use DNS, which is one
+            of several reasons that path is treated as the weaker one.
+          </p>
+
+          <h2 id="mdns">mDNS, the local cousin</h2>
+          <p class="kt-note">
+            Airhop uses mDNS for real: it is how the LAN transport finds peers on a
+            shared network. Chapter <a href="29-lan.html">29</a> is that
+            transport, including what a published record exposes.
+          </p>
+          <p>
+            Multicast DNS answers the same question with none of the hierarchy.
+            It is how your laptop finds a printer without anyone configuring
+            anything.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>DNS</th><th>mDNS</th></tr></thead>
+              <tbody>
+                <tr><td>Who answers</td><td>A hierarchy of servers, globally</td><td><strong>The device itself</strong>, on the local network</td></tr>
+                <tr><td>How you ask</td><td>Unicast to your resolver, port 53</td><td><strong>Multicast to everyone</strong>, port 5353</td></tr>
+                <tr><td>Names</td><td><code>example.com</code></td><td><code>printer.local</code></td></tr>
+                <tr><td>Scope</td><td>The world</td><td>One network segment. Never routed off it.</td></tr>
+                <tr><td>Infrastructure</td><td>Root servers, registrars, resolvers</td><td><strong>None at all</strong></td></tr>
+                <tr><td>Service discovery</td><td>Separate (SRV records)</td><td>Built in: DNS-SD, <code>_service._tcp.local</code></td></tr>
+                <tr><td>Also called</td><td></td><td>Bonjour (Apple), Avahi (Linux), NSD (Android)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  HOW mDNS SERVICE DISCOVERY WORKS
+
+  A device that offers something ANNOUNCES itself:
+
+     "I am airhop-3a9f._airhop-mesh._tcp.local
+      at 192.168.1.42 port 7420"
+
+  A device that wants something MULTICASTS a question:
+
+     "who offers _airhop-mesh._tcp.local?"
+
+  Everyone on the network hears it. The ones that match answer.
+  No server, no registry, no configuration, no internet.
+
+  THE SERVICE NAME FORMAT
+
+     _airhop-mesh . _tcp . local
+     └────┬─────┘   └─┬┘   └─┬─┘
+      what it is    over   only on
+                    TCP    this network
+</pre>
+          <div class="box warn">
+            <p class="box-title">Airhop's designed and unshipped LAN transport</p>
+            <p>
+              <code>ARCHITECTURE.md</code> specifies mDNS discovery on
+              <code>_airhop-mesh._tcp</code> plus TCP links carrying the same
+              packet frames Bluetooth carries. It is not implemented. Chapter
+              <a href="28-transports.html">28</a> covers what it would buy and why
+              it matters: it is the only proposed local transport that works
+              <em>iPhone to Android</em>, because WiFi Aware is Android-only and
+              Apple's equivalent cannot interoperate with it.
+            </p>
+            <p>
+              The three real constraints are also worth knowing, because they are
+              why it is harder than it looks. Most guest and venue WiFi has
+              <strong>client isolation</strong>, which blocks device-to-device
+              traffic at the access point and cannot be detected before trying.
+              mDNS itself is often filtered even where ordinary traffic works. And
+              a TCP socket has no iOS background mode equivalent to
+              <code>bluetooth-central</code>, so a locked iPhone drops the link.
+            </p>
+          </div>
+
+          <h2 id="lanwan">LAN, WAN, NAT</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Term</th><th>Means</th><th>Example</th></tr></thead>
+              <tbody>
+                <tr><td><strong>LAN</strong></td><td>Local area network. One building, one router, devices that can address each other directly.</td><td>Your home WiFi</td></tr>
+                <tr><td><strong>WAN</strong></td><td>Wide area network. Everything beyond your router.</td><td>The internet</td></tr>
+                <tr><td><strong>PAN</strong></td><td>Personal area network. A few metres, usually Bluetooth.</td><td><strong>Airhop's mesh</strong></td></tr>
+                <tr><td><strong>NAT</strong></td><td>Network address translation. Many private addresses hiding behind one public one.</td><td>Every home router</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  WHY NAT EXISTS AND WHY IT HURTS
+
+  There are only ~4.3 billion IPv4 addresses and far more devices.
+  So your router hands out PRIVATE addresses that mean nothing outside:
+
+     192.168.x.x     10.x.x.x      172.16-31.x.x
+
+  ┌─────────────────────────────────┐
+  │  YOUR HOME                       │
+  │   phone   192.168.1.42           │
+  │   laptop  192.168.1.43           │──▶ ROUTER ──▶ INTERNET
+  │   TV      192.168.1.44           │   203.0.113.7 (one public IP)
+  └─────────────────────────────────┘
+
+  OUTGOING works: the router remembers which internal device asked,
+  and sends the reply back to it.
+
+  INCOMING DOES NOT. A packet arriving at 203.0.113.7 has no way to
+  say which of the three devices it is for. There is nothing to
+  translate it back to.
+
+  THEREFORE: a phone behind NAT CANNOT BE A SERVER.
+</pre>
+          <div class="box bad">
+            <p class="box-title">NAT is why peer-to-peer over the internet is hard</p>
+            <p>
+              Two phones, each behind their own router, cannot simply connect to
+              each other. Neither has a reachable address. The industry's answers
+              are all workarounds: STUN (ask a server what your public address
+              looks like), TURN (relay everything through a server), ICE
+              (systematically try every combination), hole punching (both sides
+              send outward at once and hope the routers open matching holes).
+            </p>
+            <p>
+              <strong>Every one of those needs a server.</strong> That is a large
+              part of why Airhop's internet path is Nostr relays rather than
+              direct peer-to-peer: a relay is a machine with a real address that
+              both parties can reach outbound, which sidesteps NAT entirely.
+            </p>
+            <p>
+              And it is a large part of why Bluetooth is the foundation. Two
+              phones in a room have no NAT between them, no addresses to
+              translate, and no router to configure. The hardest problem in
+              internet peer-to-peer simply does not exist there.
+            </p>
+          </div>
+          <p>
+            IPv6 has enough addresses that NAT is unnecessary, and every device
+            can have a globally reachable address. Adoption is partial and
+            uneven, so it does not solve the problem in practice. WiFi Aware
+            sidesteps it differently: the peer's address is a
+            <strong>link-local IPv6</strong> delivered in the framework's network
+            info, valid only on that direct radio link, which is why Airhop's WiFi
+            transport needs Android API 29 even though discovery works at 26.
+          </p>
+
+          <h2 id="http">HTTP, TLS, WebSocket</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Protocol</th><th>Shape</th><th>Airhop uses it for</th></tr></thead>
+              <tbody>
+                <tr><td><strong>HTTP</strong></td><td>Request, response. The client asks, the server answers, done.</td><td>Cashu mint calls only.</td></tr>
+                <tr><td><strong>HTTPS</strong></td><td>HTTP inside TLS.</td><td>Same.</td></tr>
+                <tr><td><strong>TLS</strong></td><td>Encryption plus <strong>server authentication by certificate</strong>.</td><td>Under HTTPS and <code>wss://</code>.</td></tr>
+                <tr><td><strong>WebSocket</strong></td><td>Starts as an HTTP request, then <strong>upgrades to a persistent two-way stream</strong>. Either side can send at any time.</td><td><strong>Every Nostr relay connection.</strong></td></tr>
+                <tr><td><strong>SOCKS5</strong></td><td>A proxy protocol: "open a connection to X on my behalf".</td><td>How iOS routes WebSockets through Arti.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            WebSocket is the right shape for Nostr because a relay must be able
+            to <em>push</em> events to a subscribed client without being asked.
+            Plain HTTP cannot do that: the client would have to poll, which is
+            slow, wasteful, and would make a mesh gateway useless.
+          </p>
+          <div class="box">
+            <p class="box-title">Why TLS certificates matter, and why Airhop cannot use them for the mesh</p>
+            <p>
+              TLS proves you are talking to the real <code>relay.damus.io</code>
+              because a certificate authority signed a statement to that effect,
+              and your device ships with a list of authorities it trusts. That
+              works because there is a name, a server, and a hierarchy of trusted
+              third parties.
+            </p>
+            <p>
+              None of those exist on a Bluetooth mesh. There is no name to
+              certify, no authority to ask, and no way to reach one offline. So
+              Airhop authenticates by <strong>raw public key</strong> instead,
+              which is exactly what Noise is designed for. Chapter
+              <a href="17-noise.html">17</a>.
+            </p>
+          </div>
+          <p>
+            One consequence of the relay URL rules in chapter
+            <a href="24-nostr.html">24</a> follows directly from this section:
+            relay addresses are restricted to <code>wss://</code> with a real DNS
+            hostname, no bare IPs, and no <code>.local</code> or
+            <code>localhost</code>. Allowing <code>ws://</code> would mean
+            permitting cleartext for the whole app on Android, because its network
+            security config cannot scope an exception to an address range, and
+            that same permission covers the mint URLs that carry bearer ecash.
+          </p>
+
+          <h2 id="server">What a "server" actually is</h2>
+          <p>
+            "No central server" is the project's fourth principle, so it is worth
+            being precise about what is being refused.
+          </p>
+          <pre class="ascii">
+  A SERVER IS A MACHINE THAT
+
+    1. has a reachable address (so it is not behind NAT)
+    2. is always on (so it can be reached at any time)
+    3. someone OWNS and PAYS FOR
+    4. someone can therefore be COMPELLED to act on
+
+  It is (3) and (4) that matter. The technical part is easy.
+  The problem is that a machine somebody owns is a machine that can
+  be subpoenaed, seized, taxed, blocked, or switched off.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Model</th><th>Who runs the server</th><th>What they can do</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Centralised</strong> (WhatsApp, Telegram)</td><td>One company</td><td>Everything. Log metadata, comply with orders, shut it down.</td></tr>
+                <tr><td><strong>Federated</strong> (Matrix, Mastodon, email)</td><td>Many operators, one per user</td><td>Your operator sees your data and holds your identity. Better, still a server.</td></tr>
+                <tr><td><strong>Relay</strong> (Nostr)</td><td>Many, none of them yours</td><td><strong>Store and forward signed blobs.</strong> No account, no identity held. Can drop, cannot forge or read.</td></tr>
+                <tr><td><strong>Serverless</strong> (Airhop's mesh, Briar)</td><td><strong>Nobody</strong></td><td>Nothing. There is nothing to compel.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop is serverless on layer 2 and relay-based on layer 3, and it
+            operates none of the relays. The chosen third parties are relays (many,
+            interchangeable, hold no account) and mints (one at a time, chosen by
+            the user, hold the money and nothing else). Both are named as trust
+            boundaries rather than hidden.
+          </p>
+
+          <h2 id="failures">Every way a network fails</h2>
+          <p>
+            The point of this table is that "the internet is down" is at least six
+            different problems, and Airhop is immune to different numbers of them
+            depending on the path.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Failure</th><th>What actually breaks</th><th>Airhop over Bluetooth</th><th>Airhop over Nostr</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Power cut</strong></td><td>Cell towers and routers lose power. Handsets show bars from a tower on backup that has no backhaul.</td><td><span class="pill ok">works</span></td><td><span class="pill bad">no</span></td></tr>
+                <tr><td><strong>National shutdown</strong></td><td>Operators are ordered to cut data. Often DNS and BGP level.</td><td><span class="pill ok">works</span></td><td><span class="pill bad">no</span></td></tr>
+                <tr><td><strong>DNS blocking</strong></td><td>Names stop resolving. Servers are fine.</td><td><span class="pill ok">works, no names to resolve</span></td><td><span class="pill bad">relays unreachable by name</span></td></tr>
+                <tr><td><strong>Deep packet inspection</strong></td><td>Specific protocols are recognised and dropped. This is what blocks Tor.</td><td><span class="pill ok">works, it is a local radio</span></td><td><span class="pill ok">bridges available</span></td></tr>
+                <tr><td><strong>Congestion</strong></td><td>The network is up and saturated. Everything times out.</td><td><span class="pill ok">works, and density helps</span></td><td><span class="pill warn">degrades</span></td></tr>
+                <tr><td><strong>Client isolation</strong></td><td>Venue WiFi blocks device-to-device traffic at the access point.</td><td><span class="pill ok">unaffected</span></td><td><span class="pill ok">unaffected</span></td></tr>
+                <tr><td><strong>NAT with no relay</strong></td><td>Neither peer is reachable.</td><td><span class="pill ok">no NAT exists</span></td><td><span class="pill ok">relays are outbound-reachable</span></td></tr>
+                <tr><td><strong>A company shuts down</strong></td><td>The service stops existing.</td><td><span class="pill ok">no company involved</span></td><td><span class="pill ok">300+ independent relays</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="airhop">Which parts Airhop uses</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Concept</th><th>Bluetooth path</th><th>Nostr path</th><th>WiFi Aware path</th></tr></thead>
+              <tbody>
+                <tr><td>MAC address</td><td>Yes, and iOS rotates it</td><td>Underneath, invisibly</td><td>Yes</td></tr>
+                <tr><td>IP address</td><td><strong>None</strong></td><td>Yes</td><td>Link-local IPv6 only</td></tr>
+                <tr><td>Port</td><td><strong>None.</strong> One GATT characteristic instead.</td><td>443</td><td>Yes</td></tr>
+                <tr><td>DNS</td><td><strong>None</strong></td><td>Yes, to reach relays</td><td>None</td></tr>
+                <tr><td>mDNS</td><td>Not used. <span class="pill warn">designed for the LAN transport, unshipped</span></td><td>n/a</td><td>Not needed; the framework does discovery</td></tr>
+                <tr><td>TCP</td><td>No. GATT instead.</td><td>Yes, under the WebSocket</td><td>Yes</td></tr>
+                <tr><td>TLS</td><td><strong>No.</strong> Noise XX instead.</td><td>Yes, plus Noise-independent gift wrap</td><td>No, Noise instead</td></tr>
+                <tr><td>Routing</td><td><strong>None.</strong> Flooding with a hop limit.</td><td>The internet's</td><td>Direct link only</td></tr>
+                <tr><td>NAT traversal</td><td><strong>Not needed</strong></td><td>Not needed, relays are outbound</td><td>Not needed</td></tr>
+                <tr><td>A server</td><td><strong>None</strong></td><td>Relays, run by others</td><td>None</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The one-sentence summary</p>
+            <p>
+              Airhop's offline path replaces addressing with names, routing with
+              flooding, TLS with Noise, and servers with nothing, which is why the
+              failures that stop every other messenger do not reach it.
+            </p>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">A peer ID looks like an address. Is it one?</span>
+              <span class="a">No. It is a <em>name</em>, derived from a public key, and nothing routes on it. There is no table anywhere mapping peer IDs to locations, because no node knows the topology. A directed packet carries the recipient's ID and is <strong>flooded</strong>; every node relays it and only the addressee decrypts it. The only thing resembling routing is a direct-link shortcut when a peer has already been mapped to a specific radio link, and that is an optimisation, not the delivery mechanism.</span>
+            </li>
+            <li>
+              <span class="q">Explain the difference between DNS and mDNS to a junior engineer.</span>
+              <span class="a">Same question, opposite architecture. DNS asks a global hierarchy of servers, unicast on port 53, and the answer comes from infrastructure somebody operates, which means four parties learn what you looked up and blocking a name is trivial. mDNS multicasts the question to everyone on the local network on port 5353, and <em>the device that owns the name answers for itself</em>. No servers, no registrars, no configuration, and it never leaves the network segment. That is why it is the right discovery mechanism for a local mesh and useless for reaching anything on the internet.</span>
+            </li>
+            <li>
+              <span class="q">Why is peer-to-peer over the internet hard, and why is it easy over Bluetooth?</span>
+              <span class="a">NAT. There are not enough IPv4 addresses, so home routers give devices private addresses that mean nothing outside, and translate outbound traffic through one shared public address. Inbound has nothing to translate back to, so a phone behind NAT cannot be a server, and two phones behind different routers cannot address each other. Every workaround (STUN, TURN, ICE, hole punching) needs a server. Over Bluetooth there are no IP addresses, no routers, and no translation, so the hardest problem in internet peer-to-peer simply does not exist.</span>
+            </li>
+            <li>
+              <span class="q">Why does Airhop not use TLS on the mesh?</span>
+              <span class="a">TLS authenticates a server by certificate, which requires a name, a certificate authority, and a way to reach or pre-trust one. A mesh of strangers has no names to certify and no authority reachable offline. Self-signed certificates would reduce TLS to raw public key authentication with a large ASN.1 parser attached, which is attack surface for no gain. Noise does raw public key authentication directly, with no PKI, which is exactly the shape the problem has.</span>
+            </li>
+            <li>
+              <span class="q">"The internet is down" is not one failure. Name three and say which ones Airhop survives.</span>
+              <span class="a">A power cut takes out towers and routers while handsets still show bars. A national shutdown cuts operator data, usually at the DNS and routing level. Congestion leaves everything up and saturated so requests time out. Airhop's Bluetooth path survives all three, because it is a local radio with no addressing, no routing, no names and no servers. Its Nostr path survives none of them, which is exactly why the internet layer is an extension rather than the foundation.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

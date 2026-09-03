@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 19: Messaging protocols compared. Signal, MLS, Bramble, Scuttlebutt, OTR, Megolm, Session, MTProto." />
+    <title>19 Messaging protocols compared · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 19 · Cryptography</p>
+          <h1>Messaging protocols compared</h1>
+          <p class="kt-lede">
+            Airhop's stack is Noise XX plus Double Ratchet. Ten other serious
+            answers exist. This chapter is what each one does, what it optimises
+            for, where it fails, and precisely why it does not fit a Bluetooth
+            mesh with no servers.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#axes">The four axes</a></li>
+              <li><a href="#matrix">The comparison, in one table</a></li>
+              <li><a href="#signal">Signal</a></li>
+              <li><a href="#mls">MLS and Marmot</a></li>
+              <li><a href="#bramble">Bramble and Briar</a></li>
+              <li><a href="#ssb">Secure Scuttlebutt</a></li>
+              <li><a href="#olm">Matrix: Olm and Megolm</a></li>
+              <li><a href="#session">Session</a></li>
+              <li><a href="#otr">OTR</a></li>
+              <li><a href="#others">MTProto, iMessage, Threema, Bridgefy</a></li>
+              <li><a href="#why">Why Airhop chose what it chose</a></li>
+              <li><a href="#honest">Where Airhop is genuinely weaker</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Lots of clever people have built ways for two phones to talk
+              privately. They mostly all work. The differences come from what each
+              one assumed: that there is always internet, that there is a company
+              running a computer in the middle, that everyone is in the group at
+              the same time, or that people meet in person first. Airhop had to
+              assume almost none of those, so it picked the pieces that survive
+              without them.
+            </p>
+          </div>
+
+          <h2 id="axes">The four axes</h2>
+          <p>
+            Every protocol here is good. They differ because they are solving
+            different problems. Four questions separate them.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Axis</th><th>The question</th><th>Airhop's constraint</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Server</strong></td><td>Does it need a machine somebody operates?</td><td><strong>No server may exist.</strong> Principle 4.</td></tr>
+                <tr><td><strong>Synchrony</strong></td><td>Must both parties be online at the same time?</td><td><strong>Rarely.</strong> The whole product is the offline case.</td></tr>
+                <tr><td><strong>Ordering</strong></td><td>Does it need messages in a global order?</td><td><strong>Impossible.</strong> A flooding mesh with partitions has no total order and cannot manufacture one.</td></tr>
+                <tr><td><strong>Group size</strong></td><td>How many members, and how cheap is a change?</td><td><strong>16.</strong> Creator-signed roster, fixed by bitchat compatibility.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The ordering constraint is the one people miss</p>
+            <p>
+              Most modern group protocols advance through <em>epochs</em>, and
+              every member must apply the same sequence of changes in the same
+              order to arrive at the same key. That requires a delivery service
+              that imposes an order.
+            </p>
+            <p>
+              A Bluetooth mesh cannot provide one. Packets flood, arrive by
+              different paths at different times, get deduplicated locally, and
+              partitions form and heal continuously. Two members in separate
+              partitions would advance to incompatible states with no reconciliation
+              path. That single fact rules out MLS, and it is worth understanding
+              because MLS is otherwise strictly better than what Airhop does for
+              groups.
+            </p>
+          </div>
+
+          <h2 id="matrix">The comparison, in one table</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Protocol</th><th>Used by</th><th>Server</th><th>Offline</th><th>Per-msg FS</th><th>PCS</th><th>Deniable</th><th>Groups</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>Noise XX + DR</strong></td><td><strong>Airhop</strong></td><td><span class="pill ok">none</span></td><td><span class="pill ok">yes</span></td><td>Yes</td><td>Yes</td><td>Yes</td><td>16, epoch key</td></tr>
+                <tr><td>Signal protocol</td><td>Signal, WhatsApp</td><td><span class="pill bad">required</span></td><td>No</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Pairwise fan-out</td></tr>
+                <tr><td>MLS (RFC 9420)</td><td>Marmot, White Noise, Wire</td><td><span class="pill bad">ordered delivery required</span></td><td>No</td><td>Per epoch</td><td><strong>Strongest</strong></td><td>Weaker</td><td><strong>Thousands, log cost</strong></td></tr>
+                <tr><td>Bramble (BTP/BSP)</td><td>Briar</td><td><span class="pill ok">none</span></td><td><span class="pill ok">yes</span></td><td>Yes</td><td>Partial</td><td>Yes</td><td>Small</td></tr>
+                <tr><td>Secure Scuttlebutt</td><td>Patchwork, Manyverse</td><td><span class="pill ok">none, pubs help</span></td><td><span class="pill ok">yes</span></td><td><strong>No</strong></td><td>No</td><td>No</td><td>Private boxes</td></tr>
+                <tr><td>Olm + Megolm</td><td>Matrix, Element</td><td><span class="pill bad">homeserver</span></td><td>No</td><td>Olm yes, <strong>Megolm ratcheted forward only</strong></td><td>Partial</td><td>Partial</td><td>Large, shared session key</td></tr>
+                <tr><td>Session protocol</td><td>Session</td><td><span class="pill warn">service nodes</span></td><td>No</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Small</td></tr>
+                <tr><td>OTR</td><td>Pidgin, legacy XMPP</td><td><span class="pill warn">transport</span></td><td><strong>No, both must be online</strong></td><td>Yes</td><td>Yes</td><td><strong>Its whole point</strong></td><td>None</td></tr>
+                <tr><td>MTProto 2.0</td><td>Telegram</td><td><span class="pill bad">required</span></td><td>No</td><td>Secret chats only</td><td>Limited</td><td>Partial</td><td><strong>Not E2E at all</strong></td></tr>
+                <tr><td>PQ3</td><td>iMessage</td><td><span class="pill bad">Apple</span></td><td>No</td><td>Yes</td><td>Yes, <strong>post-quantum</strong></td><td>Weaker</td><td>Pairwise</td></tr>
+                <tr><td>Ibex</td><td>Threema</td><td><span class="pill bad">required</span></td><td>No</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Pairwise</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Look down the "Server" and "Offline" columns. Only three entries have
+            neither a server nor an online requirement: Airhop, Briar and
+            Scuttlebutt. Those are the only real peers, and the rest are solving a
+            different problem well.
+          </p>
+
+          <h2 id="signal">Signal</h2>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Shape</strong></td><td>X3DH to establish, Double Ratchet to maintain. PQXDH adds a post-quantum key exchange alongside X3DH.</td></tr>
+                <tr><td><strong>Optimises for</strong></td><td>Asynchronous messaging with strong forward secrecy, at consumer scale, with a server that is trusted as little as possible.</td></tr>
+                <tr><td><strong>Genuinely excellent</strong></td><td>The Double Ratchet is the best per-message key management scheme anyone has produced. Sealed sender hides the sender from the server. Private contact discovery uses secure enclaves. It is the benchmark, deservedly.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>X3DH, and why Airhop does not use it</h3>
+          <pre class="ascii">
+  X3DH: how to start a session with somebody who is OFFLINE
+
+  Bob publishes to the SERVER, in advance:
+     IK_B    identity key
+     SPK_B   signed prekey, rotated periodically
+     OPK_B   a batch of one-time prekeys
+
+  Alice fetches them and computes FOUR Diffie-Hellmans:
+     DH1 = DH(IK_A, SPK_B)     authenticates Alice to Bob
+     DH2 = DH(EK_A, IK_B)      authenticates Bob to Alice
+     DH3 = DH(EK_A, SPK_B)     forward secrecy
+     DH4 = DH(EK_A, OPK_B)     one-time, extra forward secrecy
+
+  SK = KDF(DH1 || DH2 || DH3 || DH4)
+
+  Bob was never online. He derives the same SK when he wakes up.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Why Airhop does not use X3DH</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Its job is already done.</strong> The Noise XX handshake seeds the ratchet directly, via the exporter secret, so no separate asynchronous key agreement is needed for live sessions.</td></tr>
+                <tr><td><strong>It assumes a server.</strong> Prekeys are published to a key distribution service. Airhop has none, so prekeys are <em>gossiped over the mesh</em> as packet type <code>0x24</code> and never published to Nostr.</td></tr>
+                <tr><td><strong>It does not mutually authenticate in the handshake.</strong> The receiver does not authenticate the sender during the exchange; that comes later. Noise XX authenticates both sides before anything is sent.</td></tr>
+                <tr><td><strong>The offline case has a different shape here.</strong> Airhop's offline path is a one-way sealed envelope carried by a stranger, so Noise X to a one-time prekey gives forward secrecy without a full X3DH construction.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The Double Ratchet itself <em>is</em> adopted, wholesale. Airhop's
+            <code>double-ratchet.ts</code> is Signal's algorithm with Airhop's
+            domain separators. What is rejected is the surrounding infrastructure:
+            X3DH's server, Signal's own relay infrastructure, and the phone number
+            as an identity.
+          </p>
+
+          <h2 id="mls">MLS and Marmot</h2>
+          <p>
+            RFC 9420, the IETF standard for group messaging, and the strongest
+            group construction that exists. <strong>Marmot</strong> brings it to
+            Nostr, and <strong>White Noise</strong> is the messenger built on it,
+            which makes it the most direct comparison to Airhop in this chapter.
+          </p>
+          <pre class="ascii">
+  TREEKEM: why MLS scales where pairwise does not
+
+  PAIRWISE FAN-OUT (Signal's group model)
+     N members, each message encrypted N-1 times.
+     Adding or removing a member: O(N) work, N times over.
+     100 members = 9,900 pairwise operations.
+
+  TREEKEM (MLS)
+     members are LEAVES of a binary tree.
+     each node holds a key derived from its children.
+     the ROOT key is the group secret.
+
+              ROOT
+             /    \
+           AB      CD
+          /  \    /  \
+         A    B  C    D
+
+     To remove C: replace the path from C to the root.
+     That is log2(N) updates, not N.
+     1000 members = ~10 operations instead of 999,000.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>MLS advantage</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Logarithmic membership changes</strong></td><td>Adding or removing at 1000 members is ~10 operations.</td></tr>
+                <tr><td><strong>The strongest PCS available</strong></td><td><em>Any</em> member can force a group-wide key update by committing an update proposal, so recovery does not depend on a specific person replying.</td></tr>
+                <tr><td><strong>Formally analysed</strong></td><td>Machine-checked proofs, an IETF standard, multiple interoperable implementations.</td></tr>
+                <tr><td><strong>Explicit epochs</strong></td><td>Group state is unambiguous. Everyone knows exactly which epoch they are in.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">Why Airhop cannot use MLS, in three parts</p>
+            <ol>
+              <li>
+                <strong>It needs an ordered delivery service.</strong> Epochs
+                advance through commits, and every member must apply the same
+                commit sequence in the same order or their keys diverge. A
+                flooding mesh has no total order and cannot manufacture one. Two
+                members in separate partitions would advance to incompatible
+                epochs with no reconciliation path, and partitions are the
+                <em>normal</em> case here rather than an exception.
+              </li>
+              <li>
+                <strong>Its advantage appears at a scale Airhop does not
+                have.</strong> TreeKEM's logarithmic cost matters at hundreds or
+                thousands. At 16 members, delivering the group key pairwise inside
+                existing Noise sessions is simpler and cheaper.
+              </li>
+              <li>
+                <strong>Interoperability.</strong> Groups are bitchat compatible
+                on the wire: packet type <code>0x25</code>, creator-signed roster,
+                ChaCha20-Poly1305 under an epoch key, domain
+                <code>bitchat-group-v1</code>. Adopting MLS would fork that.
+              </li>
+            </ol>
+          </div>
+          <p>
+            White Noise deserves a fair comparison because it is the closest thing
+            to a competitor. It is Nostr-only, so it needs internet and does not
+            solve the offline case at all. Its group cryptography is genuinely
+            better than Airhop's. If the question is "the best group messenger for
+            people who have connectivity", the answer is not Airhop.
+          </p>
+
+          <h2 id="bramble">Bramble and Briar</h2>
+          <p>
+            The most philosophically similar project to Airhop, and the one worth
+            studying most closely.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Briar</th><th>Airhop</th></tr></thead>
+              <tbody>
+                <tr><td>Transports</td><td>Bluetooth, WiFi, <strong>Tor hidden services</strong></td><td>Bluetooth, WiFi Aware, Nostr relays, Tor</td></tr>
+                <tr><td>Protocol stack</td><td>BTP (transport), BSP (sync), BQP (QR pairing)</td><td>Noise XX, Double Ratchet, gossip sync</td></tr>
+                <tr><td>Contact model</td><td><strong>Mutual, in person or by link.</strong> You cannot message a stranger.</td><td>Open. Anyone in range can be messaged.</td></tr>
+                <tr><td>Sync model</td><td>Every message replicates to contacts who are entitled to it</td><td>Flood plus GCS reconciliation</td></tr>
+                <tr><td>Forward secrecy</td><td>Rotating stream keys, per time period</td><td>Per message, via the ratchet</td></tr>
+                <tr><td>Platforms</td><td><strong>Android and desktop. No iOS.</strong></td><td>iOS and Android</td></tr>
+                <tr><td>Payments</td><td>None</td><td>Cashu ecash</td></tr>
+                <tr><td>Compatible with anything</td><td>No</td><td><strong>bitchat</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">The genuine philosophical difference</p>
+            <p>
+              Briar's model is <strong>mutual contacts only</strong>. You add
+              someone in person or through a link, and only then can you exchange
+              anything. That is stronger against a whole class of attack: there is
+              no way for a stranger to reach you at all, so impersonation, spam and
+              Sybil floods have nowhere to land.
+            </p>
+            <p>
+              Airhop's model is <strong>open</strong>: a public channel anyone in
+              range can join, and DMs to peers you have never met. That is
+              necessary for the crowd scenario, where the useful thing is often
+              hearing from strangers nearby, and it is why so much of chapter
+              <a href="43-threat-model.html">43</a> exists. Briar does not need a
+              Sybil section; Airhop does.
+            </p>
+            <p>
+              Neither is right in general. Briar is stronger for a known network of
+              activists. Airhop is more useful in a crowd of strangers.
+            </p>
+          </div>
+          <p>
+            Briar's absence on iOS is not an oversight: iOS background execution
+            makes a Tor-plus-Bluetooth always-on node very hard, which is exactly
+            the constraint chapter <a href="36-platform.html">36</a> describes.
+            Airhop's answer is to accept weaker background behaviour on iOS rather
+            than not ship there.
+          </p>
+
+          <h2 id="ssb">Secure Scuttlebutt</h2>
+          <p>
+            An append-only log system, and the clearest example of a protocol that
+            is offline-first and yet completely unsuitable here.
+          </p>
+          <pre class="ascii">
+  EVERY IDENTITY IS AN APPEND-ONLY, HASH-CHAINED LOG
+
+     msg 1 ──▶ msg 2 ──▶ msg 3 ──▶ msg 4
+     each signed, each referencing the previous hash
+
+  REPLICATION: you fetch the logs of people you follow, and of
+  people they follow, from anyone who happens to have them. Gossip
+  in the truest sense.
+
+  CONSEQUENCE: THE LOG IS IMMUTABLE AND PERMANENT.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Consequence for Airhop's mission</th></tr></thead>
+              <tbody>
+                <tr><td><strong>No forward secrecy, by design</strong></td><td>The log is meant to be replayable forever. Compromising a key exposes everything that identity ever wrote. This is the opposite of principle 5, ephemerality by default.</td></tr>
+                <tr><td><strong>No deletion</strong></td><td>You cannot unsay anything. There is no panic wipe that reaches other people's copies, and by design there should not be.</td></tr>
+                <tr><td><strong>Single-device identity</strong></td><td>Two devices writing to one log fork it, permanently and unrecoverably.</td></tr>
+                <tr><td><strong>Unbounded storage growth</strong></td><td>You store everyone's history, not just your own.</td></tr>
+                <tr><td><strong>Excellent at</strong></td><td>Eventual consistency with no server, and a social network that genuinely survives disconnection for months.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The lesson worth taking: Scuttlebutt proves that
+            <strong>offline-first does not imply ephemeral</strong>, and the two
+            goals actively fight. Airhop chose ephemerality, which is why messages
+            expire, media is swept after seven days, and gossip windows are
+            measured in minutes rather than forever. Airhop's board posts are the
+            one place it borrows the log idea, and even those cap at seven days.
+          </p>
+
+          <h2 id="olm">Matrix: Olm and Megolm</h2>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Olm</strong></td><td>A Double Ratchet implementation for one-to-one. Sound, and essentially Signal's algorithm.</td></tr>
+                <tr><td><strong>Megolm</strong></td><td>The group answer, and the interesting one. A <em>shared</em> outbound session key per sender, ratcheted <strong>forward only</strong>, distributed to members over Olm.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  MEGOLM'S TRADE
+
+     ratchet forward only:  key_n -> key_n+1, one way
+     you can give somebody key_n and they can read from n onward
+     you CANNOT go backward, so history before n stays closed
+
+  THIS IS WHAT MAKES "share history with a new member" POSSIBLE.
+  It is also what makes it WEAKER: any member holding key_n can
+  read every message from n onward FOREVER, until the session is
+  rotated.
+</pre>
+          <p>
+            Megolm's real-world weakness is not cryptographic, it is operational:
+            key sharing between a user's own devices, and to new members, has been
+            a persistent source of "unable to decrypt" errors and of accidental
+            over-sharing. It is a good illustration that a protocol's usability
+            failures become its security failures, because users turn things off.
+          </p>
+          <p>
+            Airhop's group model is closer to Megolm than to MLS: a shared epoch
+            key, distributed pairwise over Noise sessions. The difference is that
+            Airhop's key does not ratchet at all within an epoch, so a member holds
+            the whole epoch rather than a suffix of it. That is
+            <em>weaker</em> than Megolm on that specific axis, and it is stated
+            plainly in chapter <a href="18-forward-secrecy.html">18</a>.
+          </p>
+
+          <h2 id="session">Session</h2>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Shape</strong></td><td>An X3DH derivative with the Double Ratchet, over the Oxen service node network, which is an onion-routing overlay.</td></tr>
+                <tr><td><strong>Genuinely good</strong></td><td><strong>No phone number and no persistent identifiers at all.</strong> Your account is a public key. Onion routing hides the IP. This is stronger metadata protection than Signal offers.</td></tr>
+                <tr><td><strong>The cost</strong></td><td>The service node network requires staking a token, which reintroduces an operator set with an economic structure. Higher latency. No offline story: you need the network.</td></tr>
+                <tr><td><strong>Notably</strong></td><td>Session <em>removed</em> forward secrecy from its protocol at one point, to make multi-device and message restoration work, then restored it. A useful reminder that these properties trade against product requirements.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop's decision log lists <strong>SimpleX</strong> as the close
+            second to Nostr for similar reasons: no persistent identifiers,
+            privacy first, but no BLE mesh story, a smaller ecosystem and fewer
+            relays. Session sits in the same family: excellent metadata properties,
+            no answer at all when the network is gone.
+          </p>
+
+          <h2 id="otr">OTR</h2>
+          <p>
+            Off-the-Record, from 2004. Historically important because it invented
+            the property Airhop relies on most and least discusses.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>OTR contributed</th><th>Where it survives</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Deniability as a design goal</strong></td><td>Airhop's DMs carry no signature inside a Noise session precisely for this. The Nostr rumor layer is unsigned for the same reason.</td></tr>
+                <tr><td><strong>Per-message forward secrecy</strong></td><td>Generalised and improved by the Double Ratchet.</td></tr>
+                <tr><td><strong>Malleable MACs, published after use</strong></td><td>An explicit mechanism to make forgery <em>easy</em> after the fact, so a transcript proves nothing. Elegant, and rarely copied.</td></tr>
+                <tr><td><strong>The socialist millionaire protocol</strong></td><td>Verifying a shared secret without revealing it. Airhop's safety number is a simpler answer to the same question.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Why it died: it required <strong>both parties online
+            simultaneously</strong>. That is fatal for mobile messaging and
+            catastrophic for a mesh, where the defining case is that the recipient
+            is not there. Everything OTR proved was absorbed into the Double
+            Ratchet, which works asynchronously.
+          </p>
+
+          <h2 id="others">MTProto, iMessage, Threema, Bridgefy</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>System</th><th>Assessment</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>MTProto 2.0</strong> (Telegram)</td>
+                  <td>Home-grown rather than built on analysed primitives, which cryptographers have criticised for years. More importantly: <strong>end-to-end encryption is off by default and unavailable in groups entirely.</strong> Ordinary Telegram chats are encrypted to Telegram's servers, which is a different property from what everything else in this table provides. A useful contrast for explaining what "encrypted" must mean.</td>
+                </tr>
+                <tr>
+                  <td><strong>PQ3</strong> (iMessage)</td>
+                  <td>Technically impressive: a post-quantum ratchet where the key exchange is rekeyed with ML-KEM periodically, giving quantum-resistant PCS. The most advanced deployed protocol on this axis. Requires Apple's infrastructure, an Apple ID, and Apple hardware. Not relevant to a serverless mesh, but the right reference for what post-quantum messaging looks like when you have bandwidth.</td>
+                </tr>
+                <tr>
+                  <td><strong>Ibex</strong> (Threema)</td>
+                  <td>Modern, with forward secrecy and PCS, using NaCl primitives. A Threema ID rather than a phone number, which is good. Client apps are open source, <strong>servers are not</strong>, and it is a paid one-time purchase. Airhop's comparison table marks that asymmetry explicitly.</td>
+                </tr>
+                <tr>
+                  <td><strong>Bridgefy</strong></td>
+                  <td>The cautionary tale, and the closest architectural relative. A Bluetooth mesh messenger promoted for protests, found in 2020 to be effectively unencrypted, trivially impersonable, and vulnerable to a man-in-the-middle that could read and alter everything. It later adopted the Signal protocol. <strong>This is the argument for why Airhop signs every packet and assumes an attacker in the room</strong>, and why "we have a mesh" is not a security claim.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="why">Why Airhop chose what it chose</h2>
+          <pre class="ascii">
+  THE CONSTRAINT FILTER, APPLIED IN ORDER
+
+  1. NO SERVER MAY EXIST
+        ✗ Signal service, Matrix homeserver, Telegram, iMessage,
+          Threema, Session's service nodes
+        ✓ Noise, Bramble, Scuttlebutt
+
+  2. MUST WORK WITH BOTH PARTIES OFFLINE AT DIFFERENT TIMES
+        ✗ OTR
+        ✓ everything else remaining
+
+  3. MUST NOT REQUIRE A GLOBAL MESSAGE ORDER
+        ✗ MLS
+        ✓ Noise, Bramble, Scuttlebutt
+
+  4. MUST NOT KEEP HISTORY FOREVER
+        ✗ Scuttlebutt
+        ✓ Noise, Bramble
+
+  5. MUST INTEROPERATE WITH bitchat
+        ✗ Bramble
+        ✓ Noise XX
+
+  6. MUST GIVE PER-MESSAGE FORWARD SECRECY
+        Noise alone gives per-SESSION only
+        ✓ add the Double Ratchet on top
+</pre>
+          <div class="box ok">
+            <p class="box-title">The result</p>
+            <p>
+              Noise XX for the handshake, because it needs no certificate
+              authority, mutually authenticates, hides identities, has no
+              negotiation to downgrade, and is what bitchat already uses. The
+              Double Ratchet on top, because Noise alone gives forward secrecy per
+              session rather than per message. And Noise X plus one-time prekeys
+              for the offline path, because a courier envelope has no reply and
+              therefore cannot run a handshake.
+            </p>
+            <p>
+              Every component is the modern consensus choice, and none is novel.
+              In cryptography that is the correct instinct.
+            </p>
+          </div>
+
+          <h2 id="honest">Where Airhop is genuinely weaker</h2>
+          <p>
+            A comparison that only lists your own advantages is marketing. These
+            are real.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Weaker than</th><th>On</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td><strong>MLS</strong></td><td>Groups</td><td>Airhop has <strong>no per-message forward secrecy within an epoch</strong>. Every member holds the epoch key and every message in that epoch is under it, so compromising one member exposes the whole epoch. MLS gives per-epoch keys with any member able to force an update.</td></tr>
+                <tr><td><strong>Megolm</strong></td><td>Groups</td><td>Megolm at least ratchets forward, so a member joining at message <em>n</em> cannot read earlier messages. Airhop's epoch key does not ratchet within an epoch.</td></tr>
+                <tr><td><strong>Signal, Session, SimpleX</strong></td><td>Metadata</td><td>Airhop's mesh packets carry sender and recipient IDs <strong>in the clear</strong>. Who is talking to whom is not hidden on the mesh, and it is listed as out of scope.</td></tr>
+                <tr><td><strong>Signal</strong></td><td>Nostr DMs</td><td>Airhop's internet DMs use a static ECDH between two long-lived identities, so they have <strong>no forward secrecy at all</strong>. Inherited from NIP-17 and bitchat's cipher, and not fixable unilaterally.</td></tr>
+                <tr><td><strong>Briar</strong></td><td>Attack surface</td><td>Briar's mutual-contacts-only model means strangers cannot reach you at all. Airhop's open model is necessary for the crowd case and creates the entire Sybil and impersonation surface.</td></tr>
+                <tr><td><strong>iMessage PQ3</strong></td><td>Post-quantum</td><td>Airhop has no post-quantum component, and cannot easily have one: an ML-DSA signature is roughly five times a whole Bluetooth frame. Mitigated by forward secrecy already deleting the keys.</td></tr>
+                <tr><td><strong>Everything with a server</strong></td><td>Reliability and reach</td><td>A server guarantees delivery to anyone, anywhere, eventually. Airhop guarantees nothing beyond "when a path exists". That is the price of having nothing to seize.</td></tr>
+                <tr><td><strong>Signal, Threema, Wire</strong></td><td>Audit status</td><td>All have external cryptographic audits. Airhop has none yet, planned for v1.9.0, and its README says so.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why can Airhop not use MLS for groups?</span>
+              <span class="a">MLS advances through epochs, and every member must apply the same sequence of commits in the same order or their keys diverge. That requires a delivery service that imposes a total order. A flooding Bluetooth mesh cannot provide one: packets take different paths, arrive out of order, and partitions form and heal continuously, so two members in separate partitions would reach incompatible epochs with no reconciliation path. Its logarithmic advantage also only appears at hundreds of members, where Airhop caps at 16, and adopting it would fork bitchat compatibility. MLS is genuinely better for groups; it assumes connectivity Airhop does not have.</span>
+            </li>
+            <li>
+              <span class="q">Airhop uses Signal's Double Ratchet but not X3DH. Why the split?</span>
+              <span class="a">Because they solve different halves and only one half is missing. The Double Ratchet manages per-message keys inside an established session, which is exactly what Noise XX does not give, so it is adopted wholesale. X3DH establishes a session with an offline party using prekeys published to a server, and Airhop has neither a server nor that shape of problem: the Noise handshake already seeds the ratchet, prekeys are gossiped over the mesh as packet type <code>0x24</code>, and the offline case is a one-way sealed courier envelope rather than a session.</span>
+            </li>
+            <li>
+              <span class="q">Scuttlebutt is offline-first and serverless. Why is it not the answer?</span>
+              <span class="a">Because it has no forward secrecy and no deletion, by design. It is an append-only hash-chained log meant to be replayed forever, so compromising a key exposes everything that identity ever wrote, and you cannot unsay anything. That is the exact opposite of ephemerality by default. It also grows without bound, since you store everyone's history, and two devices writing one log fork it permanently. It proves that offline-first and ephemeral actively fight, and Airhop chose ephemeral.</span>
+            </li>
+            <li>
+              <span class="q">Compare Airhop and Briar fairly.</span>
+              <span class="a">They are the two closest projects. Briar is Bluetooth, WiFi and Tor hidden services with its own Bramble stack, and its model is mutual contacts only: strangers cannot reach you, which removes the whole Sybil, spam and impersonation surface. It has no iOS build, because iOS background execution makes an always-on Tor and Bluetooth node very hard. Airhop is open, so anyone in range can be messaged, which is necessary for the crowd case and is why its threat model chapter is long. Airhop also has iOS, an internet relay layer, payments, and wire compatibility with another client. Neither is right in general.</span>
+            </li>
+            <li>
+              <span class="q">What does Bridgefy teach?</span>
+              <span class="a">That a Bluetooth mesh is not a security property. Bridgefy was promoted for protests and found in 2020 to be effectively unencrypted, trivially impersonable, and open to a man-in-the-middle that could read and alter everything. Users in exactly the situations this class of app targets were exposed. It is the reason Airhop signs every packet, verifies before rendering, assumes an attacker in the room, and treats "we have a mesh" as an architectural claim rather than a safety one.</span>
+            </li>
+            <li>
+              <span class="q">Name Airhop's single weakest cryptographic property relative to this field.</span>
+              <span class="a">Group forward secrecy. Every member holds one epoch key, and every message in that epoch is encrypted under it, so compromising any member exposes the whole epoch. Megolm at least ratchets forward, so a late joiner cannot read earlier messages; MLS gives per-epoch keys any member can rotate. Airhop's rotation only happens on a roster change. It is bounded, because older epochs are refused, and it is genuinely weaker than both, and the honest answer is that a serverless mesh has no way to run TreeKEM today rather than that the current design is equivalent.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

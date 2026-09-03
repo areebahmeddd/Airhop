@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 36: Platform and native. Native modules, background execution, permissions, power policy." />
+    <title>36 Platform and native · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 36 · The device</p>
+          <h1>Platform and native code</h1>
+          <p class="kt-lede">
+            The protocol is one TypeScript implementation. The hardware is two
+            operating systems that disagree about almost everything. This chapter
+            is the boundary between them, and every place a platform fact leaks
+            through it.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#why">Why so little native code</a></li>
+              <li><a href="#contract">The native contract</a></li>
+              <li><a href="#background">Background execution</a></li>
+              <li><a href="#permissions">Permissions</a></li>
+              <li><a href="#power">The power policy</a></li>
+              <li><a href="#reconciler">The reconciler</a></li>
+              <li><a href="#divergence">Platform divergences that reach the user</a></li>
+              <li><a href="#build">Build and release</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              The brain of the app is written once, in one language, so it behaves
+              the same on every phone. But a phone's radio, microphone and locked
+              drawer can only be reached in the phone's own language, so there is
+              a small translator at the bottom. The translator is kept as small and
+              stupid as possible: it knows how to turn the radio on and hand over
+              bytes, and it knows nothing about what any of the bytes mean.
+            </p>
+          </div>
+
+          <h2 id="why">Why so little native code</h2>
+          <p>
+            Hardware requires native code. Routing, cryptography, Nostr and
+            payments do not. Native code is harder to test, harder to keep
+            consistent across two platforms, and harder to reason about. So there
+            is <strong>one module per hardware capability and no more</strong>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Module</th><th>Platform</th><th>Capability</th></tr></thead>
+              <tbody>
+                <tr><td><code>AirhopBLEModule</code></td><td>Both</td><td>BLE GATT peripheral and central, radio state, power mode</td></tr>
+                <tr><td><code>AirhopVoiceModule</code></td><td>Both</td><td>AAC-LC capture and playback</td></tr>
+                <tr><td><code>AirhopWiFiModule</code></td><td>Both</td><td>WiFi Aware fast path. Same-platform only: Apple requires a paired data path Android cannot complete.</td></tr>
+                <tr><td><code>AirhopLANModule</code></td><td>Both</td><td>mDNS discovery on <code>_airhop-lan-v1._tcp</code> and the TCP links behind it. Android uses <code>NsdManager</code>, iOS uses <code>NWListener</code> and <code>NWBrowser</code>. One contract, two implementations, and the mesh engine does not know which it has. Chapter <a href="29-lan.html">29</a>.</td></tr>
+                <tr><td><code>AirhopAppModule</code></td><td>Android</td><td>Process-level operations that belong to no radio. Currently one method, <code>restart()</code>, which relaunches into a fresh process. Android only for a reason rather than for now: iOS gives an app no supported way to relaunch itself and <code>exit()</code> there is grounds for rejection.</td></tr>
+                <tr><td><code>AirhopTorModule</code>, <code>AirhopTorSocket</code></td><td>iOS</td><td>Embedded Arti and the SOCKS socket it fronts</td></tr>
+                <tr><td><code>AirhopForegroundService</code></td><td>Android</td><td>Holding the process up under Doze</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <strong>None of them knows anything about packets, routing or
+            encryption.</strong> That is the design constraint, and everything
+            below follows from it.
+          </p>
+          <p>
+            The payoff is direct. bitchat's iOS and Android are separate native
+            codebases that drift: an Android fragment size mismatch (500 bytes
+            against iOS's ~469) broke iOS to Android messaging for months with
+            nobody noticing. Airhop's answer is that there is nothing to drift,
+            because there is one implementation. A fix in gossip sync fixes both
+            platforms at the same instant.
+          </p>
+
+          <h2 id="contract">The native contract</h2>
+          <p>
+            Bridge specs live in <code>src/bridge/</code>. Bytes cross
+            <strong>base64 encoded</strong>, the only representation both runtimes
+            agree on safely.
+          </p>
+          <h3><code>NativeAirhopBLE</code>, fourteen methods</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Role</th></tr></thead>
+              <tbody>
+                <tr><td><code>startAdvertising</code> / <code>stopAdvertising</code></td><td>The GATT peripheral half.</td></tr>
+                <tr><td><code>startScanning</code> / <code>stopScanning</code></td><td>The GATT central half.</td></tr>
+                <tr><td><code>writeToLink</code></td><td>Raw bytes to a connected peer.</td></tr>
+                <tr><td><code>getRadioState</code></td><td>Support, power, authorization, location and battery in one answer. One call rather than five, so the reconciler sees a consistent snapshot.</td></tr>
+                <tr><td><code>setPowerMode</code></td><td>How hard to run the radios.</td></tr>
+                <tr><td><code>requestEnableBluetooth</code> / <code>openLocationSettings</code></td><td>One-tap fixes for the Mesh banner.</td></tr>
+                <tr><td><code>setBackgroundServiceEnabled</code></td><td>Hold the process up, independently of advertising.</td></tr>
+                <tr><td><code>getTorProxyPort</code> / <code>getTorAvailability</code></td><td>Whether a SOCKS proxy is routing (Android).</td></tr>
+                <tr><td><code>startTor</code> / <code>stopTor</code> / <code>getTorStatus</code></td><td>The embedded Arti client, identical on both platforms. Chapter <a href="25-tor.html">25</a>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Ten events come back:</p>
+          <pre class="code">
+  packetReceived      linkConnected       linkDisconnected
+  rssiUpdated         adapterStateChanged powerStateChanged
+  scanFailed          meshStopRequested
+  onVpnLost           onVpnAvailable      ← unprefixed, because JS
+                                            subscribes by those exact names
+</pre>
+          <p>
+            <code>AirhopWiFiModule</code> mirrors the shape with four of its own:
+            <code>packetReceived</code>, <code>linkConnected</code>,
+            <code>linkDisconnected</code> and
+            <code>availabilityChanged</code>. The last carries both edges from the
+            framework's WiFi Aware state broadcast, which is what lets the fast
+            path recover without a relaunch.
+          </p>
+          <div class="box">
+            <p class="box-title">The rule that keeps this small</p>
+            <p>
+              Anything richer would put protocol knowledge on the native side,
+              which this design exists to prevent. The test is simple: if a
+              proposed native method needs to know what a packet type means, it is
+              the wrong method.
+            </p>
+          </div>
+          <p>
+            One detail that matters for shipping: the WiFi and Tor specs are
+            <strong>hand-maintained rather than Codegen input</strong>, and every
+            call is optional-chained. <code>TurboModuleRegistry.get</code> returns
+            null on a platform where the module does not exist, so an iOS build has
+            no WiFi module and a JavaScript-only update can land on an older
+            native binary that lacks a method. The controllers latch
+            "unsupported" on the first pass rather than crashing.
+          </p>
+
+          <h2 id="background">Background execution</h2>
+          <p>
+            A mesh node that only works while the app is open is not a mesh node.
+            Both platforms make this hard, in different ways.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Platform</th><th>Mechanism</th><th>Result</th></tr></thead>
+              <tbody>
+                <tr><td>iOS</td><td><code>UIBackgroundModes: bluetooth-central</code></td><td>Receives BLE data while backgrounded.</td></tr>
+                <tr><td>iOS</td><td><code>UIBackgroundModes: bluetooth-peripheral</code></td><td>Keeps advertising, though not visibly to Android.</td></tr>
+                <tr><td>iOS</td><td><code>CBCentralManagerOptionRestoreIdentifierKey</code></td><td><strong>Relaunches the app on a BLE event after suspension.</strong> This is why the keychain item must be <code>AFTER_FIRST_UNLOCK</code>.</td></tr>
+                <tr><td>Android</td><td><code>AirhopForegroundService</code> with a persistent notification</td><td>Survives Doze and battery optimization.</td></tr>
+                <tr><td>Android 14+</td><td><code>FOREGROUND_SERVICE_CONNECTED_DEVICE</code></td><td>Required to declare that service type at all.</td></tr>
+                <tr><td>Android</td><td><code>neverForLocation</code> on <code>BLUETOOTH_SCAN</code></td><td><strong>Delivers scan results without a location grant.</strong> See below.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The Android scan flag is what makes the rest deliver</p>
+            <p>
+              Android treats a BLE scan as a location access unless the manifest
+              says otherwise, and an app counts as foreground for location purposes
+              only with a visible activity or a <code>location</code>-typed
+              foreground service. A <code>connectedDevice</code> service does not
+              qualify.
+            </p>
+            <p>
+              So a backgrounded Airhop held its process up, kept a notification
+              reading "Discovering and relaying nearby messages", and
+              <strong>was handed no scan results at all</strong>. A visible promise
+              of a service that was not running.
+            </p>
+            <p>
+              bitchat solves this with <code>ACCESS_BACKGROUND_LOCATION</code> and
+              a <code>location</code> service type. Airhop asserts
+              <code>neverForLocation</code> instead, which is accurate here: a scan
+              result is read for its service UUID, its 8-byte peer ID and its RSSI,
+              none of which is a position. From API 31 that removes the coupling
+              entirely. API 26 to 30 keeps it, since the flag does not exist there,
+              and <code>getRadioState</code> reports which regime applies through
+              <code>locationRequiredForScan</code>.
+            </p>
+          </div>
+          <p>
+            Location is still requested, but <strong>only for geohash channels,
+            and only when the user opens one</strong>. That is a meaningful
+            difference in what the app asks for and why.
+          </p>
+
+          <p class="kt-note">
+            Battery policy, the four scan modes and the OEM skins that kill a
+            foreground service are <a href="38-power-radiation.html">38</a>.
+          </p>
+          <h2 id="permissions">Permissions</h2>
+          <p class="kt-note">
+            This is the platform-facing summary. The flow itself, the three
+            permission states, the primer, the startup sequence and its
+            deadlines are <a href="37-permissions.html">37</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Permission</th><th>Platform</th><th>Needed for</th><th>When asked</th></tr></thead>
+              <tbody>
+                <tr><td><code>BLUETOOTH_SCAN</code> (<code>neverForLocation</code>)</td><td>Android 12+</td><td>Discovering peers</td><td>After the primer, before the mesh starts</td></tr>
+                <tr><td><code>BLUETOOTH_ADVERTISE</code></td><td>Android 12+</td><td>Being discovered</td><td>Same</td></tr>
+                <tr><td><code>BLUETOOTH_CONNECT</code></td><td>Android 12+</td><td>GATT connections</td><td>Same</td></tr>
+                <tr><td>Bluetooth</td><td>iOS</td><td>Everything</td><td>Same</td></tr>
+                <tr><td><code>ACCESS_FINE_LOCATION</code></td><td>Android below 31</td><td>Scan results, because the flag does not exist there</td><td>Same, with the regime reported</td></tr>
+                <tr><td>Location</td><td>Both</td><td><strong>Geohash channels only</strong></td><td>When a location channel is opened</td></tr>
+                <tr><td><code>NEARBY_WIFI_DEVICES</code></td><td>Android 13+</td><td>WiFi Aware</td><td>Lazily, and its absence is not a blocker</td></tr>
+                <tr><td><code>ACCESS_LOCAL_NETWORK</code></td><td>Android 17+</td><td>The WiFi Aware socket</td><td>Declared already</td></tr>
+                <tr><td>Camera</td><td>Both</td><td>QR scanning and photos</td><td>On use</td></tr>
+                <tr><td>Microphone</td><td>Both</td><td>Voice notes and push to talk</td><td>On use</td></tr>
+                <tr><td>Notifications</td><td>Both</td><td>Message alerts</td><td>Deferred until past onboarding</td></tr>
+                <tr><td>Media library</td><td>Both</td><td>Saving received media</td><td>On use</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <strong>permission primer</strong> is mounted outside the
+            onboarding flow on purpose. A user who killed the app mid-onboarding
+            gets a next launch that skips onboarding entirely, and the primer still
+            has to appear. It explains why Bluetooth is needed <em>before</em> the
+            OS dialog, so a refusal is not the first thing a new user does.
+          </p>
+          <p>
+            A denied permission produces a <strong>blocker</strong> on the Mesh tab
+            with a one-tap route to the right settings screen, rather than a
+            spinner. Denials that cannot be re-prompted (the OS only asks once) get
+            an explicit "open Settings" path.
+          </p>
+
+          <h2 id="power">The power policy</h2>
+          <p>
+            BLE scanning is the largest battery cost in the app. A continuous
+            low-latency scan costs roughly an order of magnitude more than low
+            power, and the app is meant to run in a pocket all day.
+          </p>
+          <div class="box">
+            <p class="box-title">Policy in TypeScript, mechanism in Kotlin</p>
+            <p>
+              <code>src/services/power-policy.ts</code> is a
+              <strong>pure function of four facts</strong>. The native module
+              reports the battery and applies whichever mode it is given, and
+              decides nothing itself. That keeps the decision testable without a
+              device, and puts "how hard to run the radios" beside "whether to run
+              them at all" in the radio controller.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mode</th><th>Scan</th><th>Advertise</th><th>TX power</th><th>RSSI poll</th><th>Duty cycle</th></tr></thead>
+              <tbody>
+                <tr><td><code>performance</code></td><td>LOW_LATENCY</td><td>LOW_LATENCY</td><td>HIGH</td><td>5 s</td><td>continuous</td></tr>
+                <tr><td><code>balanced</code></td><td>BALANCED</td><td>BALANCED</td><td>MEDIUM</td><td>10 s</td><td>continuous</td></tr>
+                <tr><td><code>power-saver</code></td><td>LOW_POWER</td><td>LOW_POWER</td><td>LOW</td><td>30 s</td><td>2 s on / 28 s off</td></tr>
+                <tr><td><code>ultra-low-power</code></td><td>LOW_POWER</td><td>LOW_POWER</td><td>ULTRA_LOW</td><td>60 s</td><td>1 s on / 29 s off</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Selection order, and the order carries the policy:</p>
+          <ol>
+            <li>Backgrounded gives <code>power-saver</code>, or <code>ultra-low-power</code> on a critical battery. Nobody is waiting on discovery latency off screen, and this is where a phone spends nearly all of its day.</li>
+            <li>Charging in the foreground gives <code>performance</code>, since the cost is someone else's.</li>
+            <li>Otherwise the battery band decides: critical at 10 percent or less gives ultra low, low at 20 percent or less gives power saver, anything else gives balanced.</li>
+          </ol>
+          <p>
+            Foreground on battery is <code>balanced</code> rather than
+            <code>performance</code> because a balanced scan still finds peers
+            within seconds, and reserving the most expensive setting for "plugged
+            in" is what stops the app being the reason a phone dies.
+          </p>
+          <div class="box">
+            <p class="box-title">The five knobs move together</p>
+            <p>
+              A duty-cycled low-power scan beside a low-latency advertise at full
+              TX power saves almost nothing, since the advertiser transmits
+              continuously either way. Tuning one in isolation is how a power
+              policy becomes a placebo.
+            </p>
+          </div>
+          <p>
+            <strong>Hysteresis is Airhop's addition.</strong> bitchat re-resolves
+            on every <code>ACTION_BATTERY_CHANGED</code>, which fires per 1
+            percent, so a phone hovering at a threshold flips modes repeatedly and
+            every flip restarts the scanner. Dropping into a lower band is
+            immediate, since running hard on a nearly flat phone is the failure
+            that matters; climbing back out needs +3 percent. Native also only
+            reports the battery every 5 percent, so it is not a bridge crossing per
+            percent for a decision whose thresholds are ten points apart.
+          </p>
+          <p>
+            The duty cycle is invisible above the native boundary. JavaScript asks
+            for scanning and keeps getting it while native decides the rate. A
+            burst ending is <strong>never</strong> reported as an adapter or link
+            change, or the reconciler would try to repair a state that is working
+            correctly.
+          </p>
+          <p>
+            In the foreground on a low battery, peers can take up to half a minute
+            to appear, which is indistinguishable from a broken mesh unless it is
+            stated. The Mesh tab shows a muted "Battery saver, scanning less often"
+            note, with no button (charging is the fix) and no dismiss (it clears
+            itself). It stays silent while backgrounded, where nobody is waiting.
+          </p>
+          <div class="box warn">
+            <p class="box-title">iOS is a declared no-op</p>
+            <p>
+              CoreBluetooth exposes no scan-rate control and already throttles
+              background BLE aggressively. <code>setPowerMode</code> exists on both
+              platforms so the shared reconciler has one code path, and
+              <code>getRadioState</code> reports
+              <code>batteryPercent: -1</code> there, which the policy reads as
+              unknown and leaves the mode alone.
+            </p>
+          </div>
+
+          <h2 id="reconciler">The reconciler</h2>
+          <p>
+            Both radio controllers use the same shape, and it is the answer to an
+            entire class of bug.
+          </p>
+          <pre class="ascii">
+  A DESIRED STATE          "we want scanning and advertising"
+  AN OBSERVED OUTCOME      what native actually reports
+  ONE IDEMPOTENT PASS      close the gap, or schedule a retry
+
+  BLE backoff:   a ladder ending in a steady interval
+  WiFi backoff:  500ms, 1.5s, 4s, 10s, 30s (slower on purpose: nothing
+                 the user is looking at depends on this transport)
+
+  "UNSUPPORTED" IS LATCHED FOREVER.
+     No BLE peripheral hardware, or an API level below the WiFi Aware
+     data path, is not a state a device leaves. Retrying it on a 5s
+     ladder for the life of the mesh is pure battery cost.
+</pre>
+          <p>
+            Two failures this shape eliminates, both of which existed:
+          </p>
+          <ul>
+            <li>
+              <strong>A one-shot start with a swallowed rejection.</strong> WiFi
+              off at start meant the attach was refused and never retried; turning
+              WiFi on later changed nothing for the rest of the process. A
+              permission granted a moment after start, which is the ordinary
+              first-install race, left the fast path dead on a device entitled to
+              it.
+            </li>
+            <li>
+              <strong>A refused write tearing down a healthy link.</strong> The
+              announce and gossip send path deleted a link from
+              the link registry on any rejected write, an action nothing
+              could undo, so one transient refusal left the phone believing it had
+              no neighbours for the rest of the session. Teardown belongs to the
+              disconnect event.
+            </li>
+          </ul>
+          <p>
+            One deliberate difference: the WiFi controller publishes
+            <strong>no blocker</strong>, because WiFi Aware is an accelerator and
+            BLE carries everything either way. Reporting a blocker would be a false
+            alarm on the one screen that must stay trustworthy. It reports state
+            instead, so the Mesh tab can note the fast path is off in the same
+            neutral voice it uses for battery saver.
+          </p>
+
+          <h2 id="divergence">Platform divergences that reach the user</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Divergence</th><th>Effect</th><th>Airhop's response</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Backgrounded iPhone invisible to Android</strong></td><td>CoreBluetooth moves the service UUID into the advertisement overflow area and drops the local name. Only another iOS device can discover it. Established links keep working.</td><td>Not fixable in app code. Modelled explicitly in the simulation's radio fabric so it cannot be forgotten in a scenario.</td></tr>
+                <tr><td><strong>Some Android devices cannot advertise</strong></td><td>At the API 26 floor some chipsets have no peripheral role, so <code>bluetoothLeAdvertiser</code> is null. They scan, relay and receive but are never discoverable.</td><td>Native answers <code>UNSUPPORTED</code>, the reconciler latches it once rather than retrying forever, scanning continues, and the Mesh tab carries a dismissible note.</td></tr>
+                <tr><td><strong>No scan-rate control on iOS</strong></td><td>The power policy cannot act.</td><td>Declared a no-op, with <code>batteryPercent: -1</code> as the honest signal.</td></tr>
+                <tr><td><strong>No service data in an iOS advertisement</strong></td><td>The peer ID cannot ride the advert as it does on Android.</td><td>iOS advertises the service UUID alone. It used to use the local name, which was removed: nothing read it, so it was a stable identifier broadcast to every passive scanner for nothing.</td></tr>
+                <tr><td><strong>iOS rotates its Bluetooth address</strong></td><td>The same device appears as a new advertiser, so a duplicate link forms.</td><td>A 15 second reaper reclaims the duplicate once the peer ID is learned from an ANNOUNCE.</td></tr>
+                <tr><td><strong>OEM battery managers</strong></td><td>Xiaomi, Huawei, Oppo and others aggressively kill background apps regardless of the foreground service.</td><td>Not fixable in app code. The battery optimization screen offers a one-tap route to the OEM exemption setting, per manufacturer.</td></tr>
+                <tr><td><strong>Android 13 per-app language picker</strong></td><td>Two settings answer one question.</td><td>A deliberate split, covered in chapter <a href="40-i18n.html">40</a>.</td></tr>
+                <tr><td><strong>Tor coverage differs by platform</strong></td><td>Android proxies the shared OkHttp client, so every socket is covered. iOS has no shared HTTP client to point at a proxy, so only the Nostr WebSocket is routed.</td><td>Not a bug awaiting a fix. Both fail closed at the socket; what differs is reach, which is why a mint call is refused on iOS. Chapter <a href="25-tor.html">25</a>.</td></tr>
+                <tr><td><strong>No push notifications</strong></td><td>Local notifications fire only while the process is alive. Android keeps it alive with the foreground service; iOS whenever the OS has the app awake. A force-stopped iOS app stays silent until reopened.</td><td>Accepted. Waking a fully killed app needs a push server Airhop does not run and will not run.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="build">Build and release</h2>
+          <div class="box bad">
+            <p class="box-title">Never run <code>npx expo prebuild</code></p>
+            <p>
+              <code>ios/</code> and <code>android/</code> are checked in and
+              hand-modified. Prebuild regenerates them from
+              <code>app.json</code> and would delete every native module. This is
+              the single most destructive command in the repository, and it is
+              flagged as a caution in the README.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Android</th><th>iOS</th></tr></thead>
+              <tbody>
+                <tr><td>Build</td><td>Gradle to an <code>.aab</code></td><td>Xcode to an <code>.ipa</code></td></tr>
+                <tr><td>Minimum OS</td><td>8.0, API 26</td><td>16.0</td></tr>
+                <tr><td>CI on every change</td><td><strong>Full R8-minified release build.</strong> So a broken keep rule, or a dependency that stops being 16 KB aligned, fails a pull request rather than a tagged release.</td><td>Unsigned Release build on a macOS runner, so native and release-only breakage fails the same pull request.</td></tr>
+                <tr><td>Release automation</td><td>Fully automated: <code>release.yml</code> builds and signs the APK and AAB.</td><td><strong>Placeholder.</strong> Distribution credentials do not exist, so the shipped <code>.ipa</code> is still produced by hand from Xcode.</td></tr>
+                <tr><td>Dependency locking</td><td><code>android/app/gradle.lockfile</code>, regenerated in the same commit as a dependency change</td><td><code>ios/Podfile.lock</code>, regenerated with <code>npx pod-install</code> in the same commit</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Neither platform uses EAS, and there is no EAS configuration. Its main
+            draws are prebuild and managed credentials, and this project does not
+            run prebuild.
+          </p>
+          <p>
+            The R8 release build in CI is worth calling out as good practice: a
+            minified build is where reflection-based libraries and missing keep
+            rules fail, and those failures otherwise appear for the first time on
+            a release tag, in front of users.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is the native layer only five modules?</span>
+              <span class="a">Because anything richer would put protocol knowledge on the native side, and then it would have to be implemented twice and kept in step. bitchat's own history is the argument: two native codebases drifted until an Android fragment size mismatch broke cross-platform messaging for months with nobody noticing. Keeping native to one module per hardware capability means the protocol has exactly one implementation, and a bug in it exists on both platforms or neither.</span>
+            </li>
+            <li>
+              <span class="q">Explain the Android scan flag problem to someone who has never shipped an Android app.</span>
+              <span class="a">Android assumes a Bluetooth scan is a way of locating the device, so it gates scan results behind location permission unless the manifest declares otherwise. Separately, an app only counts as foreground for location purposes with a visible activity or a location-typed foreground service, and Airhop's is a connectedDevice service. So a backgrounded app held its process up, showed a notification promising to relay messages, and received no scan results at all. Declaring <code>neverForLocation</code> removes the coupling from API 31 onward, and it is accurate here because a scan result is read for its service UUID, peer ID and signal strength, none of which is a position.</span>
+            </li>
+            <li>
+              <span class="q">Why does the power policy live in TypeScript when the mechanism is native?</span>
+              <span class="a">So the decision is a pure function of four facts and can be tested in CI without a device. The native module reports the battery and applies whichever mode it is handed, deciding nothing. It also keeps "how hard to run the radios" next to "whether to run them at all" in the same controller, rather than splitting one policy across two languages where the halves can disagree.</span>
+            </li>
+            <li>
+              <span class="q">What is the reconciler and what bug class does it eliminate?</span>
+              <span class="a">A desired state, an observed outcome, and one idempotent pass that closes the gap or schedules a retry. It eliminates the fire-and-forget start: one attempt with the rejection swallowed, so WiFi off at launch means the fast path is dead for the whole process, a permission granted a second late leaves it dead on an entitled device, and a mid-session toggle latches the module into a state it cannot leave. It also draws the line that a refused write is not a dead link, because the stack says the same thing when its queue is merely full.</span>
+            </li>
+            <li>
+              <span class="q">Why does CI build a fully minified R8 release on every change?</span>
+              <span class="a">Because a minified build is where reflection-based libraries and missing keep rules fail, and where alignment requirements bite. Those failures otherwise appear for the first time on a release tag, in front of users, at the moment it is hardest to fix. Building it on every pull request turns a release-day emergency into a red check on a branch.</span>
+            </li>
+            <li>
+              <span class="q">Why is there no push notification support, and what is the consequence?</span>
+              <span class="a">Because waking a fully killed app requires a push server, which is infrastructure the project will not operate: it would be a party that knows who is being messaged and when, and a service that could be shut down. Local notifications fire while the process is alive, which Android's foreground service maintains and iOS provides whenever the OS has the app awake. The consequence is that a force-stopped iOS app stays silent until reopened, and that is an accepted trade rather than a bug.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

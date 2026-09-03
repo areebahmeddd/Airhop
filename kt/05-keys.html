@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 05: Keys, from zero. What a public key actually is, and how signing and agreement work." />
+    <title>05 Keys, from zero · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 05 · Foundations</p>
+          <h1>Keys, from zero</h1>
+          <p class="kt-lede">
+            No prior knowledge assumed. By the end of this chapter you will know
+            what a public key physically is, why nobody can work backwards from
+            it, how two strangers agree a secret in public, and what a signature
+            actually proves. Chapter 16 builds on all of it.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#oneway">One-way functions</a></li>
+              <li><a href="#hash">Hashing</a></li>
+              <li><a href="#symmetric">Symmetric encryption</a></li>
+              <li><a href="#problem">The key distribution problem</a></li>
+              <li><a href="#asymmetric">What a key pair actually is</a></li>
+              <li><a href="#dh">Key agreement</a></li>
+              <li><a href="#sign">Signing and verifying</a></li>
+              <li><a href="#hybrid">Why real systems use both</a></li>
+              <li><a href="#random">Randomness</a></li>
+              <li><a href="#binding">The part cryptography cannot solve</a></li>
+              <li><a href="#airhop">Every key in Airhop</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine a padlock you can copy as many times as you like, and one
+              single key that opens all the copies. You hand out open padlocks to
+              everyone: to your friends, to strangers, you leave them lying in the
+              street. Anyone can snap one shut on a box and send it to you, and
+              nobody, not even the person who locked it, can open it again. Only
+              you can, because only you have the key. The padlock is your public
+              key. The key is your private key. The whole of modern security is
+              that one idea plus the fact that nobody can build the key by looking
+              at the padlock.
+            </p>
+          </div>
+
+          <h2 id="oneway">One-way functions</h2>
+          <p>
+            Everything in this chapter rests on one idea: some operations are
+            easy to do and infeasible to undo.
+          </p>
+          <pre class="ascii">
+  EASY FORWARD, HARD BACKWARD
+
+    multiply         7919 x 6841 = 54,173,879           instant
+    factorise        54,173,879 = ? x ?                 slow
+
+    that is a toy. Use 300-digit numbers and the second
+    direction takes longer than the universe has existed.
+
+  A TRAPDOOR one-way function is the same, with a shortcut:
+
+    hard backward FOR EVERYONE
+    easy backward IF YOU KNOW ONE SECRET
+
+    the secret is the trapdoor. It is your PRIVATE KEY.
+</pre>
+          <div class="box">
+            <p class="box-title">"Infeasible" is a real number, not a hand wave</p>
+            <p>
+              128-bit security means roughly 2<sup>128</sup> operations to break,
+              which is about 340 undecillion. If every computer on Earth tried a
+              trillion combinations per second, it would still take vastly longer
+              than the age of the universe. Curve25519, ChaCha20 and SHA-256 all
+              target that level.
+            </p>
+            <p>
+              Which is why real attacks are never against the mathematics. They
+              are against implementations, key storage, human trust decisions, and
+              metadata. Every finding in chapter <a href="49-review.html">49</a>
+              is one of those four, and none is a broken cipher.
+            </p>
+          </div>
+
+          <h2 id="hash">Hashing</h2>
+          <p>The simplest one-way function, and the most used.</p>
+          <pre class="ascii">
+  A HASH TAKES ANY INPUT AND PRODUCES A FIXED-SIZE OUTPUT
+
+    SHA-256("hello")   -> 2cf24dba5fb0a30e26e83b2ac5b9e29e
+                          1b161e5c1fa7425e73043362938b9824
+    SHA-256("hellp")   -> 7d1a54127b222502f5b79b5fb0803061
+                          152a44f92b37e23c6527baf665d4da9a
+
+  ONE CHARACTER CHANGED. Completely different output. That is the
+  AVALANCHE property, and it is what makes a hash a fingerprint.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Means</th><th>Airhop relies on it for</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Deterministic</strong></td><td>Same input, same output, on every device forever.</td><td>Safety numbers matching on two phones. Peer IDs agreeing everywhere.</td></tr>
+                <tr><td><strong>Fixed size</strong></td><td>A one-byte input and a one-gigabyte input both give 32 bytes.</td><td>Packet IDs.</td></tr>
+                <tr><td><strong>Preimage resistant</strong></td><td>Given an output, you cannot find <em>an</em> input that produces it.</td><td><strong>Peer IDs.</strong> An attacker cannot build a key that hashes to your ID.</td></tr>
+                <tr><td><strong>Collision resistant</strong></td><td>You cannot find <em>two</em> inputs with the same output.</td><td>Packet deduplication being meaningful.</td></tr>
+                <tr><td><strong>Avalanche</strong></td><td>One bit changed, half the output bits change.</td><td>Any tampering being obvious.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Preimage and collision resistance are different, and the difference matters</p>
+            <p>
+              A peer ID is 8 bytes, so 64 bits. Finding a key that hashes to
+              <em>your specific</em> ID takes about 2<sup>64</sup> work, which is
+              out of reach. Finding <em>any two</em> keys that collide takes about
+              2<sup>32</sup> by the birthday bound, which is easy. But both would
+              be the attacker's own keys, and colliding with yourself impersonates
+              nobody. The property Airhop needs is preimage resistance, and 64 bits
+              delivers it comfortably. That is why the ID is short and why that is
+              fine.
+            </p>
+          </div>
+          <p>
+            Two variations you will meet constantly.
+            <strong>HMAC</strong> is a keyed hash: <code>HMAC(key, message)</code>
+            proves whoever made it knew the key. It exists because
+            <code>SHA-256(key || message)</code> is <em>not</em> safe, since an
+            attacker who sees the output can append data and produce a valid output
+            for the longer message without knowing the key (length extension).
+            <strong>HKDF</strong> turns one messy secret, like the raw output of a
+            key agreement, into any number of clean independent keys.
+          </p>
+
+          <h2 id="symmetric">Symmetric encryption</h2>
+          <p>One key, used for both locking and unlocking.</p>
+          <pre class="ascii">
+  encrypt(key, plaintext)  -> ciphertext
+  decrypt(key, ciphertext) -> plaintext
+
+  SAME KEY BOTH TIMES.
+
+  A STREAM CIPHER works by generating a keystream and XORing:
+
+     plaintext   0110 1001
+     keystream   1011 0011      <- from the key, looks random
+     XOR         ────────
+     ciphertext  1101 1010
+
+  XOR is its own inverse, so the receiver runs the same keystream
+  over the ciphertext and gets the plaintext back.
+</pre>
+          <div class="box bad">
+            <p class="box-title">Two ways to destroy a stream cipher</p>
+            <p>
+              <strong>Reuse the keystream.</strong> If two messages are encrypted
+              with the same key and the same starting position, XORing the two
+              ciphertexts together cancels the keystream entirely and leaves
+              <code>plaintext1 XOR plaintext2</code>, which is often enough to
+              recover both. This is why the <em>nonce</em> exists and why reusing
+              a (key, nonce) pair is catastrophic rather than merely weak.
+            </p>
+            <p>
+              <strong>Forget to authenticate.</strong> XOR is transparent to an
+              attacker: flip a bit in the ciphertext and the same bit flips in the
+              plaintext. Without an authentication tag, an attacker who cannot read
+              your message can still change it in targeted ways. That is why
+              everything modern is <strong>AEAD</strong>: encryption and
+              authentication as one inseparable operation, where a failed tag
+              returns <em>nothing</em> rather than garbage.
+            </p>
+          </div>
+          <p>
+            Symmetric encryption is fast, simple and well understood. It has
+            exactly one problem, and it is a big one.
+          </p>
+
+          <h2 id="problem">The key distribution problem</h2>
+          <pre class="ascii">
+  Alice wants to send Bob a secret.
+  They agree to use symmetric encryption.
+
+  First they must both have the same key.
+
+  How does Alice get the key to Bob?
+
+    send it over the network?   an eavesdropper takes it
+    post it?                    slow, interceptable
+    meet in person?             does not scale, and often impossible
+    use a third party?          now the third party has your key
+
+  AND WITH n PEOPLE YOU NEED n(n-1)/2 KEYS:
+
+     10 people   ->     45 keys
+    100 people   ->  4,950 keys
+   1000 people   -> 499,500 keys
+</pre>
+          <p>
+            This was an unsolved problem for the entire history of cryptography
+            until 1976. It is why codebooks were carried by hand, why embassies
+            used diplomatic bags, and why a captured key compromised everything.
+          </p>
+          <p>
+            For Airhop it is fatal in a specific way: <strong>two strangers who
+            have never met, with no internet, must agree a secret</strong>. There
+            is no prior meeting, no trusted third party reachable, and no
+            out-of-band channel. Symmetric cryptography alone cannot do it.
+          </p>
+
+          <h2 id="asymmetric">What a key pair actually is</h2>
+          <p>
+            The 1976 answer: use <em>two</em> keys with a mathematical
+            relationship, where one can be public.
+          </p>
+          <pre class="ascii">
+  THE CURVE25519 VERSION, WHICH IS WHAT AIRHOP USES
+
+  Start with a fixed, publicly known point on a curve. Call it G.
+  Everyone in the world uses the same G.
+
+     PRIVATE KEY   d      = 32 random bytes. A number.
+     PUBLIC KEY    P      = d added to itself d times, on the curve
+                          = "d times G", written d·G
+
+  "Adding a point to itself d times" is EASY even for enormous d,
+  because you can double repeatedly: G, 2G, 4G, 8G... and combine.
+  About 256 doublings covers every possible d.
+
+  GOING BACKWARDS is the ELLIPTIC CURVE DISCRETE LOGARITHM PROBLEM:
+  given G and P, find d. Nobody knows how to do this faster than
+  brute force, and brute force is 2^128 operations.
+
+  SO A PUBLIC KEY IS LITERALLY A POINT ON A CURVE,
+  AND A PRIVATE KEY IS LITERALLY A BIG RANDOM NUMBER.
+</pre>
+          <div class="box">
+            <p class="box-title">What "elliptic curve" means, without the algebra</p>
+            <p>
+              A curve is the set of points satisfying an equation. Curve
+              cryptography defines a way to "add" two points and get a third point
+              that is also on the curve. That addition has the useful property of
+              being easy to do repeatedly and impossible to reverse.
+            </p>
+            <p>
+              You do not need the algebra to work on this codebase. What you need
+              is: a public key is a point, a private key is a number, going
+              forward is fast, going backward is infeasible, and 32 bytes of
+              elliptic curve gives the same security as 384 bytes of RSA. That
+              size difference is precisely why a Curve25519 public key fits in a
+              31-byte Bluetooth advertisement's neighbourhood and an RSA key does
+              not.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Private key</th><th>Public key</th></tr></thead>
+              <tbody>
+                <tr><td>What it is</td><td>32 random bytes</td><td>A point, encoded as 32 bytes</td></tr>
+                <tr><td>Who has it</td><td><strong>Only you.</strong> Never transmitted.</td><td>Everyone. Broadcast in every announce.</td></tr>
+                <tr><td>Where Airhop keeps it</td><td>OS keychain, hardware-backed</td><td>Anywhere. It is public.</td></tr>
+                <tr><td>Derived from</td><td>The random number generator</td><td>The private key, one-way</td></tr>
+                <tr><td>If leaked</td><td><strong>Total compromise</strong></td><td>Nothing. It is meant to be public.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="dh">Key agreement</h2>
+          <p>
+            Two people, each with a key pair, end up holding the same secret
+            without ever transmitting it. This is Diffie-Hellman, and it is the
+            single most important trick in the chapter.
+          </p>
+          <pre class="ascii">
+  ALICE                                            BOB
+  ─────                                            ───
+  a = random 32 bytes                              b = random 32 bytes
+  A = a·G                                          B = b·G
+
+              ─────────── A ──────────▶
+              ◀────────── B ───────────
+              (both public, sent in the clear)
+
+  shared = a·B                                     shared = b·A
+         = a·(b·G)                                        = b·(a·G)
+         = (a·b)·G                                        = (a·b)·G
+
+                  IDENTICAL 32 BYTES
+
+  AN EAVESDROPPER HAS A AND B.
+  To compute (a·b)·G they would need a or b, which means solving the
+  discrete logarithm. They cannot.
+</pre>
+          <div class="box bad">
+            <p class="box-title">The paint-mixing analogy, and where it breaks</p>
+            <p>
+              The usual explanation is public paint plus a secret colour each,
+              exchanged and mixed, arriving at the same final colour. It is a good
+              intuition for <em>why</em> it works and it hides the thing that
+              matters most:
+            </p>
+            <p>
+              <strong>Plain Diffie-Hellman has no idea who you are talking
+              to.</strong> An attacker in the middle can run it twice, once with
+              each of you, and hold two different shared secrets while relaying
+              everything. Both of you believe you have a secure channel, and both
+              of you are talking to the attacker.
+            </p>
+            <p>
+              Fixing that is exactly what Noise XX does: it performs three
+              Diffie-Hellman operations, and two of them use the parties'
+              <em>long-term</em> keys, so completing the handshake proves each side
+              holds the private half of the identity it claims. Chapter
+              <a href="17-noise.html">17</a>.
+            </p>
+          </div>
+          <p>
+            One detail that matters in practice: the raw output of a key agreement
+            is a curve coordinate, not a key. It has mathematical structure and is
+            not uniformly random. Every protocol runs it through a KDF before using
+            it, which is what <code>mixKey</code> does inside Noise and what
+            <code>kdfRk</code> does inside the Double Ratchet.
+          </p>
+
+          <h2 id="sign">Signing and verifying</h2>
+          <p>The mirror image. Instead of privacy, it gives proof.</p>
+          <pre class="ascii">
+  SIGN                                      VERIFY
+  ────                                      ──────
+  sig = sign(message, PRIVATE key)          ok = verify(sig, message, PUBLIC key)
+
+  ONLY the holder of the private key         ANYONE with the public key
+  can produce a valid signature.             can check it.
+
+  WHAT A SIGNATURE PROVES
+
+    1. AUTHENTICITY   the holder of that private key made this
+    2. INTEGRITY      not one bit has changed since
+    3. NON-REPUDIATION they cannot later deny it
+
+  WHAT IT DOES NOT DO
+
+    it does not hide the message. A signature is attached to
+    PLAINTEXT. Signing is not encrypting.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Operation</th><th>Uses which key</th><th>Gives</th></tr></thead>
+              <tbody>
+                <tr><td>Encrypt to someone</td><td>Their <strong>public</strong></td><td>Only they can read it</td></tr>
+                <tr><td>Decrypt</td><td>Your <strong>private</strong></td><td>You read what was sent to you</td></tr>
+                <tr><td>Sign</td><td>Your <strong>private</strong></td><td>Everyone knows it was you</td></tr>
+                <tr><td>Verify</td><td>Their <strong>public</strong></td><td>You know it was them</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop signs almost everything that travels in the open: announces,
+            public and private channel messages, attachments, voice frames, board
+            posts and gateway uplinks. A relay that carries your packet cannot
+            change a byte of it, and cannot invent one attributed to you.
+          </p>
+          <div class="box">
+            <p class="box-title">Where Airhop deliberately does NOT sign, and why</p>
+            <p>
+              Non-repudiation is usually described as a benefit. For private
+              messaging it is a liability: it produces a cryptographic proof, that
+              the recipient holds, that you said a specific thing. Airhop wants the
+              opposite.
+            </p>
+            <p>
+              So messages inside a Noise session carry <strong>no
+              signature</strong>. Their authenticity comes from a symmetric key
+              <em>both</em> parties hold, so the recipient knows it came from you
+              and cannot prove that to anybody else, because they could have
+              produced it themselves. That property is called
+              <strong>deniability</strong>, and it is why the Nostr rumor layer is
+              unsigned too.
+            </p>
+          </div>
+
+          <h2 id="hybrid">Why real systems use both</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Symmetric</th><th>Asymmetric</th></tr></thead>
+              <tbody>
+                <tr><td>Speed</td><td><strong>Very fast.</strong> Gigabytes per second.</td><td>Slow. Thousands of operations per second.</td></tr>
+                <tr><td>Key distribution</td><td><strong>The hard problem</strong></td><td><strong>Solved</strong></td></tr>
+                <tr><td>Good at</td><td>Bulk data</td><td>Establishing a shared secret, and proving identity</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  SO EVERY REAL SYSTEM DOES THIS
+
+    1. use ASYMMETRIC to agree on a symmetric key   (slow, once)
+    2. use SYMMETRIC for all the actual data        (fast, forever)
+
+  AIRHOP, CONCRETELY
+
+    Noise XX handshake      3 messages, 3 elliptic curve operations
+        ▼
+    two ChaCha20-Poly1305 keys, one per direction
+        ▼
+    every DM after that is symmetric and cheap
+        ▼
+    Double Ratchet adds ONE more curve operation per REPLY,
+    and one cheap HMAC per message
+</pre>
+          <p>
+            This is why a handshake is a few hundred milliseconds and a message is
+            free. It is also why the Double Ratchet's design is clever: the
+            expensive asymmetric step happens on each reply, and the cheap
+            symmetric step happens on each message.
+          </p>
+
+          <h2 id="random">Randomness</h2>
+          <div class="box bad">
+            <p class="box-title">This is where real systems break</p>
+            <p>
+              A private key is <em>only</em> random bytes. If the randomness is
+              predictable, the key is guessable, and every other layer is
+              irrelevant.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Historical failure</th><th>What happened</th></tr></thead>
+              <tbody>
+                <tr><td>Debian OpenSSL, 2008</td><td>A patch removed the entropy source. Every key generated for two years came from a pool of 32,768 possibilities.</td></tr>
+                <tr><td>PlayStation 3, 2010</td><td>Sony reused the same ECDSA nonce for every signature. That alone reveals the private key algebraically. The console's code signing was permanently broken.</td></tr>
+                <tr><td>Android Bitcoin wallets, 2013</td><td>A weak <code>SecureRandom</code> produced repeated nonces. Wallets were drained.</td></tr>
+                <tr><td>Dual_EC_DRBG</td><td>A standardised random generator with a structure that permitted a backdoor for whoever chose its constants.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The rule is: never write your own, always use the operating system's.
+            Airhop calls <code>crypto.getRandomValues</code>, which is
+            <code>SecRandomCopyBytes</code> on iOS and the Android framework's CSPRNG
+            underneath. Every private key, ephemeral key, nonce, stream ID and
+            message ID comes from it.
+          </p>
+          <div class="box warn">
+            <p class="box-title">The one line holding this up</p>
+            <p>
+              Hermes, React Native's JavaScript engine, does not implement
+              <code>crypto.getRandomValues</code>. A polyfill provides it, and its
+              import sits at the very top of <code>src/app/app.tsx</code> with a
+              comment saying it must be first. If any cryptography module were
+              imported before it, key generation would fail at runtime. That single
+              import line is load-bearing for the entire security model.
+            </p>
+          </div>
+          <p>
+            One elegant sidestep worth knowing: Ed25519 is
+            <strong>deterministic</strong>. Its per-signature nonce is derived by
+            hashing the private key together with the message, rather than being
+            drawn from the random generator. So signing is safe even on a device
+            whose randomness is broken, which is precisely the failure that
+            destroyed ECDSA in the two cases above. It also means the same message
+            signed twice produces identical bytes, which keeps Airhop's
+            content-derived packet IDs stable.
+          </p>
+
+          <h2 id="binding">The part cryptography cannot solve</h2>
+          <pre class="ascii">
+  Cryptography can prove:
+
+     "the holder of private key K signed this"          ✓ certain
+     "only the holder of private key K can read this"   ✓ certain
+
+  Cryptography CANNOT prove:
+
+     "private key K belongs to the person you mean"     ✗ NOT A MATHS PROBLEM
+</pre>
+          <p>
+            That last line is the whole of chapter
+            <a href="20-identity.html">20</a>, and every system answers it
+            differently.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Approach</th><th>How</th><th>Weakness</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Certificate authority</strong> (TLS, the web)</td><td>A trusted third party signs "this key belongs to this name".</td><td>You must trust hundreds of authorities. Any one of them can lie. Needs to be reachable.</td></tr>
+                <tr><td><strong>Web of trust</strong> (PGP)</td><td>People sign each other's keys, and you trust transitively.</td><td>Nobody ever understood it. Effectively dead.</td></tr>
+                <tr><td><strong>Trust on first use</strong> (SSH, <strong>Airhop</strong>)</td><td>Accept the first key you see, then refuse any change.</td><td>Wrong if an attacker is present at first contact.</td></tr>
+                <tr><td><strong>In-person verification</strong> (<strong>Airhop</strong>, Signal)</td><td>Scan a QR code, or read a safety number aloud.</td><td>Requires effort, and most people skip it.</td></tr>
+                <tr><td><strong>The key IS the identity</strong> (<strong>Airhop</strong>, Nostr, Bitcoin)</td><td>There is no separate name to bind to. The key is the name.</td><td>No human-meaningful names. Losing the key loses the identity, permanently.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop uses the last three together. The key <em>is</em> the identity,
+            because a peer ID is a hash of the public key. Trust on first use pins
+            whatever you hear first. And an in-person QR scan is the only thing
+            permitted to correct a pin, with the safety number as the route for
+            somebody you can only reach by voice.
+          </p>
+
+          <h2 id="airhop">Every key in Airhop</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Key</th><th>Type</th><th>Job</th><th>Lives</th></tr></thead>
+              <tbody>
+                <tr><td><code>noiseStaticPriv/Pub</code></td><td>X25519 pair</td><td>Key agreement for sessions. Its hash is your peer ID.</td><td>Keychain. Forever.</td></tr>
+                <tr><td><code>signingPriv/Pub</code></td><td>Ed25519 pair</td><td>Signing every public packet.</td><td>Keychain. Forever.</td></tr>
+                <tr><td>Nostr key</td><td>secp256k1 pair</td><td>Internet identity, DMs, nutzaps.</td><td><strong>Derived</strong> from the signing key by HKDF. Never stored.</td></tr>
+                <tr><td>Geohash keys</td><td>secp256k1 pairs</td><td>One unlinkable pseudonym per location cell.</td><td>Derived by HMAC from a seed, itself derived from the signing key.</td></tr>
+                <tr><td>Ephemeral handshake keys</td><td>X25519 pairs</td><td>Fresh per Noise handshake. Give forward secrecy.</td><td>Memory. <strong>Destroyed at split.</strong></td></tr>
+                <tr><td>Noise transport keys</td><td>Two symmetric</td><td>Encrypting a live session, one per direction.</td><td>Memory, per session.</td></tr>
+                <tr><td>Ratchet keys</td><td>X25519 pairs, rotating</td><td>New entropy on each reply.</td><td>Memory.</td></tr>
+                <tr><td>Message keys</td><td>Symmetric, single use</td><td>One message each.</td><td>Memory. Deleted immediately after use.</td></tr>
+                <tr><td>One-time prekeys</td><td>X25519 pairs</td><td>Forward secrecy for courier mail.</td><td>MMKV, deleted 48 hours after use.</td></tr>
+                <tr><td>Channel key</td><td>Symmetric, 32 bytes</td><td>A private channel. Travels in the invite link.</td><td>MMKV.</td></tr>
+                <tr><td>Group epoch key</td><td>Symmetric</td><td>All group messages in one epoch.</td><td>MMKV. Rotated on roster change.</td></tr>
+                <tr><td>Wallet MMKV key</td><td>AES-256</td><td>Encrypting the proof store at rest.</td><td>Keychain.</td></tr>
+                <tr><td>Wallet P2PK key</td><td>secp256k1 pair</td><td>Locking nutzaps so only you can spend them.</td><td>Keychain.</td></tr>
+                <tr><td>Recovery phrase</td><td>BIP-39, 12 words</td><td>Optional. Re-deriving ecash secrets on a new device.</td><td>Keychain, only if enabled.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Notice the pattern: <strong>four secrets in the keychain, everything
+            else derived or ephemeral.</strong> That is why the panic wipe has so
+            few items to destroy, and why destroying them is sufficient.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">What is a public key, physically?</span>
+              <span class="a">A point on an elliptic curve, encoded as 32 bytes. It is produced by taking a fixed public starting point that everyone shares and adding it to itself a secret number of times, where that secret number is the private key. Going forward is fast because you can double repeatedly. Going backward, recovering the number from the point, is the elliptic curve discrete logarithm problem, and nobody knows how to do it faster than 2<sup>128</sup> brute force.</span>
+            </li>
+            <li>
+              <span class="q">Explain Diffie-Hellman, then say what is wrong with it.</span>
+              <span class="a">Each side picks a secret number and publishes that number times the shared base point. Each then multiplies the other's public point by their own secret, and both arrive at the same value because multiplication commutes. An eavesdropper sees both public points and would need to solve a discrete logarithm to get further. What is wrong with it is that it authenticates nobody: an attacker in the middle runs it twice, once with each party, and relays everything while holding both secrets. Both sides believe they are secure. Fixing that requires binding the exchange to long-term identity keys, which is what Noise XX does with its <code>es</code> and <code>se</code> operations.</span>
+            </li>
+            <li>
+              <span class="q">Why does every real system use both symmetric and asymmetric crypto?</span>
+              <span class="a">Asymmetric solves key distribution and proves identity but is slow. Symmetric is orders of magnitude faster but cannot get the key to the other party. So you use asymmetric once to agree a symmetric key, then symmetric for all the data. In Airhop that is a three-message Noise handshake producing two ChaCha20 keys, after which every message is cheap, with the Double Ratchet adding one curve operation per reply and one HMAC per message.</span>
+            </li>
+            <li>
+              <span class="q">Why does Airhop deliberately not sign private messages?</span>
+              <span class="a">Because a signature is non-repudiable: it produces a permanent cryptographic proof, held by the recipient, that you said a specific thing. For private messaging that is a liability rather than a feature. Inside a Noise session, authenticity comes instead from a symmetric key both parties hold, so the recipient knows it came from you and cannot prove it to anyone else, because they could have produced the same bytes. That is deniability, and it is also why the Nostr rumor layer is unsigned.</span>
+            </li>
+            <li>
+              <span class="q">Where do real cryptographic systems actually break?</span>
+              <span class="a">Almost never in the mathematics. They break in randomness (Debian's OpenSSL, the PlayStation 3's reused nonce, Android's weak SecureRandom), in implementation (timing side channels, a decoder that throws instead of returning null), in key storage, in metadata that the encryption never covered, and in the human step of deciding that a key belongs to a person. Every finding in this project's own review is one of those, and none is a broken cipher.</span>
+            </li>
+            <li>
+              <span class="q">What can cryptography never prove?</span>
+              <span class="a">That a key belongs to the person you mean. It can prove the holder of key K signed something, and that only the holder of K can read something, both with certainty. Binding K to a human being is not a mathematical problem, and every system answers it socially: certificate authorities, a web of trust, trust on first use, in-person verification, or declaring that the key simply <em>is</em> the identity. Airhop uses the last three together.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

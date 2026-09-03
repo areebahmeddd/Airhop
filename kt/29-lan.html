@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 29: The LAN transport. mDNS discovery, the dial ring, rotating instance names, and the only transport that is off by default." />
+    <title>29 The LAN transport · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 29 · Media and transports</p>
+          <h1>The LAN transport</h1>
+          <p class="kt-lede">
+            The only path that reaches an iPhone and an Android phone over
+            something other than Bluetooth. mDNS discovery plus ordinary TCP,
+            carrying the same packet frames Bluetooth carries. It is also the
+            only transport in the app that is off until the user turns it on, and
+            the reason for that is the whole second half of this chapter.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#problem">The gap it closes</a></li>
+              <li><a href="#mdns">mDNS, and what a record exposes</a></li>
+              <li><a href="#shape">The shape of it</a></li>
+              <li><a href="#dial">Who to dial: the ring</a></li>
+              <li><a href="#name">What to publish: a rotating name</a></li>
+              <li><a href="#consent">Why it is off by default</a></li>
+              <li><a href="#reconciler">The reconciler</a></li>
+              <li><a href="#states">Six states, and searching</a></li>
+              <li><a href="#courier">Carrying mail across networks</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              If everyone in a building is already connected to the same WiFi,
+              their phones can talk to each other through it, without going out
+              to the internet at all. To find each other they shout their name
+              onto the network and listen for other names. The catch is that
+              shouting your name tells the building you are running this app, so
+              the app never shouts unless you say it may. And because shouting
+              finds <em>everyone</em>, the phones sort all the names into a
+              circle and each one links only to its few neighbours in that
+              circle, instead of everybody linking to everybody.
+            </p>
+          </div>
+
+          <h2 id="problem">The gap it closes</h2>
+          <p>
+            Before this, an iPhone and an Android phone on the same WiFi network
+            had <strong>no local path between them at all</strong>. That sounds
+            surprising given the app already had two WiFi-adjacent transports,
+            so it is worth being precise about why.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Transport</th><th>Needs a network?</th><th>Crosses platforms?</th><th>Reaches</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Bluetooth LE</td>
+                  <td>No</td>
+                  <td>Yes</td>
+                  <td>Anyone in radio range, at about 18 KiB/s</td>
+                </tr>
+                <tr>
+                  <td>WiFi Aware</td>
+                  <td>No</td>
+                  <td class="pill bad">No</td>
+                  <td>Same-platform phones nearby. Apple demands a paired data path Android cannot complete.</td>
+                </tr>
+                <tr>
+                  <td><strong>LAN (this chapter)</strong></td>
+                  <td class="pill warn">Yes</td>
+                  <td class="pill ok">Yes</td>
+                  <td>Everyone on the network, at network speed</td>
+                </tr>
+                <tr>
+                  <td>Nostr</td>
+                  <td>Internet</td>
+                  <td>Yes</td>
+                  <td>Anyone, anywhere, if a relay is reachable</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            WiFi Aware is a <em>radio protocol</em>, not a way of using a
+            network: two phones on the same router cannot reach each other over
+            it. So it sits beside LAN rather than being replaced by it. Aware
+            needs no network at all, which mDNS cannot do; mDNS reaches everyone
+            on a network, which Aware cannot.
+          </p>
+          <div class="box ok">
+            <p class="box-title">The scenario this was built for</p>
+            <p>
+              A ship, a hotel, a conference centre, a hackathon, anywhere with
+              working WiFi and no route out. The router is up, every phone is
+              associated, and there is no internet. Before LAN the only path
+              between an iPhone and a Pixel in that room was Bluetooth, which is
+              two orders of magnitude slower and limited to a handful of links.
+            </p>
+          </div>
+          <p>
+            Being plain IP, it does not care which phone anyone owns. The links
+            carry the same frames Bluetooth carries, so the mesh engine needs no
+            new concept and the wire format does not move. Everything in chapters
+            <a href="09-wire-format.html">09</a> to
+            <a href="15-mesh-service.html">15</a> is unchanged.
+          </p>
+
+          <h2 id="mdns">mDNS, and what a record exposes</h2>
+          <p>
+            Multicast DNS is DNS with no server. Chapter
+            <a href="04-networking.html">04</a> has the general version; the
+            short one is:
+          </p>
+          <pre class="ascii">
+  ORDINARY DNS                      mDNS
+  ────────────                      ────
+
+  who is example.com?               who offers _airhop-lan-v1._tcp?
+        │                                 │
+        ▼  unicast                        ▼  multicast to 224.0.0.251
+   a DNS server                      EVERY DEVICE on the link
+        │                                 │
+        ▼                                 ▼
+   one answer                        every device that offers it
+                                     answers for itself
+
+  no server, no registrar, no configuration.
+  the same protocol behind AirPlay, printer discovery and Chromecast.
+</pre>
+          <p>
+            The service type is <code>_airhop-lan-v1._tcp</code>, kept
+            deliberately distinct from WiFi Aware's
+            <code>_airhop-mesh-v1._tcp</code> so neither reads as a typo of the
+            other.
+          </p>
+          <div class="box bad">
+            <p class="box-title">What publishing actually costs you</p>
+            <p>
+              An mDNS record is <strong>cleartext to the entire network</strong>
+              and is logged by ordinary infrastructure. Enterprise WiFi
+              controllers, mDNS reflectors and network monitoring tools all keep
+              it as a matter of routine. So publishing on a workplace or venue
+              network produces, in somebody else's logs, a list of which devices
+              were running this app and when. That is an attendance list. It is
+              the reason for both of the design decisions below.
+            </p>
+          </div>
+
+          <h2 id="shape">The shape of it</h2>
+          <pre class="ascii">
+  TypeScript                                    Native
+  ──────────                                    ──────
+
+  lan-controller.ts        413 lines      AirhopLANModule.kt    621 lines
+    the reconciler                          NsdManager
+    owns intent and state                 AirhopLANModule.swift 620 lines
+        │                                   NWListener / NWBrowser
+        │  startLAN(instanceName)                  │
+        │  connectToPeer(serviceName)              │
+        │  writeToLANLink(id, base64)              │
+        │  stopLAN()                               │
+        ├──────────────────────────────────────────┤
+        │                                          │
+        │  peerDiscovered { serviceName }          │
+        │  peerLost       { serviceName }          │
+        │  linkConnected  { linkID }               │
+        │  linkDisconnected { linkID }             │
+        │  packetReceived { linkID, dataBase64 }   │
+        │  availabilityChanged { available }       │
+        │◀─────────────────────────────────────────┘
+        ▼
+  lan-dial-policy.ts        55 lines      one contract,
+    pure function                         two implementations,
+    who to dial                           and the mesh engine does
+        │                                 not know which it has
+        ▼
+  LinkRegistry (kind "lan")
+    same as every other transport from here on
+</pre>
+          <div class="box ok">
+            <p class="box-title">Discovery and dialling are split, unlike every other transport</p>
+            <p>
+              With <code>AirhopWiFi</code>, native connects to whatever it finds.
+              Here it cannot, because mDNS finds <em>everyone</em>, and
+              connecting to everyone is a full mesh whose cost grows with the
+              square of the room. Who to dial is therefore a decision rather than
+              a consequence, and decisions live in TypeScript. Native reports
+              what it sees and opens the sockets it is told to. Same split as
+              <code>power-policy.ts</code>, and for the same reason: a pure
+              function is testable in CI without a network.
+            </p>
+          </div>
+
+          <h2 id="dial">Who to dial: the ring</h2>
+          <p>
+            Bluetooth answers "how many links" with physics: the radio holds six
+            or so and refuses more. mDNS has no such limit, so the cap has to be
+            deliberate.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The arithmetic that forces a cap</p>
+            <p>
+              Thirty phones fully connected is 435 sockets. One broadcast then
+              costs <strong>841 writes instead of 29</strong>, because every
+              phone relays to everyone it holds and the deduplicator throws the
+              copies away. A channel photo turns that into millions of writes for
+              one file. Note that this arithmetic is not LAN's fault: it applies
+              to Bluetooth too, and Bluetooth is saved from it only by the radio
+              refusing the links.
+            </p>
+          </div>
+          <p>
+            So <code>MAX_LAN_LINKS = 8</code>, sized against bitchat's
+            <code>bleMaxCentralLinks</code> of 6, which keeps a LAN room reading
+            the way a Bluetooth room does to every constant tuned for Bluetooth
+            density: the jitter bands, the TTL cap, the sync budgets.
+          </p>
+          <pre class="ascii">
+  dialTargets(selfName, discovered, maxLinks = 8)
+
+  1.  sort every name, OUR OWN INCLUDED, into one ring
+  2.  reach = maxLinks / 2 = 4
+  3.  link to the 4 names either side of ours
+  4.  dial only those sorting AFTER ours
+
+
+        ring of 6, we are "c7"
+
+                    3f
+              a1  ┌────┐  b9
+                 ╱      ╲
+          ▲ ────┤   c7   ├──── ▲     4 either side, wrapping
+          │      ╲      ╱      │
+          │   d2  └────┘  e8   │
+          │                    │
+          └── neighbours: a1 b9 d2 e8 3f  (ring wraps, below cap
+                                            everyone is a neighbour)
+
+              WE dial:  d2, e8  (sort after "c7")
+              THEY dial us:  a1, b9, 3f  (we sort after them)
+
+  Both ends compute the same ring from the same list, so they agree
+  without negotiating. Each dials only the pairs sorting after its own
+  name, so no pair is dialled twice.
+</pre>
+          <p>
+            A ring rather than "everyone dials the lowest N", which would point
+            the room at a few phones and produce a star with hot spots rather
+            than a mesh. Below the cap the ring wraps and every peer is a
+            neighbour, which is exactly right for a hotspot with four people on
+            it.
+          </p>
+
+          <h2 id="name">What to publish: a rotating name</h2>
+          <p>
+            The instance name is 16 random hex characters, minted per
+            <em>publishing session</em>, and it is emphatically
+            <strong>never the peer ID</strong>.
+          </p>
+          <pre class="ascii">
+  newInstanceName()  =  hex(crypto.getRandomValues(8 bytes))
+
+  called for EVERY start, not once per process
+
+     office WiFi        walk         cafe WiFi
+     ──────────         ────         ─────────
+     "3f9a2c...."       stop         "b71e04...."
+          │             start             │
+          ▼                               ▼
+     office logs                     cafe logs
+
+     two records, no relationship an observer can see
+
+
+  the alternative, and why it is refused:
+
+     peerID = hex(SHA-256(noiseStaticPubKey))[0:16]
+     never changes, ever
+
+     office logs "a1b2..."  +  cafe logs "a1b2..."
+                       │
+                       ▼
+     anyone holding both sets of logs has linked
+     your two locations, for the life of the install
+</pre>
+          <p>
+            The ring sorts on that random name, so discovery needs no durable
+            identifier at all. Identity is proven afterwards, in the ANNOUNCE,
+            once the link is up and the ordinary mesh rules apply. Chapter
+            <a href="20-identity.html">20</a> is that half.
+          </p>
+
+          <h2 id="consent">Why it is off by default</h2>
+          <div class="box warn">
+            <p class="box-title">The only transport in the app that requires the user to opt in</p>
+            <p>
+              Bluetooth, WiFi Aware and Nostr all start with the mesh. LAN does
+              not, and <code>setEnabled</code> gates everything downstream of it.
+            </p>
+            <p>
+              The reason is the record. Publishing tells every device on the
+              network, and whoever runs the network, that this phone is carrying
+              Airhop. On a workplace or venue network that is an attendance list
+              in somebody else's logs, and it is not a cost the app may take on
+              somebody's behalf for a speed improvement they did not ask for.
+            </p>
+            <p>
+              The Settings copy says that, rather than selling the speed. That is
+              a deliberate choice about what a consent screen is for.
+            </p>
+          </div>
+          <p>
+            This is worth holding beside the rest of the threat model in chapter
+            <a href="43-threat-model.html">43</a>: it is the one place in the app
+            where the privacy cost is paid to the <em>local network operator</em>
+            rather than to a peer, a relay or an observer of the radio.
+          </p>
+
+          <h2 id="reconciler">The reconciler</h2>
+          <p>
+            Same shape as <code>wifi-controller.ts</code>: a desired state, an
+            observed outcome, one idempotent pass that closes the gap, and a
+            retry when it cannot.
+          </p>
+          <pre class="ascii">
+  DESIRED                        run?  =  enabled  AND  meshRunning
+     enabled       user switch
+     meshRunning   mesh lifecycle
+
+  OBSERVED
+     started, unsupported, lastFailure, discovered[], linkCount
+
+  reconcile()
+     ├─ want &amp;&amp; !started   ->  startLAN(newInstanceName())
+     │                          on reject, classify:
+     │                            unsupported  ->  permanent, stop trying
+     │                            unavailable  ->  clears on its own, retry
+     │                            permission   ->  Android asks; on iOS the
+     │                                             prompt comes from browsing
+     │                                             and a refusal needs Settings
+     │                            transient    ->  retry ladder
+     ├─ !want &amp;&amp; started   ->  stopLAN()
+     └─ started            ->  walk the dial plan
+
+  BACKOFF_MS          500, 1500, 4000, 10000, 30000
+  DISCOVERY_SETTLE_MS 500     mDNS answers arrive in a burst, one per
+                              device. Dialling on the first means planning
+                              a ring of two, then replanning as each
+                              further answer lands. Settling first costs
+                              half a second nobody is watching and
+                              produces one correct plan instead of N.
+  DIAL_REVIEW_MS      15000   a TCP link can drop while the peer's mDNS
+                              record stays visible, which is no discovery
+                              change at all. Without a periodic review a
+                              hiccup loses that peer until it restarts.
+                              Matched to the gossip sync interval.
+</pre>
+          <p>
+            Two guards are worth naming because both are the kind of bug that
+            only appears under a race:
+          </p>
+          <ul>
+            <li>
+              <strong>A generation counter</strong>, bumped whenever intent
+              changes under an in-flight start, so a resolve that lands late
+              cannot mark the transport started against an intent that has
+              already moved on. The WiFi controller carries the same guard for
+              the same reason.
+            </li>
+            <li>
+              <strong><code>onAvailabilityChanged(false)</code> forgets that it
+              is started.</strong> This is the case that is otherwise
+              unrecoverable: the listener and the browser are dead but the module
+              still holds its handles, so every later start resolves instantly
+              having done nothing. Dropping the belief is what lets the next pass
+              do real work. Android reports both edges from the network callback;
+              iOS reports only the falling edge, so the controller answers a drop
+              with its retry ladder rather than waiting to be told the network
+              came back.
+            </li>
+          </ul>
+          <p>
+            A <code>dialling</code> set tracks in-flight dials so a pass landing
+            mid-dial does not start a second one. It is emptied when each dial
+            settles, either way: a name left in it after its dial finished is a
+            peer that could never be dialled again.
+          </p>
+
+          <h2 id="states">Six states, and searching</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th><code>LanState</code></th><th>Means</th><th>Recoverable?</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>off</code></td><td>The user has not turned it on</td><td>By the switch</td></tr>
+                <tr><td><code>unsupported</code></td><td>No mDNS stack, or an OS below the floor</td><td>No. Permanent.</td></tr>
+                <tr><td><code>unavailable</code></td><td>No network, or not on WiFi</td><td>Clears on its own</td></tr>
+                <tr><td><code>permission</code></td><td>Local network access refused</td><td>Android re-asks; iOS needs Settings</td></tr>
+                <tr><td><code>searching</code></td><td>Running, published, zero links</td><td>Maybe. See below.</td></tr>
+                <tr><td><code>active</code></td><td>Running with at least one link</td><td>Working</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Why zero links says "searching" and not "nothing here"</p>
+            <p>
+              <strong>Client isolation</strong> is on by default at most guest
+              and venue networks: the access point forwards traffic to the
+              internet but blocks phone-to-phone traffic entirely. It cannot be
+              detected before trying, so from inside the app an empty network and
+              a network that forbids peer traffic look identical.
+            </p>
+            <p>
+              The UI therefore says "No Airhop devices on this network" rather
+              than spinning forever or claiming a failure it cannot prove. mDNS
+              filtering is common even where ordinary traffic works, which
+              produces the same symptom by a different mechanism; a manual join
+              by address covers that case.
+            </p>
+          </div>
+          <div class="box bad">
+            <p class="box-title">iOS is foreground only</p>
+            <p>
+              A TCP socket has no equivalent of the
+              <code>bluetooth-central</code> background mode, and a suspended app
+              has its listener reclaimed without getting it back on resume. So
+              LAN on iOS runs while the app is in front and not otherwise. WiFi
+              Aware on iOS is already in the same position, so this is not a new
+              limitation, but it does mean the fastest transport is the one least
+              available in a pocket.
+            </p>
+          </div>
+
+          <h2 id="courier">Carrying mail across networks</h2>
+          <p>
+            The question this transport raises most often: three phones on a
+            hotspot, one of them carrying a sealed envelope for a fourth person
+            who is not there. What happens?
+          </p>
+          <pre class="ascii">
+  1.  PICKED UP over LAN
+      envelope arrives as an ordinary COURIER_ENV packet on a lan link
+      sealed to a one-time prekey, addressed by a rotating recipient tag
+      the carrier cannot read it and neither can anyone it passes through
+
+  2.  DORMANT
+      persisted to MMKV by courier-store.ts
+      survives the app being killed AND the phone rebooting
+      does nothing at all until a trigger arrives
+
+  3.  the carrier switches off the hotspot and walks away
+      LAN links close.  the envelope is untouched.
+
+  4.  WOKEN, hours later, over BLUETOOTH
+      the recipient announces
+        -> onAnnounce -> sprayCourierTo(peerID)
+        -> three days of candidate tags computed
+        -> offerHandover matches
+        -> links.linkFor(peer) returns whatever link exists
+
+  5.  DELIVERED over Bluetooth, or over Nostr, or over LAN again
+
+  NOTHING IN THE COURIER PATH KNOWS WHICH TRANSPORT IT ARRIVED ON
+  OR WHICH ONE IT LEAVES ON. Picked up over LAN, delivered over
+  Bluetooth is an ORDINARY case, not a special one.
+</pre>
+          <p>
+            That property is not an accident of this transport; it falls out of
+            the <code>LinkRegistry</code> being the single answer to "how do I
+            reach this peer". Chapter <a href="13-courier.html">13</a> is the
+            courier in full, chapter <a href="14-peers-queues.html">14</a> is the
+            registry.
+          </p>
+          <p>
+            The 24 hour envelope TTL runs on wall-clock time and is unaffected by
+            any of this: an envelope is dropped 24 hours after it was sealed
+            whether or not anyone ever met the recipient, and every carrier
+            enforces that independently.
+          </p>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>_airhop-lan-v1._tcp</code></td><td>mDNS service type</td><td>Kept distinct from Aware's <code>_airhop-mesh-v1._tcp</code> so neither reads as a typo of the other.</td></tr>
+                <tr><td>8</td><td><code>MAX_LAN_LINKS</code></td><td>Sized against bitchat's <code>bleMaxCentralLinks</code> of 6, so a LAN room reads the way a Bluetooth room does to every Bluetooth-tuned constant. Even, because the ring takes half on each side.</td></tr>
+                <tr><td>4</td><td>Ring reach either side</td><td><code>MAX_LAN_LINKS / 2</code>.</td></tr>
+                <tr><td>16 hex chars</td><td>Instance name length</td><td>8 random bytes. No history, and collides rarely enough that mDNS never renames us.</td></tr>
+                <tr><td>500 ms</td><td><code>DISCOVERY_SETTLE_MS</code></td><td>mDNS answers burst. One correct plan beats N wrong ones.</td></tr>
+                <tr><td>15,000 ms</td><td><code>DIAL_REVIEW_MS</code></td><td>A TCP link can drop with the mDNS record still visible, which is no discovery event. Matched to the gossip sync interval.</td></tr>
+                <tr><td>500 to 30,000 ms</td><td><code>BACKOFF_MS</code> ladder</td><td>Five steps. Nothing the user is watching depends on this transport, and polling a network interface in a pocket is not free.</td></tr>
+                <tr><td>6</td><td><code>LanState</code> values</td><td>off, unsupported, unavailable, permission, searching, active.</td></tr>
+                <tr><td>435 / 841</td><td>Sockets and writes for 30 phones fully connected</td><td>Against 30 and 29 for a ring. The arithmetic that forces the cap.</td></tr>
+                <tr><td>1,241</td><td>Lines of new native code</td><td>621 Kotlin (NsdManager), 620 Swift (NWListener and NWBrowser). One contract, two implementations.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>Client isolation.</strong> The most common failure by a
+              wide margin, on by default at most venues, undetectable before
+              trying, and indistinguishable from an empty network. It is why the
+              zero-link state is worded as "searching" rather than as an error.
+            </li>
+            <li>
+              <strong>mDNS filtering.</strong> Common even where ordinary traffic
+              works. Same symptom, different mechanism.
+            </li>
+            <li>
+              <strong>A stable instance name.</strong> Would hand anyone holding
+              logs from two networks the link between them, for the life of the
+              install. This is why the name is minted per publishing session
+              rather than per process.
+            </li>
+            <li>
+              <strong>Dialling on the first discovery.</strong> Produces a plan
+              for a ring of two, then a replan per answer. The settle delay
+              exists for exactly this.
+            </li>
+            <li>
+              <strong>Losing the network without forgetting <code>started</code>.</strong>
+              The unrecoverable one: the listener and browser are dead, the
+              module still holds its handles, and every later start resolves
+              instantly having done nothing.
+            </li>
+            <li>
+              <strong>Letting LAN peers into the announce neighbour list.</strong>
+              The announce carries only the first ten <code>directPeers()</code>
+              as TLV 0x04, and that list is the mesh graph other clients draw. A
+              phone on a busy network holds more LAN peers than Bluetooth ones,
+              so <code>TRANSPORT_KINDS</code> puts Bluetooth first and LAN last
+              specifically to stop them crowding out the Bluetooth neighbours and
+              handing bitchat a graph full of edges it cannot use.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            The mesh keeps working everywhere, and one specific room gets much
+            worse: a building with WiFi, no internet, and a mix of iPhones and
+            Android phones. There, the only remaining path between the two
+            platforms is Bluetooth at roughly 18 KiB/s with a handful of links,
+            so a photo becomes a minute-long transfer and a crowd becomes a
+            congested radio. Nothing is lost in correctness terms, because LAN
+            introduces no new packet type, no new crypto and no new routing rule.
+            What is lost is the one situation where a mesh app is most obviously
+            the right tool and was previously slowest.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Approach</th><th>How it works</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>UDP broadcast discovery</td>
+                  <td>Shout on a fixed port, listen for others</td>
+                  <td>Blocked more often than multicast on managed networks, has no service-type namespace, and would need its own retry and naming scheme. mDNS is the standard both platforms already ship a stack for.</td>
+                </tr>
+                <tr>
+                  <td>Full mesh, no cap</td>
+                  <td>Dial everyone mDNS returns</td>
+                  <td>Quadratic. 30 phones is 435 sockets and 841 writes per broadcast, and a channel photo turns that into millions of writes.</td>
+                </tr>
+                <tr>
+                  <td>Everyone dials the lowest N names</td>
+                  <td>Simpler than a ring, still bounded</td>
+                  <td>Points the room at a few phones. A star with hot spots, not a mesh, and those few phones carry the whole network's relaying.</td>
+                </tr>
+                <tr>
+                  <td>Publish the peer ID as the instance name</td>
+                  <td>No separate naming scheme, no ring identifier to invent</td>
+                  <td>A permanent identifier in a record every network logs. Two networks' logs then link your locations for the life of the install.</td>
+                </tr>
+                <tr>
+                  <td>On by default, like every other transport</td>
+                  <td>One fewer setting, faster out of the box</td>
+                  <td>Publishes an attendance list to a network operator who did not ask and a user who did not consent. The one transport whose cost is paid to the network rather than to a peer.</td>
+                </tr>
+                <tr>
+                  <td>Native decides who to dial</td>
+                  <td>Matches how <code>AirhopWiFi</code> works</td>
+                  <td>Two implementations of the same policy in two languages, neither testable without a network. The pure function is exercised in CI.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does Airhop need a LAN transport when it already has WiFi Aware?</span>
+              <span class="a">Because WiFi Aware is a radio protocol, not a way of using a network, and it does not cross platforms. Apple requires a paired data path that Android cannot complete, so an iPhone and an Android phone have no Aware path between them at all, and two phones on the same router cannot reach each other over Aware even on the same platform. That leaves a building with WiFi and no internet, full of both platforms, with Bluetooth as its only local path. mDNS plus TCP closes exactly that gap, and it sits beside Aware rather than replacing it: Aware needs no network, which mDNS cannot do, and mDNS reaches everyone on a network, which Aware cannot.</span>
+            </li>
+            <li>
+              <span class="q">Why is the mDNS instance name random and rotated, rather than the peer ID?</span>
+              <span class="a">Because an mDNS record is cleartext to the whole network and is logged by ordinary infrastructure. A peer ID is derived from the long-term Noise key and never changes, so publishing it means anyone holding logs from two networks has linked your two locations, permanently. Sixteen random hex characters carry no history, and minting a fresh one per publishing session rather than per process matters specifically because a phone carried from an office to a cafe stops and starts on the way. Discovery needs no durable identifier at all: the ring sorts on the random name, and identity is proven afterwards in the ANNOUNCE once the link is up.</span>
+            </li>
+            <li>
+              <span class="q">Explain the dial ring, and why not just have everyone dial everyone.</span>
+              <span class="a">Every name, including our own, is sorted into one ring, and each device links to the four either side of it, dialling only those that sort after its own name so no pair is dialled twice. Both ends compute the same ring from the same list, so they agree without negotiating anything. The alternative is quadratic: thirty phones fully connected is 435 sockets, and one broadcast costs 841 writes instead of 29 because every phone relays to everyone it holds and the deduplicator discards the copies. A channel photo makes that millions of writes for one file. A ring rather than "dial the lowest N" because the latter points the room at a few phones, which is a star with hot spots rather than a mesh. Below the cap the ring wraps and everyone is a neighbour, which is right for a four-person hotspot.</span>
+            </li>
+            <li>
+              <span class="q">Why is this the only transport that is off by default?</span>
+              <span class="a">Because it is the only one whose cost is paid to the network operator rather than to a peer or an observer of the radio. Publishing an mDNS record tells every device on the network, and whoever runs it, that this phone is carrying Airhop, and that record lands in ordinary infrastructure logs. On a workplace or venue network that is an attendance list. Bluetooth and Aware advertise too, but to whoever is physically in range rather than into a logged, administered system. That is not a cost the app may take on somebody's behalf in exchange for speed they did not ask for, so <code>setEnabled</code> gates everything and the Settings copy states the exposure rather than selling the bandwidth.</span>
+            </li>
+            <li>
+              <span class="q">A user turns LAN on, the switch stays on, and nothing ever connects. What is happening and what does the app say?</span>
+              <span class="a">Almost certainly client isolation: the access point forwards traffic to the internet and blocks phone-to-phone traffic, which is the default at most guest and venue networks. It cannot be detected before trying, and from inside the app an empty network and one that forbids peer traffic are indistinguishable. So the state is <code>searching</code>, not an error, and the UI says "No Airhop devices on this network" rather than spinning or claiming a failure it cannot prove. mDNS filtering produces the same symptom by a different mechanism, and is common even where ordinary traffic works. A manual join by address covers that case.</span>
+            </li>
+            <li>
+              <span class="q">A phone picks up a courier envelope over LAN, then leaves the network. Can it still deliver?</span>
+              <span class="a">Yes, and it is not a special case. The envelope persists to MMKV, so it survives the app being killed and the phone rebooting. Delivery is triggered by <code>onAnnounce</code> over any transport, and the handover asks <code>links.linkFor(peer)</code>, which returns whatever link exists. So picked up over LAN and delivered over Bluetooth hours later, or over Nostr, is an ordinary path. Nothing in the courier code knows or cares which transport an envelope arrived on. The 24 hour TTL is unaffected: it runs from the seal time on wall-clock, so the envelope is dropped whether or not anyone met the recipient.</span>
+            </li>
+            <li>
+              <span class="q">Why does <code>TRANSPORT_KINDS</code> list Bluetooth first and LAN last?</span>
+              <span class="a">Because enumeration order is observable, and two callers depend on it. The announce carries only the first ten <code>directPeers()</code> as its neighbour list in TLV 0x04, and that list is the mesh graph other clients, including bitchat, draw from. A phone on a busy network holds more LAN peers than Bluetooth ones, so listing LAN first would crowd the Bluetooth neighbours out and hand bitchat a graph full of edges it has no way to use. Couriers are also the first few <code>directPeers()</code>. Note this is deliberately distinct from <code>SEND_PREFERENCE</code>, which is WiFi then LAN then Bluetooth: that answers "which link do we use", this answers "what order do we list things in".</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 37: Permissions and consent. Six runtime permissions, three states, the startup sequence, and why the mesh never waits on an OS dialog." />
+    <title>37 Permissions and consent · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 37 · The device</p>
+          <h1>Permissions and consent</h1>
+          <p class="kt-lede">
+            A mesh app has an unusually hard permission problem. It needs
+            Bluetooth before it can do anything at all, it needs location on
+            older Android for reasons that have nothing to do with location, and
+            a refusal is close to permanent. Get the sequencing wrong and the
+            app looks broken while every radio sits idle.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#three-states">Three states, not one boolean</a></li>
+              <li><a href="#inventory">Every permission the app asks for</a></li>
+              <li><a href="#android">Android: the split at API 31</a></li>
+              <li><a href="#never">neverForLocation, and a deliberate divergence</a></li>
+              <li><a href="#ios">iOS: prompts you do not control</a></li>
+              <li><a href="#sequence">The startup sequence</a></li>
+              <li><a href="#primer">The primer sheet</a></li>
+              <li><a href="#blocker">Naming the reason: BleBlocker</a></li>
+              <li><a href="#screen">The Permissions screen</a></li>
+              <li><a href="#media">Camera, photos, microphone</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Your phone is like a house with locked rooms. The app has to knock
+              before it can go into the Bluetooth room, the camera room, the
+              microphone room. You can say yes, or no, or "no and stop asking".
+              That last one really does mean stop: after it, knocking makes no
+              sound at all, and the only way to open the door is to walk to the
+              phone's own settings and unlock it from there. So the app explains
+              why it is knocking <em>before</em> it knocks, once, and if you have
+              locked a door for good it stops pretending it can knock and just
+              offers to walk you to the settings.
+            </p>
+          </div>
+
+          <h2 id="three-states">Three states, not one boolean</h2>
+          <div class="box ok">
+            <p class="box-title">Where permission flows usually go wrong</p>
+            <p>
+              Treating a permission as granted-or-not collapses two situations
+              that need opposite handling. <code>src/platform/permissions.ts</code>
+              keeps three.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>State</th><th>Means</th><th>Correct response</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>undetermined</code></td>
+                  <td>The OS prompt has never been shown</td>
+                  <td>Show it. Saying anything of our own first is a second dialog nobody asked for.</td>
+                </tr>
+                <tr>
+                  <td><code>deniable</code></td>
+                  <td>Denied once, but the OS will still prompt</td>
+                  <td>Ask again. The user is now inside the flow that needs it, so the ask finally has context.</td>
+                </tr>
+                <tr>
+                  <td><code>blocked</code></td>
+                  <td>Denied for good: twice on Android, any denial on iOS</td>
+                  <td>The <strong>only</strong> state that deserves a message from us, and that message must carry the way out.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The whole distinction reduces to one field the platform gives us,
+            <code>canAskAgain</code>. <code>ensurePermission(get, request, copy)</code>
+            resolves all three into a plain boolean so every caller can stay
+            linear:
+          </p>
+          <pre class="ascii">
+  ensurePermission(get, request, copy)
+        │
+        ├─ current = await get()          check first: an already-granted
+        │                                  permission never costs a trip
+        │                                  through the prompt machinery
+        ├─ current.granted        -> true
+        │
+        ├─ current.canAskAgain
+        │     ├─ asked = await request()
+        │     ├─ asked.granted       -> true
+        │     └─ asked.canAskAgain   -> false, and NO dialog of our own
+        │           (declining a prompt they were looking at is an
+        │            answer, not an error. Nagging here is noise.)
+        │
+        └─ showBlockedAlert(copy)   -> false
+              "Camera access is off"
+              "...so Airhop cannot scan a contact's QR code."
+              [ Open Settings ]  [ Not now ]
+</pre>
+          <p>
+            <code>showBlockedAlert</code> deep-links into the Settings app
+            through <code>Linking.openSettings()</code> rather than describing
+            where to tap. That is the difference between a dead end and a two-tap
+            fix, and it is the same dialog every blocked path in the app uses.
+          </p>
+
+          <h2 id="inventory">Every permission the app asks for</h2>
+          <p>
+            Six runtime permissions, and a longer list of install-time
+            declarations behind them.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Permission</th><th>Asked when</th><th>Used for</th><th>Cost of refusing</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Bluetooth</strong></td>
+                  <td>First launch, before the mesh starts</td>
+                  <td>Scanning, advertising, connecting. The entire mesh.</td>
+                  <td>Total. No peers, ever. Only Nostr still works.</td>
+                </tr>
+                <tr>
+                  <td><strong>Location</strong></td>
+                  <td>After the mesh is up (iOS); folded into the BLE ask on Android 11 and below</td>
+                  <td>Resolving the geohash cell for area channels. On Android 30 and below it is also what BLE scanning needs.</td>
+                  <td>Area channels stay empty. On old Android, the mesh itself.</td>
+                </tr>
+                <tr>
+                  <td><strong>Notifications</strong></td>
+                  <td>Last in the startup sequence</td>
+                  <td>System notifications for messages</td>
+                  <td>Degrades gracefully: in-app badges and haptics still work.</td>
+                </tr>
+                <tr>
+                  <td><strong>Camera</strong></td>
+                  <td>On demand, when scanning a QR or taking a photo</td>
+                  <td>Contact QR scan, photo and video capture</td>
+                  <td>Contacts can still be added by pasted code or peer ID.</td>
+                </tr>
+                <tr>
+                  <td><strong>Photos</strong></td>
+                  <td>On demand</td>
+                  <td>Sending images, picking a saved QR, saving your own QR</td>
+                  <td>No gallery attachments.</td>
+                </tr>
+                <tr>
+                  <td><strong>Microphone</strong></td>
+                  <td>On demand</td>
+                  <td>Voice notes and live push-to-talk</td>
+                  <td>No voice; text and files unaffected.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Order matters and is enforced. On a fresh install, concurrent prompts
+            raced: the notification prompt was swallowed and sometimes crashed.
+            Every prompt outside the BLE batch is now awaited one after another.
+          </p>
+
+          <h2 id="android">Android: the split at API 31</h2>
+          <p>
+            <code>src/platform/ble-permissions.ts</code>. Android changed
+            Bluetooth permissions in API 31, and the app asks for genuinely
+            different things on each side of that line.
+          </p>
+          <pre class="ascii">
+  androidApiLevel() &gt;= 31              androidApiLevel() &lt;= 30
+  ─────────────────────────            ──────────────────────────
+  BLUETOOTH_SCAN                       ACCESS_FINE_LOCATION
+    + neverForLocation                   (and nothing else)
+  BLUETOOTH_ADVERTISE
+  BLUETOOTH_CONNECT                    Bluetooth permissions are
+                                       install-time here; scanning is
+  no location at all                   coupled to location with no
+                                       way to say otherwise
+
+  optional, batched into the same run of dialogs, never required:
+    NEARBY_WIFI_DEVICES     API 33+, for the WiFi Aware fast path
+</pre>
+          <p>
+            Two properties of that function are easy to miss and both were
+            bugs once:
+          </p>
+          <ul>
+            <li>
+              <strong>The optional permission is batched but not required.</strong>
+              WiFi Aware is an accelerator; the mesh must run without it. A
+              denial there never fails the gate. Batching it means the user
+              answers one run of dialogs rather than two.
+            </li>
+            <li>
+              <strong>The fast-path check reads both lists.</strong> They move
+              independently. A build that adds an optional permission reaches
+              phones whose required grants are already settled, so a check
+              reading only the required list returns early for the life of the
+              install and the new permission is never requested at all. On API
+              33 and above both lists sit in the same <code>NEARBY_DEVICES</code>
+              group, so the extra pass is granted without a dialog. That is what
+              makes re-requesting safe here: an optional permission carrying its
+              own group would re-prompt on every launch once denied, and would
+              need a persisted "already asked" marker instead.
+            </li>
+          </ul>
+          <p>
+            <code>hasBlePermissions()</code> is the read-only counterpart. It
+            checks the <em>required</em> permissions and never prompts, which is
+            what makes it safe to call on app resume, where the user may have
+            just granted in Settings. Re-requesting there is either a no-op or a
+            prompt thrown at somebody who did not ask, and both leave the mesh
+            dead until a restart. It deliberately ignores the optional ones: a
+            missing accelerator grant must not shut down a transport that does
+            not depend on it.
+          </p>
+          <div class="box warn">
+            <p class="box-title">One permission is declared but never requested</p>
+            <p>
+              <code>ACCESS_LOCAL_NETWORK</code> sits in the manifest so the WiFi
+              Aware socket keeps working later, but it is not in the request
+              list. Local network protection is only enforced for apps targeting
+              Android 17, and this app targets 36, so asking now would show a
+              dialog that unlocks nothing. It gets added in the same commit that
+              raises the target, and it will need the persisted marker described
+              above, because it carries its own permission group.
+            </p>
+          </div>
+
+          <h2 id="never">neverForLocation, and a deliberate divergence</h2>
+          <p>
+            <code>android:usesPermissionFlags="neverForLocation"</code> on
+            <code>BLUETOOTH_SCAN</code> is a promise to the OS that scan results
+            will not be used to derive a physical position. For Airhop that
+            promise is accurate: a scan result is read for the service UUID, the
+            peer ID and the RSSI, none of which is a position. The flag releases
+            scanning from the location permission <em>and</em> from the system
+            location toggle.
+          </p>
+          <div class="box ok">
+            <p class="box-title">Where this differs from bitchat/android, and why</p>
+            <p>
+              bitchat requires location at every API level, and therefore also
+              needs <code>ACCESS_BACKGROUND_LOCATION</code> and a
+              <code>location</code> foreground-service type. That coupling costs
+              a backgrounded phone every scan result, and costs anyone whose
+              location is set to "Approximate" a mesh that finds nobody. Airhop
+              declares the flag and drops the coupling above API 31. The
+              advertisement and the wire protocol are untouched, so interop is
+              unaffected. This is one of the clearest cases in the codebase of
+              diverging from the reference implementation for a concrete user
+              benefit.
+            </p>
+          </div>
+          <p>
+            The geohash channels still need real location, and
+            <code>location-service.ts</code> requests it when one opens. Denying
+            that costs channels, not the mesh.
+          </p>
+
+          <h2 id="ios">iOS: prompts you do not control</h2>
+          <p>
+            There is no BLE permission code for iOS, and that is correct.
+            CoreBluetooth prompts on first use of a manager, backed by the usage
+            strings compiled into <code>Info.plist</code>. There is no way to
+            query the answer from JavaScript, and no way to ask again.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Key</th><th>Shown when</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>NSBluetoothAlwaysUsageDescription</code></td><td>First CoreBluetooth use. This string <em>is</em> the primer on iOS.</td></tr>
+                <tr><td><code>NSBluetoothPeripheralUsageDescription</code></td><td>Advertising, on older iOS versions.</td></tr>
+                <tr><td><code>NSLocationWhenInUseUsageDescription</code></td><td>Opening an area channel. Says explicitly that the exact position never leaves the device.</td></tr>
+                <tr><td><code>NSLocalNetworkUsageDescription</code></td><td>The high-bandwidth local transport.</td></tr>
+                <tr><td><code>NSCameraUsageDescription</code></td><td>QR scan and capture.</td></tr>
+                <tr><td><code>NSMicrophoneUsageDescription</code></td><td>Voice notes and live voice.</td></tr>
+                <tr><td><code>NSPhotoLibraryUsageDescription</code></td><td>Attaching images.</td></tr>
+                <tr><td><code>NSPhotoLibraryAddUsageDescription</code></td><td>Saving a photo, or downloading your own QR.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>UIBackgroundModes</code> declares
+            <code>bluetooth-central</code> and
+            <code>bluetooth-peripheral</code>, which is what lets the mesh keep
+            scanning and advertising when the app is not in front. Chapter 36 covers what iOS actually delivers in that state.
+          </p>
+          <p>
+            On iOS <code>hasBlePermissions()</code> resolves true and
+            <code>ensureBlePermissions()</code> returns granted. That is not a
+            lie so much as a statement that this layer has nothing to contribute:
+            the answer lives in system settings and the radio controller finds
+            out by trying.
+          </p>
+
+          <h2 id="sequence">The startup sequence</h2>
+          <p>
+            <code>startMeshWithPermissions()</code> in <code>src/app/app.tsx</code>.
+            The important design property is stated in one line: <strong>the mesh
+            must not wait for the permission conversation to finish.</strong>
+          </p>
+          <pre class="ascii">
+  identity loaded
+        │
+        ├─ primer needed?   not seen before  AND  not already granted
+        │     │              (3 s check timeout, default false)
+        │     └─ show sheet, wait up to 120 s, then continue regardless
+        │
+        ├─ ensureBlePermissions()          up to 60 s
+        │     ├─ answered  -> applyBlePermissionResult(perm)
+        │     └─ timed out -> publish NOTHING. `null` is "the OS never
+        │                     answered", which is not any answer it
+        │                     could have given.
+        │
+        ├─ primeTorRoutingOnStartup()      guarded: a throw here would
+        │                                  silently prevent the mesh
+        │                                  from existing at all
+        ├─ initMeshService(identity, nick) <-- the mesh now EXISTS
+        ├─ retryRadios()                   the grant may have landed
+        │                                  while the mesh was building
+        └─ startMeshDependents()
+              ├─ wallet unlock, reconcile, nutzap watcher
+              └─ sequentially, one prompt at a time:
+                    location      (iOS only in practice)
+                    notifications (last, so it lands cleanly)
+</pre>
+          <div class="box ok">
+            <p class="box-title">Why every await is time-boxed</p>
+            <p>
+              Everything before <code>initMeshService</code> is a conversation
+              with the OS, and it is not a conversation the app controls. The
+              primer resolves on a sheet the user has to dismiss.
+              <code>PermissionsAndroid.requestMultiple</code> settles on a dialog
+              hosted by <em>another process</em>, which an Activity teardown can
+              orphan, and OEMs that reap the Activity behind a foreground service
+              do exactly that. Either one going quiet used to leave a running app
+              with no mesh at all and a Mesh tab reading "starting..." for the
+              rest of the session, which is indistinguishable from a broken
+              radio.
+            </p>
+            <p>
+              Missing a deadline costs nothing that matters. The radio controller
+              reads the real grant off the device on its first pass and publishes
+              the true blocker, so a permission answer that arrives late, or
+              never, changes only how quickly the banner is right.
+            </p>
+          </div>
+          <p>
+            Note what is <em>not</em> published on a timeout. Guessing would put
+            a red banner over a permission the user may well have granted, so the
+            <code>null</code> case writes nothing and lets the controller's own
+            reading of the device be the source.
+          </p>
+
+          <h2 id="primer">The primer sheet</h2>
+          <p>
+            One screen, shown at most once per install, immediately before the
+            OS dialogs. It exists because a chat app asking for location reads as
+            tracking, and because two refusals on Android block the permission
+            for good.
+          </p>
+          <div class="box warn">
+            <p class="box-title">Four things the primer deliberately is not</p>
+            <p>
+              <strong>Not a gate.</strong> The app behind it already works, and
+              nothing downstream branches on what the user chose.
+            </p>
+            <p>
+              <strong>Not a question.</strong> Dismissing by drag or backdrop
+              counts as acknowledged, because there is no wrong way to close an
+              explanation and nothing should be waiting on a specific gesture.
+            </p>
+            <p>
+              <strong>Not repeated.</strong> Gated on
+              <code>permissionPrimerSeen</code> so somebody who declined does not
+              get the lecture on every launch, and gated on the permission not
+              already being held so a returning user never sees it at all.
+            </p>
+            <p>
+              <strong>Not able to hang.</strong> It resolves however it is
+              dismissed, it resolves immediately if it is somehow already up, and
+              if it never appears the 120 second deadline fires and
+              <code>acknowledgePermissionPrimer()</code> is called anyway to put
+              the store back in step. A primer that failed to resolve would hold
+              BLE startup behind it forever, which is far worse than the problem
+              it exists to prevent.
+            </p>
+          </div>
+          <p>
+            Its rows mirror the prompts that are about to fire, in the order they
+            fire: Bluetooth, then Location on Android only, then Notifications.
+            Each row says what the permission does and what it does not. It is
+            Android-only in practice, and correctly so: on iOS the CoreBluetooth
+            prompt carries our own usage string and there is no location coupling
+            to explain away, so that prompt is the primer.
+          </p>
+          <p>
+            It is implemented as a store rather than a prop for one reason: it
+            has to be awaitable from <code>startMeshWithPermissions</code>, a
+            module-level async function with no access to React state. Same shape
+            as the alert store: transient state, a component reading it, and a
+            plain function callers can await.
+          </p>
+
+          <h2 id="blocker">Naming the reason: BleBlocker</h2>
+          <p>
+            A single "granted" boolean collapsed two situations that need
+            different responses, so the mesh state store records <em>why</em> the
+            mesh cannot run, not merely that it cannot.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th><code>BleBlocker</code></th><th>Means</th><th>Banner offers</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>none</code></td><td>Running</td><td>Nothing</td></tr>
+                <tr><td><code>starting</code></td><td>Granted, radios coming up</td><td>Nothing</td></tr>
+                <tr><td><code>unsupported</code></td><td>No BLE on this device</td><td>Nothing that helps</td></tr>
+                <tr><td><code>permission-denied</code></td><td>Refused, still askable</td><td>Ask again</td></tr>
+                <tr><td><code>permission-blocked</code></td><td>Refused for good</td><td>Open app settings</td></tr>
+                <tr><td><code>location-permission</code></td><td>Android 11 and below: what the user saw was a location dialog</td><td>Ask again, named correctly</td></tr>
+                <tr><td><code>adapter-off</code></td><td>Bluetooth switched off</td><td>Enable Bluetooth</td></tr>
+                <tr><td><code>location-services-off</code></td><td>System location toggle off</td><td>Open location settings</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>blePermissionBlocked</code> is kept as a separate flag rather
+            than folded into the union, and the reason is subtle: only the
+            permission <em>request</em> can answer whether a refusal is
+            permanent. Neither platform reports it through the radio. A later
+            reconcile reading the device would otherwise downgrade a
+            known-permanent refusal back to "ask again", and the banner would
+            offer a prompt the OS silently swallows.
+          </p>
+          <p>
+            Notice the ordering in <code>applyBlePermissionResult</code>:
+            <code>locationRequired</code> is checked <em>before</em> the
+            blocked-versus-denied split. Both of those resolve to the same
+            action, so naming the permission the user actually saw matters more
+            than distinguishing them. And a denial that can still be re-asked
+            gets no dialog at all, because the Mesh banner already says what is
+            wrong and carries the button that fixes it. Stacking a modal on top
+            is two things to dismiss for one problem.
+          </p>
+          <p>
+            One separate hardware fact rides alongside:
+            <code>bleAdvertisingUnsupported</code>. Some chipsets have no
+            peripheral role, so the device can scan and relay but can never
+            advertise. That is distinct from every blocker, because the mesh
+            <em>is</em> working; one half of it is simply unavailable on this
+            hardware and always will be.
+          </p>
+
+          <h2 id="screen">The Permissions screen</h2>
+          <p>
+            Settings has a screen listing all six with their current state. Two
+            things are deliberately not true on it, because pretending otherwise
+            is how a permissions screen becomes a lie.
+          </p>
+          <div class="box bad">
+            <p class="box-title">Nothing on this screen can revoke a permission</p>
+            <p>
+              No mobile OS lets an app hand one back. Android 13 has
+              <code>revokeSelfPermissionOnKill</code>, but it kills the process
+              to do it, and iOS has no equivalent at all. So switching a granted
+              row off opens system settings, where revoking actually happens, and
+              the switch stays on until the OS says otherwise.
+            </p>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The state is never cached</p>
+            <p>
+              It is re-read from the OS every time the screen comes forward, via
+              an <code>AppState</code> listener on <code>active</code>. That is
+              the whole point: the user leaves for system settings, changes
+              something, and comes back expecting the list to agree with what
+              they did. A cached copy gets exactly that case wrong.
+            </p>
+          </div>
+          <p>
+            Each of the six reads is individually wrapped. A module that throws,
+            because of an unsupported platform or a permission not declared in
+            this build, leaves its row <code>unmanaged</code> rather than taking
+            the screen down. iOS Bluetooth is permanently <code>unmanaged</code>,
+            which is honest: there is nothing to report.
+          </p>
+          <p>
+            Android Bluetooth is the interesting row. Android cannot be asked
+            whether a denial is permanent without an Activity, so the answer comes
+            from the last request that <em>was</em> made, which is the same
+            <code>blePermissionBlocked</code> flag the mesh banner reads. Without
+            it this row could only ever say "askable" and would offer an Allow
+            button that the OS silently swallows for somebody who has already
+            refused twice.
+          </p>
+          <p>
+            Granting from this screen does the same follow-up work the startup
+            path does, and for the same reason: record whether the refusal is
+            permanent, nudge <code>retryRadios()</code>, and on Android 11 and
+            below also set the location grant and refresh the geo channels,
+            because there the two are one permission. Splitting that logic between
+            the two callers is how they drift.
+          </p>
+
+          <h2 id="media">Camera, photos, microphone</h2>
+          <p>
+            These three are asked on demand, at the moment the feature needs
+            them, which is the only time an explanation is unnecessary. They all
+            go through <code>ensurePermission</code>, so they behave identically
+            everywhere in the app: check, prompt if askable, and only produce a
+            dialog of our own when the OS will no longer prompt.
+          </p>
+          <pre class="ascii">
+  tap "scan a QR"
+        │
+        ├─ ensurePermission(getCameraPermissions,
+        │                   requestCameraPermissions,
+        │                   { label: "Camera access",
+        │                     purpose: "scan a contact's QR code" })
+        │
+        ├─ true   -> open the viewfinder
+        └─ false  -> stay on the entry screen. Pasting a contact code
+                     and typing a peer ID are still right there, so a
+                     camera refusal is never a dead end for the task.
+</pre>
+          <p>
+            That last property is worth stating as a design rule: every
+            permission in this group has a working path around it. Camera
+            refusal leaves paste and manual entry. Photos refusal leaves the
+            camera. Microphone refusal leaves text and files. Only Bluetooth has
+            no alternative, which is exactly why it is the one that gets a primer.
+          </p>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>3,000 ms</td><td><code>PERMISSION_CHECK_TIMEOUT_MS</code></td><td>A <code>check</code> is a synchronous binder call behind a promise. Anything past this is the binder wedged, not a slow answer.</td></tr>
+                <tr><td>60,000 ms</td><td><code>PERMISSION_PROMPT_TIMEOUT_MS</code></td><td>How long the permission conversation may hold the mesh start. Past it, the mesh starts regardless and the controller reads the device.</td></tr>
+                <tr><td>120,000 ms</td><td><code>PRIMER_TIMEOUT_MS</code></td><td>Long enough to read the sheet twice. It guards against the sheet never appearing, and is not a limit on how long a person may take.</td></tr>
+                <tr><td>8,000 ms</td><td><code>IDENTITY_LOAD_TIMEOUT_MS</code></td><td>A healthy keychain read is single-digit milliseconds. Past this, "slow" has become "never" and the user is owed a screen.</td></tr>
+                <tr><td>API 31</td><td><code>NEVER_FOR_LOCATION_MIN_API</code></td><td>Below it <code>BLUETOOTH_SCAN</code> does not exist and a scan is a location access whatever we say about it.</td></tr>
+                <tr><td>API 33</td><td><code>NEARBY_WIFI_DEVICES</code> floor</td><td>Below that, the location permissions already cover Aware discovery.</td></tr>
+                <tr><td>6</td><td>Runtime permissions</td><td>Bluetooth, location, notifications, camera, photos, microphone.</td></tr>
+                <tr><td>1</td><td>Primer showings per install</td><td>Gated on a persisted flag and on the permission not already being held.</td></tr>
+                <tr><td>2</td><td>Android refusals before permanent</td><td>The platform's rule, and the reason the primer exists at all.</td></tr>
+                <tr><td>8</td><td><code>BleBlocker</code> states</td><td>Each maps to a distinct banner and a distinct button.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>Ungranted BLE with no gate.</strong> The original failure
+              mode, and the reason this layer is explicit rather than lazy.
+              <code>startScanning</code> and <code>startAdvertising</code> throw
+              <code>SecurityException</code>, the mesh service swallows it, and
+              the app looks completely fine while never seeing a single peer.
+              Silent, total discovery failure.
+            </li>
+            <li>
+              <strong>An orphaned OS dialog.</strong> The prompt is hosted by
+              another process. An OEM that reaps the Activity behind a foreground
+              service can destroy it while the dialog is up, and the promise
+              never settles. The 60 second deadline is a backstop for a step that
+              can hang rather than fail, which is not a state the app can detect
+              from the inside.
+            </li>
+            <li>
+              <strong>Re-requesting on resume.</strong> Either a no-op or a
+              prompt thrown at somebody who did not ask. This is why
+              <code>hasBlePermissions()</code> exists as a separate, non-prompting
+              read.
+            </li>
+            <li>
+              <strong>An optional permission with its own group.</strong>
+              Re-requesting is only safe because the optional permission shares
+              the required ones' group on API 33 and above. Add one that does not
+              and it re-prompts on every launch after a single denial. This is
+              written down at the call site because it is the trap the next
+              change will fall into.
+            </li>
+            <li>
+              <strong>Concurrent prompts.</strong> On a fresh install, racing the
+              notification prompt against the others swallowed it and sometimes
+              crashed. They are sequenced now, one await at a time.
+            </li>
+            <li>
+              <strong>Guessing on a timeout.</strong> Publishing a blocker for an
+              answer that never arrived would show a red banner over a permission
+              the user may have granted. The <code>null</code> case is
+              deliberately silent.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            On Android the app would install and run and find nobody, forever,
+            with no indication why. That is the exact bug this layer was built to
+            fix. On iOS almost nothing would change, because CoreBluetooth
+            prompts on its own and the usage strings are in the bundle either
+            way. Removing only the primer would be survivable and measurably
+            worse: more first-refusals on a permission where a second refusal is
+            permanent, and no explanation for the location dialog that a chat app
+            has no obvious reason to show.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Approach</th><th>How it works</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Ask everything at first launch</td>
+                  <td>One batch of dialogs before the app is usable</td>
+                  <td>Highest refusal rate of any pattern, because none of the asks has context yet. It also puts camera and microphone prompts in front of a user who may never use either.</td>
+                </tr>
+                <tr>
+                  <td>Ask nothing until it fails</td>
+                  <td>Let the native call throw and react to the error</td>
+                  <td>This is precisely the old behaviour. The throw is swallowed, so the failure is invisible and the app appears to work.</td>
+                </tr>
+                <tr>
+                  <td>Require location on Android at every level</td>
+                  <td>bitchat's approach: one code path, no API-level branch</td>
+                  <td>Simpler, and it costs a backgrounded phone every scan result plus a dead mesh for anyone on "Approximate" location. The branch is worth its complexity.</td>
+                </tr>
+                <tr>
+                  <td>Block the app behind the primer</td>
+                  <td>A hard gate: no mesh until acknowledged</td>
+                  <td>Turns an explanation into a hostage situation, and creates a state where a sheet that fails to render bricks the app. It resolves either way for that reason.</td>
+                </tr>
+                <tr>
+                  <td>No deadlines, just await</td>
+                  <td>Trust the platform promises to settle</td>
+                  <td>They do not always. An orphaned dialog leaves a running app with no mesh and no error, which reads to the user as broken hardware.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does the app show its own explanation before the Bluetooth prompt on Android, but not on iOS?</span>
+              <span class="a">Two reasons, both platform facts. On Android a second refusal makes the permission permanently blocked, so the cost of a poorly-contextualised first ask is very high and the only remedy afterwards is a trip to system settings. And on Android 11 and below the mesh asks for <em>location</em>, which in a chat app reads as tracking and needs explaining before the dialog rather than after. On iOS neither applies: CoreBluetooth prompts on first use carrying our own usage string, so that prompt already is the primer, and there is no location coupling to explain away. The sheet still renders correctly on iOS if it is ever shown; it is simply not needed.</span>
+            </li>
+            <li>
+              <span class="q">The permission request promise never settles. What does the user see?</span>
+              <span class="a">A working app. After 60 seconds the deadline fires, nothing is published about the permission because "the OS never answered" is not an answer, and <code>initMeshService</code> runs anyway. The radio controller then reads the actual grant off the device on its first reconcile and publishes the true blocker. So the only thing the timeout changes is how quickly the banner becomes correct. This matters because the promise really can be orphaned: the dialog is hosted by another process, and OEMs that reap the Activity behind a foreground service destroy it while the dialog is up. Before the deadline existed, that left a running app with no mesh and a Mesh tab reading "starting..." for the whole session.</span>
+            </li>
+            <li>
+              <span class="q">Why is <code>blePermissionBlocked</code> a separate flag rather than one more <code>BleBlocker</code> value?</span>
+              <span class="a">Because the two are learned from different sources with different lifetimes. The blocker is re-derived by the radio controller from the device on every reconcile. Whether a refusal is permanent can only be learned from the permission request itself, since neither platform reports it through the radio. Folding them together means the next reconcile downgrades a known-permanent refusal back to "ask again", and the banner offers an Allow button that the OS silently swallows. Keeping them apart is also why the Permissions screen can render an honest Android Bluetooth row at all.</span>
+            </li>
+            <li>
+              <span class="q">A reviewer says the fast-path check in <code>ensureBlePermissions</code> should only look at the required permissions, since the optional one cannot fail the gate. Answer them.</span>
+              <span class="a">The two lists move independently over time. A future build adds an optional permission and ships to phones whose required grants were settled long ago. A fast path reading only the required list returns early on every launch for the life of that install, so the new permission is never requested even once. Checking both means the first launch after the update falls through to the request, and on API 33 and above both lists are in the <code>NEARBY_DEVICES</code> group so the user sees no extra dialog. The caveat is written at the call site: this is only safe while the optional permission shares a group. One carrying its own group would re-prompt on every launch after a denial and would need a persisted marker.</span>
+            </li>
+            <li>
+              <span class="q">Explain <code>neverForLocation</code> to a privacy reviewer who suspects it is a loophole.</span>
+              <span class="a">It is a declaration to the OS that scan results will not be used to derive a physical position, and the OS enforces it by stripping location-inferring data from the results. For Airhop the declaration is accurate: a result is read for the service UUID, the peer ID and the RSSI, none of which is a position, and the app never correlates them into one. What it buys is real: scanning no longer requires the location permission, and no longer depends on the system location toggle. The reference implementation does not use it and therefore also needs background location and a location foreground-service type, which costs a backgrounded phone every scan result. Location for the geohash area channels is requested separately, by the feature that actually uses a position, and denying it costs channels rather than the mesh.</span>
+            </li>
+            <li>
+              <span class="q">Why does the Permissions screen open system settings instead of turning a permission off?</span>
+              <span class="a">Because no mobile OS allows it. Android 13 added <code>revokeSelfPermissionOnKill</code>, which kills the process to do it, and iOS has no equivalent at all. A switch that appears to revoke and does not is worse than no switch, so the row navigates to the place where revocation actually happens and stays on until the OS reports otherwise. The same honesty rule is why the screen re-reads every permission from the OS whenever it comes forward: the user leaves, changes something in settings, and comes back expecting the list to match, which is exactly the case a cached value gets wrong.</span>
+            </li>
+            <li>
+              <span class="q">Why is notifications asked last, and after the mesh has already started?</span>
+              <span class="a">Two separate reasons. Last, because concurrent prompts on a fresh install raced: the notification prompt got swallowed and sometimes crashed, so every prompt outside the batched BLE run is now awaited one at a time. After the mesh, because notifications are the permission with the mildest consequence, degrading to in-app badges and haptics, and nothing about starting the radios depends on it. The general rule holds throughout the sequence: nothing that can fail may sit between the app and a working mesh.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 46: Airhop vs bitchat. Shared wire, deliberate divergences, and the compatibility contract." />
+    <title>46 Airhop vs bitchat · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 46 · The wider world</p>
+          <h1>Airhop against bitchat</h1>
+          <p class="kt-lede">
+            Airhop is a spiritual fork of bitchat, sharing its wire protocol byte
+            for byte. Most "why is it like that" questions in this manual bottom
+            out here. This chapter is the complete difference list, and the
+            contract that governs what may and may not change.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#relationship">The relationship</a></li>
+              <li><a href="#contract">The compatibility contract</a></li>
+              <li><a href="#three">Three implementations, not two</a></li>
+              <li><a href="#adds">What Airhop adds</a></li>
+              <li><a href="#diverges">Where Airhop deliberately diverges</a></li>
+              <li><a href="#inherits">What Airhop inherits, including the flaws</a></li>
+              <li><a href="#interop">The interoperability failure list</a></li>
+              <li><a href="#respects">What bitchat does better</a></li>
+              <li><a href="#extending">How to extend without breaking it</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Someone else built a way for phones to talk over Bluetooth without
+              the internet, and published exactly how it works. Airhop speaks the
+              same language, so an Airhop phone and one of their phones can talk to
+              each other with no setup at all. Airhop then adds some words of its
+              own, chosen so their phones politely pass them along without trying
+              to understand them.
+            </p>
+          </div>
+
+          <h2 id="relationship">The relationship</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>bitchat</th><th>Airhop</th></tr></thead>
+              <tbody>
+                <tr><td>Origin</td><td>permissionlesstech. Created by jackjackbits.</td><td>Built at a 24-hour hackathon in July 2026, on bitchat's foundation.</td></tr>
+                <tr><td>License</td><td>Unlicense, public domain</td><td>MIT</td></tr>
+                <tr><td>Codebase</td><td><strong>Two</strong>: Swift for iOS, Kotlin for Android</td><td><strong>One</strong>: TypeScript, with native modules only for hardware</td></tr>
+                <tr><td>Platforms</td><td>iOS (with macOS via Catalyst), Android</td><td>iOS, Android</td></tr>
+                <tr><td>Relationship</td><td colspan="2">Not competitors. Airhop is an independent project, not affiliated with or endorsed by permissionlesstech, building on the same open foundation.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The acknowledgements are explicit about the debt: the BLE mesh
+            protocol and wire format come from jackjackbits, the Android lead and
+            Cashu author is callebtc, the Noise implementation reference is Nadim
+            Kobeissi's, and the georelays toolkit that produces the bundled relay
+            CSV is a1denvalu3's.
+          </p>
+
+          <h2 id="contract">The compatibility contract</h2>
+          <div class="box ok">
+            <p class="box-title">Principle 6, from VISION.md</p>
+            <p>
+              "Airhop nodes must communicate with bitchat nodes. The BLE packet
+              wire format, service UUIDs, and peer ID derivation algorithm are
+              fixed. Breaking this requires a protocol version bump and explicit
+              compat testing."
+            </p>
+            <p>
+              And principle 7: "When in doubt, do what bitchat does. The bitchat
+              team are smart engineers who made deliberate choices."
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fixed</th><th>Value</th></tr></thead>
+              <tbody>
+                <tr><td>Service UUID</td><td><code>F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C</code></td></tr>
+                <tr><td>Characteristic UUID</td><td><code>A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D</code></td></tr>
+                <tr><td>Packet version</td><td>2 (with v1 decoded)</td></tr>
+                <tr><td>Header layout</td><td>16 bytes, u64 BE millisecond timestamp, u32 BE payload length</td></tr>
+                <tr><td>Flag bits</td><td>Identical values</td></tr>
+                <tr><td>Peer ID derivation</td><td><code>hex(SHA-256(noiseStaticPubKey)).slice(0, 16)</code></td></tr>
+                <tr><td>Noise suite</td><td><code>Noise_XX_25519_ChaChaPoly_SHA256</code></td></tr>
+                <tr><td>Default TTL</td><td>7</td></tr>
+                <tr><td>Fragment frame budget</td><td>512 bytes, unsigned fragments</td></tr>
+                <tr><td>Packet ID</td><td><code>SHA-256(type | sender | timestamp | payload)[0:16]</code></td></tr>
+                <tr><td>Signing preimage</td><td>ttl 0, IS_RSR cleared, unsigned, <strong>always padded</strong></td></tr>
+                <tr><td>Padding blocks</td><td>256, 512, 1024, 2048, PKCS#7</td></tr>
+                <tr><td>Compression</td><td>Raw DEFLATE, threshold 100, level 6, unique-byte heuristic</td></tr>
+                <tr><td>Courier tag</td><td><code>HMAC(noiseStaticKey, "bitchat-courier-tag-v1" || epochDay)[0:16]</code></td></tr>
+                <tr><td>Courier TTL</td><td>24 hours plus 1 hour slack</td></tr>
+                <tr><td>GCS parameters</td><td>P = 7, M = count x 2^P, SHA-256 hashing</td></tr>
+                <tr><td>Nostr DM cipher</td><td>bitchat's <code>nip44-v2</code>, not the published NIP-44</td></tr>
+                <tr><td>Voice burst format</td><td><code>VoiceBurstPacket</code>, AAC-LC 16 kHz mono, 210 byte content budget</td></tr>
+                <tr><td>Group protocol</td><td>Creator-signed roster, 16 members, epoch keys, <code>bitchat-group-v1</code> domain</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="three">Three implementations, not two</h2>
+          <div class="box warn">
+            <p class="box-title">The distinction most documentation gets wrong</p>
+            <p>
+              bitchat-iOS and bitchat-Android do <strong>not implement the same
+              set of packet types</strong>. Android's <code>MessageType</code> enum
+              carries <code>0x01</code> to <code>0x03</code>,
+              <code>0x10</code>, <code>0x11</code>, <code>0x20</code> to
+              <code>0x22</code> and <code>0x29</code>. Everything else is iOS only.
+            </p>
+            <p>
+              So <strong>"bitchat compatible" should be read as "bitchat-iOS
+              compatible, ignored by bitchat-Android"</strong> for the courier
+              envelope, board posts, prekey bundles, group messages, ping, pong and
+              gateway carriers. Airhop treats iOS as canonical where the two
+              disagree, because it is the more mature implementation.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Type</th><th>iOS</th><th>Android</th><th>Airhop</th></tr></thead>
+              <tbody>
+                <tr><td><code>0x01</code> ANNOUNCE, <code>0x02</code> CHANNEL_MSG, <code>0x03</code> LEAVE</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>0x04</code> COURIER_ENV</td><td>Yes</td><td><strong>No</strong></td><td>Yes</td></tr>
+                <tr><td><code>0x10</code>, <code>0x11</code> Noise</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>0x20</code> FRAGMENT, <code>0x21</code> REQUEST_SYNC, <code>0x22</code> FILE_TRANSFER</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>0x23</code> BOARD_POST, <code>0x24</code> PREKEY_BUNDLE, <code>0x25</code> GROUP_MESSAGE</td><td>Yes</td><td><strong>No</strong></td><td>Yes</td></tr>
+                <tr><td><code>0x26</code>, <code>0x27</code> PING/PONG, <code>0x28</code> NOSTR_CARRIER</td><td>Yes</td><td><strong>No</strong></td><td>Yes</td></tr>
+                <tr><td><code>0x29</code> VOICE_FRAME</td><td>Yes</td><td><strong>Yes</strong></td><td>Yes</td></tr>
+                <tr><td><code>0x12</code> DR_ENCRYPTED, <code>0x50</code> CHANNEL_ENC, <code>0x51</code> CHANNEL_MSG_AIRHOP</td><td>No</td><td>No</td><td><strong>Airhop only</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Live voice being in Android's registry is worth noting: it is one of
+            the few types above <code>0x22</code> that all three implement, so a
+            push-to-talk burst genuinely crosses between every client.
+          </p>
+
+          <h2 id="adds">What Airhop adds</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Addition</th><th>Mechanism</th><th>Cost to bitchat</th></tr></thead>
+              <tbody>
+                <tr><td><strong>One codebase</strong></td><td>TypeScript protocol core, native only for hardware</td><td>None. This is the structural bet: bitchat's two codebases drifted until an Android fragment size mismatch broke cross-platform messaging for months.</td></tr>
+                <tr><td><strong>Double Ratchet</strong></td><td>Packet type <code>0x12</code>, seeded from the Noise exporter secret</td><td>None. bitchat relays it without interpreting it, and falls back to plain Noise transport.</td></tr>
+                <tr><td><strong>Private channels</strong></td><td>Packet type <code>0x50</code>, XChaCha20-Poly1305 under a key in the invite link</td><td>None. Relayed, not interpreted.</td></tr>
+                <tr><td><strong>Location channels over Bluetooth</strong></td><td>Packet type <code>0x51</code>, plus sync bit 24</td><td>None, and this is why it needed its own type: under <code>0x02</code> it would render in bitchat's single mesh room, addressed to an audience its author never chose, on top of the Nostr copy they already receive.</td></tr>
+                <tr><td><strong>Cashu ecash</strong></td><td>Tokens as text inside ordinary messages</td><td>None. A dedicated packet type was <em>retired</em> (<code>0x40</code>) precisely to avoid a second path to keep in sync.</td></tr>
+                <tr><td><strong>Nutzaps</strong></td><td>NIP-61 over Nostr</td><td>None. Off the mesh entirely.</td></tr>
+                <tr><td><strong>Video sharing</strong></td><td><code>video/*</code> added to the MIME allow list</td><td>None. bitchat skips unknown types; this is a gap it documents.</td></tr>
+                <tr><td><strong>File packet tags <code>0x05</code> to <code>0x07</code></strong></td><td>Channel, duration, caption</td><td>None. bitchat skips unknown TLVs by reading their u16 length.</td></tr>
+                <tr><td><strong>Nostr pubkey in the announce</strong></td><td>TLV <code>0x07</code></td><td>None. Outside the <code>0x01</code> to <code>0x06</code> range bitchat assigns.</td></tr>
+                <tr><td><strong>Noise payload <code>0x22</code></strong></td><td>Contact card, linking a geohash pseudonym to a durable identity</td><td>None. Dropped as an unknown payload type.</td></tr>
+                <tr><td><strong>Location pin</strong></td><td>Noise payload <code>0x50</code>, 19 fixed bytes</td><td>None.</td></tr>
+                <tr><td><strong>Radio power hysteresis</strong></td><td>+3 percent to climb out of a band</td><td>Local only. bitchat re-resolves on every 1 percent battery change, so a phone hovering at a threshold flips modes repeatedly and every flip restarts the scanner.</td></tr>
+                <tr><td><strong>Reading Bitle's <code>0xB1</code> relay flag</strong></td><td>Draws relay hardware as equipment rather than as a person nobody can message</td><td>Read, never written.</td></tr>
+                <tr><td><strong>Human-readable usernames</strong></td><td>Derived from the peer ID</td><td>Local presentation. The word lists are deliberately never translated so a name resolves identically everywhere, including in bitchat.</td></tr>
+                <tr><td><strong>35 languages</strong></td><td>Bundled catalogs, no library</td><td>Nothing on the wire carries a language.</td></tr>
+                <tr><td><strong>The multi-device simulation</strong></td><td>Including a bitchat actor written to their rules</td><td>None, and arguably a contribution: it is a compatibility harness neither project had.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="diverges">Where Airhop deliberately diverges</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Behaviour</th><th>bitchat</th><th>Airhop</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Outbox TTL</strong></td>
+                  <td>24 hours</td>
+                  <td><strong>7 days</strong></td>
+                  <td>The one documented wire-adjacent divergence, and it is local: nothing about the outbox goes on the wire. Courier envelopes held by third parties still expire at 24 hours to match the wire rule, so the sender's own queue is the only thing that can still deliver on a later encounter. A week covers people who do not meet daily, which is the case this app exists for, and it costs no airtime because retries are bounded by the 8-attempt cap rather than by the clock.</td>
+                </tr>
+                <tr>
+                  <td><strong>Fanout</strong></td>
+                  <td>Deterministic message-ID-seeded subset</td>
+                  <td><strong>Full fanout</strong></td>
+                  <td>Not a decision, a gap. <code>PROTOCOLS.md</code> documents subsetting; the code writes to every non-ingress link. Chapter <a href="45-scaling.html">45</a>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Relay cancellation</strong></td>
+                  <td>Cancels a scheduled relay when a duplicate arrives first</td>
+                  <td>Does not</td>
+                  <td>The timer map exists; the receive path drops duplicates before reaching cancellation. Wasted airtime in a dense room.</td>
+                </tr>
+                <tr>
+                  <td><strong>Sent photo cap</strong></td>
+                  <td>512 KiB received, ~45 KB in practice</td>
+                  <td><strong>256 KiB sent</strong></td>
+                  <td>bitchat expires an assembly 30 seconds after the <em>first</em> fragment. 512 KiB is about 22 seconds of transfer, so it only lands if the link never forces a retry. 256 KiB leaves room for backoff.</td>
+                </tr>
+                <tr>
+                  <td><strong>Fragment data size</strong></td>
+                  <td>469 bytes</td>
+                  <td>467 bytes</td>
+                  <td>Same 512-byte budget, slightly larger fragment header. Harmless: the chunk size is a sender-side choice and the receiver reassembles by index.</td>
+                </tr>
+                <tr>
+                  <td><strong>Gossip cache</strong></td>
+                  <td>1,000 on iOS, <strong>100 on Android</strong></td>
+                  <td>1,000</td>
+                  <td>Resolved toward iOS, as with every other divergence between the two upstreams.</td>
+                </tr>
+                <tr>
+                  <td><strong>Sync interval</strong></td>
+                  <td>15 s on iOS, 30 s on Android</td>
+                  <td>15 s</td>
+                  <td>Same rule.</td>
+                </tr>
+                <tr>
+                  <td><strong>Announce freshness</strong></td>
+                  <td>900 s backwards only on iOS, 600 s symmetric on Android</td>
+                  <td><strong>900 s symmetric</strong></td>
+                  <td>The <em>union</em> of what both accept, so no announce a bitchat device would accept is refused here. The forward bound is the cheap half and stops a peer parking a far-future timestamp.</td>
+                </tr>
+                <tr>
+                  <td><strong>Sync bit 7, files</strong></td>
+                  <td>Serves files from sync</td>
+                  <td><strong>Does not</strong></td>
+                  <td>A 1 MiB attachment is tens of seconds of exclusive radio per asking peer, and bitchat's own reassembly often expires anyway. Symmetric and non-erroring in both directions.</td>
+                </tr>
+                <tr>
+                  <td><strong>Sync bit 9, prekeys</strong></td>
+                  <td>Reconciles them</td>
+                  <td><strong>Does not</strong></td>
+                  <td>Not a decision, a gap. Costs forward secrecy on some courier envelopes. Chapter <a href="13-courier.html">13</a>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Source routes</strong></td>
+                  <td>Originates and follows</td>
+                  <td><strong>Follows only</strong></td>
+                  <td>Originating requires emitting adjacency in cleartext, which bitchat's own peer-ID rotation analysis rejects, and which bitchat has since stopped doing.</td>
+                </tr>
+                <tr>
+                  <td><strong>Android background location</strong></td>
+                  <td><code>ACCESS_BACKGROUND_LOCATION</code> and a <code>location</code> service type</td>
+                  <td><code>neverForLocation</code> on <code>BLUETOOTH_SCAN</code></td>
+                  <td>Accurate here: a scan result is read for its UUID, peer ID and RSSI, none of which is a position. Asks for less.</td>
+                </tr>
+                <tr>
+                  <td><strong>iOS advertisement</strong></td>
+                  <td>Service UUID alone</td>
+                  <td>Service UUID alone (now)</td>
+                  <td>Airhop used to advertise the peer ID in the local name. Removed: nothing read it, so it was a stable identifier broadcast to every passive scanner for nothing.</td>
+                </tr>
+                <tr>
+                  <td><strong>Tor default</strong></td>
+                  <td>On, fail-closed (iOS)</td>
+                  <td><strong>Off</strong> on both</td>
+                  <td>Turning Tor on used to be a visible signal in itself, which in several target situations is the risk. Airhop now ships obfs4 and Snowflake for exactly that, which bitchat does not. Chapter 26.</td>
+                </tr>
+                <tr>
+                  <td><strong>Android Tor</strong></td>
+                  <td>Embeds Arti (<code>ArtiTorManager.kt</code>)</td>
+                  <td>Embeds Arti, plus obfs4 and Snowflake bridges</td>
+                  <td>Was a gap; now closed and then some. Airhop embeds Arti on both platforms from one Rust crate and ships pluggable transports, which bitchat does not. Chapters 25 and 26. Chapter <a href="25-tor.html">25</a>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Same-platform fast path on iOS</strong></td>
+                  <td>Never had one</td>
+                  <td>Written, never worked on a device, <strong>removed</strong></td>
+                  <td>Two independently fatal defects, and the 1 MiB cap means Bluetooth's ceiling is seconds rather than minutes.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="inherits">What Airhop inherits, including the flaws</h2>
+          <div class="box bad">
+            <p class="box-title">Inherited limitations that cannot be fixed unilaterally</p>
+            <ul>
+              <li>
+                <strong>Courier tag linkability.</strong> The HMAC key is the
+                recipient's <em>public</em> Noise key, which every announce
+                broadcasts, so anyone who heard one announce can compute that
+                peer's tags for any day. bitchat documents the same flaw and notes
+                its whitepaper's unlinkability claim does not hold. Fixing it needs
+                a v2 tag keyed on a shared secret, agreed across implementations.
+              </li>
+              <li>
+                <strong>Nostr DMs have no forward secrecy.</strong> Static ECDH
+                between two long-lived secp256k1 identities. Inherited from NIP-17
+                and from bitchat's cipher.
+              </li>
+              <li>
+                <strong>Sender and recipient IDs in the clear</strong> on every
+                mesh packet. Who is talking to whom is not hidden.
+              </li>
+              <li>
+                <strong>Peer IDs do not rotate.</strong> bitchat has a whole design
+                document on this and has not shipped it either.
+              </li>
+              <li>
+                <strong>No Tor bridges or pluggable transports</strong> on either
+                platform, in either project.
+              </li>
+              <li>
+                <strong>The file size ceiling is iOS's alone.</strong> Android
+                allows 10 MiB, iOS refuses past ~1.13 MiB silently, so there is no
+                cross-platform number to raise to.
+              </li>
+              <li>
+                <strong>The 255 byte DM content cap</strong>, from a one-byte TLV
+                length in <code>PrivateMessagePacket</code>, on all three
+                implementations.
+              </li>
+            </ul>
+          </div>
+          <p>
+            Naming these matters more than fixing them, because each is a place
+            where a reasonable person would assume a stronger property than the
+            system provides.
+          </p>
+
+          <h2 id="interop">The interoperability failure list</h2>
+          <p>
+            Every one of these actually happened, and every one failed
+            <strong>silently</strong>. This list is the strongest argument for
+            keeping a bitchat actor in the test suite.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Bug</th><th>Symptom</th><th>Root cause</th></tr></thead>
+              <tbody>
+                <tr><td><strong>No handshake ever completed</strong></td><td>Total failure to talk to bitchat, with no error.</td><td>A skipped <code>mixHash(prologue)</code>. Standard Noise runs it even when the prologue is empty. Airhop's handshake hash was one hash behind, and that hash is the AEAD associated data when the static key is sealed in message 2, so the tag mismatched.</td></tr>
+                <tr><td><strong>Every courier envelope dropped</strong></td><td>Store-and-forward silently did nothing through bitchat carriers.</td><td>Airhop stamped a 7-day expiry; bitchat refuses anything past 24 hours plus 1 hour of slack.</td></tr>
+                <tr><td><strong>Every courier envelope unreadable</strong></td><td>Same, in the other direction: bitchat envelopes rendered a binary TLV as the message body.</td><td>Airhop sealed bare UTF-8; bitchat requires the plaintext to be a typed Noise private message.</td></tr>
+                <tr><td><strong>Every attachment discarded</strong></td><td>No photo ever arrived, in either direction, with no error at either end. Live voice kept working, which is why it survived.</td><td>The fragment budget was spent on the payload, producing 557-byte frames against a 512-byte ATT ceiling.</td></tr>
+                <tr><td><strong>Signature verification would fail</strong></td><td>Valid packets rejected.</td><td>DEFLATE is not canonical, and verification re-encodes and therefore re-compresses. Fixed by keeping the received wire form and reusing it verbatim.</td></tr>
+                <tr><td><strong>Location messages in the wrong room</strong></td><td>Would have rendered in bitchat's mesh room, addressed to an audience the author never chose.</td><td>Averted by allocating <code>0x51</code> rather than reusing <code>0x02</code>.</td></tr>
+                <tr><td><strong>Nostr DMs unreadable</strong></td><td>Would have failed silently at both ends.</td><td>Averted by implementing bitchat's <code>nip44-v2</code> rather than the published NIP-44.</td></tr>
+                <tr><td>bitchat's own Android fragment size</td><td>Broke iOS to Android messaging <strong>for months</strong> with nobody noticing.</td><td>500 bytes against iOS's ~469. This is the bug that motivates Airhop's single-codebase bet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The pattern is consistent: <strong>protocol mismatches fail
+            silently</strong>. Neither side logs, neither side errors, and the
+            feature simply does not work. That is why the conformance tests parse
+            bitchat's own sources rather than restating their constants, and why
+            the simulation includes a node written to bitchat's rules rather than
+            Airhop's.
+          </p>
+
+          <h2 id="respects">What bitchat does better</h2>
+          <p>An honest list, because a fork that only lists its own advantages is not a review.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Area</th><th>bitchat's advantage</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Fanout subsetting</strong></td><td>Implemented. Airhop's is documented and absent, and it is the main scaling mitigation.</td></tr>
+                <tr><td><strong>Relay cancellation</strong></td><td>Cancels a scheduled relay when a duplicate arrives first.</td></tr>
+                <tr><td><strong>Prekey sync</strong></td><td>Reconciles prekey bundles through gossip, so courier envelopes reliably get forward secrecy.</td></tr>
+                
+                <tr><td><strong>Native performance</strong></td><td>Swift and Kotlin against JavaScript with a bridge. Real, though the protocol work is not the bottleneck; the radio is.</td></tr>
+                <tr><td><strong>Maturity</strong></td><td>Longer in the field, more real users, more hardware seen.</td></tr>
+                <tr><td><strong>Duty-cycled scanning policy</strong></td><td>A scan duty policy that adapts to graph density and recent traffic, which Airhop simplifies to fixed duty cycles per power mode.</td></tr>
+                <tr><td><strong>Share extension</strong></td><td>bitchat-iOS can receive shared content from other apps.</td></tr>
+                <tr><td><strong>Documentation of its own flaws</strong></td><td>Airhop's honesty here is largely inherited: bitchat documented the courier linkability problem in its own implementation and corrected its own NIP-44 labelling.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="extending">How to extend without breaking it</h2>
+          <ol>
+            <li>
+              <strong>New packet types at <code>0x52</code> or above.</strong>
+              bitchat has reached <code>0x2C</code> and allocates forward.
+              <code>conformance.test.ts</code> fails if the gap closes to 16, so a
+              future collision surfaces in CI rather than in the field.
+            </li>
+            <li>
+              <strong>New TLV tags above the range the other side assigns.</strong>
+              bitchat holds announce tags <code>0x01</code> to <code>0x06</code>;
+              Airhop's Nostr key is <code>0x07</code>. Reading one as the other
+              would corrupt both sides.
+            </li>
+            <li>
+              <strong>New Noise payload types at <code>0x50</code> or above.</strong>
+              bitchat holds <code>0x01</code> to <code>0x03</code>,
+              <code>0x06</code> to <code>0x09</code>, <code>0x10</code> to
+              <code>0x12</code> and <code>0x20</code> to <code>0x21</code>.
+              (<code>0x22</code> predates the rule and stays where it is, because
+              moving it would break every shipped build for no gain.)
+            </li>
+            <li>
+              <strong>New sync bits well above bitchat's frontier.</strong> Their
+              table ends at 10, so Airhop's channel bit is 24 rather than 11, and
+              it must stay under 31 because <code>1 &lt;&lt; 31</code> is negative
+              in JavaScript.
+            </li>
+            <li>
+              <strong>Never change a shared constant unilaterally.</strong> Every
+              one of the silent failures above came from doing so, in good faith,
+              for a defensible local reason.
+            </li>
+            <li>
+              <strong>Add a conformance scenario.</strong> A new type should be
+              proven to cross a mesh of bitchat phones while staying invisible to
+              their users, which is exactly what X02 does.
+            </li>
+          </ol>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is wire compatibility worth constraining the whole design?</span>
+              <span class="a">Because mesh range scales with user density, and the honest weakness of any phone mesh is that nobody else has it installed. Sharing bitchat's wire protocol doubles the effective user base at zero cost: an Airhop phone and a bitchat phone join the same mesh with no configuration, relay for each other, and exchange DMs. In a protest or a disaster, "how many people around me are running a compatible app" is the number that decides whether the product works at all.</span>
+            </li>
+            <li>
+              <span class="q">Why did location channels need their own packet type?</span>
+              <span class="a">Because bitchat has the same location channels at the same geohash precisions but publishes them to Nostr and never over Bluetooth: on the mesh it has exactly one public room. So the Bluetooth copy is an Airhop-only path, and a bitchat peer already receives the Nostr copy. Sent under <code>0x02</code> it would render in their mesh room as well, addressed to an audience its author never chose. Under <code>0x51</code> it is a type neither client interprets, so they relay it without showing it, which is exactly the desired behaviour.</span>
+            </li>
+            <li>
+              <span class="q">Give the strongest example of why protocol mismatches are dangerous.</span>
+              <span class="a">The 557-byte fragment. Airhop budgeted 469 bytes of payload rather than 512 bytes of frame, so every fragment exceeded the ATT ceiling. Android truncated the write and iOS refused it, the receiver's decoder failed on a signature whose last bytes never arrived, and <em>nothing was logged at either end</em>. Every attachment silently failed in both directions, while live voice kept working because a burst is capped at 210 bytes and never fragments, so the feature that looked most fragile was the one that was fine.</span>
+            </li>
+            <li>
+              <span class="q">Name a place where Airhop is behind bitchat and say why it matters.</span>
+              <span class="a">Fanout subsetting. bitchat relays a broadcast to a message-ID-seeded subset of its links; Airhop writes to every non-ingress link. Airhop's own protocol document specifies the subset as a routing constant, and gossip sync already provides the repair mechanism that makes subsetting safe. Full fanout is fine at the 25 phones the simulation tests and is the most likely failure mode in a crowd of 200, where airtime rather than correctness is the constraint.</span>
+            </li>
+            <li>
+              <span class="q">Somebody wants to raise the file size cap to 5 MiB. Explain the consequence.</span>
+              <span class="a">Sending would work, Android delivery would work, and the local UI would look fine, while every attachment to an iPhone silently stopped arriving. bitchat-iOS refuses any packet whose declared expanded size passes its framed ceiling of about 1.13 MiB, and it refuses it by returning nil with nothing logged. bitchat-Android allows 10 MiB, so the ceiling is iOS's alone and there is no cross-platform number to raise to. The conformance test reads that constant out of the vendored Swift source and fails if Airhop's caps stop fitting under it.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

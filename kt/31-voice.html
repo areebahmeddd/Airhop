@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 31: Live voice. AAC, burst packets, jitter buffers, and walkie talkie over a mesh." />
+    <title>31 Live voice · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 31 · Media and transports</p>
+          <h1>Live voice</h1>
+          <p class="kt-lede">
+            Real-time audio across a multi-hop Bluetooth mesh, on a radio that
+            moves 18 KiB per second and adds up to 220 ms of deliberate delay per
+            hop. It works because the requirements are much smaller than they look
+            and every constant was chosen against a stopwatch.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#budget">The bandwidth budget</a></li>
+              <li><a href="#codec">The codec</a></li>
+              <li><a href="#burst">The burst format</a></li>
+              <li><a href="#210">The 210 byte rule</a></li>
+              <li><a href="#relay">Relaying live audio</a></li>
+              <li><a href="#jitter">The jitter buffer</a></li>
+              <li><a href="#security">Security and replay</a></li>
+              <li><a href="#scopes">Where it works</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              It is a walkie-talkie. You hold a button, talk, and let go. Your
+              voice is squeezed down to about the size of two pages of text per
+              second, chopped into small packets, and thrown into the room. The
+              phones listening wait a third of a second before playing, so that if
+              a packet is a little late there is still something to play. When you
+              let go, the whole recording is also sent as a normal voice message,
+              so anyone who missed it can still hear it.
+            </p>
+          </div>
+
+          <h2 id="budget">The bandwidth budget</h2>
+          <pre class="ascii">
+  WHAT LIVE VOICE ACTUALLY COSTS
+
+    AAC-LC, 16 kHz, mono, ~16 kbps  =  ~2 KiB per second
+    about 15 packets per second, each under 210 bytes
+
+  WHAT THE RADIO HAS
+
+    ~18 KiB per second per link
+
+  HEADROOM
+
+    ~2 of ~18  =  about 11 percent of one link
+
+  That is why this works at all. Voice is not a bandwidth problem on
+  this transport. It is a LATENCY problem.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Medium</th><th>Bitrate</th><th>Viable on this mesh</th></tr></thead>
+              <tbody>
+                <tr><td>Text</td><td>Effectively zero</td><td>Yes, trivially</td></tr>
+                <tr><td><strong>AAC-LC voice, 16 kHz mono</strong></td><td><strong>~16 kbps</strong></td><td><strong>Yes, with margin</strong></td></tr>
+                <tr><td>Music quality audio</td><td>128 to 320 kbps</td><td>No</td></tr>
+                <tr><td>Lowest usable video</td><td>200+ kbps</td><td>No, an order of magnitude over</td></tr>
+                <tr><td>Ordinary video call</td><td>1 to 2 Mbps</td><td>No, two orders over</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            This is the whole reason live voice ships and live video does not, and
+            it is a physical fact rather than a roadmap position.
+          </p>
+
+          <h2 id="codec">The codec</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Parameter</th><th>Value</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Codec</td><td>AAC-LC</td><td>Hardware encoders and decoders exist on every phone, so it costs almost no CPU or battery. It is what bitchat uses, so bursts cross between the two apps.</td></tr>
+                <tr><td>Sample rate</td><td>16 kHz</td><td>Wideband speech. Telephony is 8 kHz and sounds like a telephone; 16 kHz sounds like a person in the room. Doubling again to 32 kHz buys almost nothing for speech.</td></tr>
+                <tr><td>Channels</td><td>Mono</td><td>Stereo doubles the bitrate to convey nothing about one speaker.</td></tr>
+                <tr><td>Bitrate</td><td>~16 kbps</td><td>The point where AAC-LC speech stops improving audibly at 16 kHz mono.</td></tr>
+                <tr><td>Codec byte</td><td><code>0x01</code></td><td><code>VoiceBurstCodec.aacLC16kMono</code> in bitchat. One byte, so a future codec is a value rather than a format change.</td></tr>
+                <tr><td>ADTS headers</td><td><strong>None</strong></td><td>The codec byte fully describes the frames, so the receiver rebuilds the <code>AudioSpecificConfig</code> from it. Carrying ADTS would spend 7 bytes per frame on information already known.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Opus would be the better codec in isolation: better quality per bit at
+            these rates, designed for exactly this use, and it handles packet loss
+            more gracefully. It is not used because bitchat uses AAC-LC and
+            interoperability of live voice across the two apps is worth more than
+            the quality difference. It is also not hardware-accelerated on every
+            device, where AAC is.
+          </p>
+
+          <h2 id="burst">The burst format</h2>
+          <p>
+            One burst is one press of the button. The same bytes are the payload
+            of a <code>VOICE_FRAME</code> (<code>0x29</code>) broadcast and of a
+            <code>NoisePayloadType.VOICE_FRAME</code> (<code>0x08</code>) DM, so
+            one format serves both scopes and only the envelope differs.
+            Byte-identical to bitchat's <code>VoiceBurstPacket.swift</code>.
+          </p>
+          <pre class="code">
+  [burstID: 8 bytes][seq: u16 BE][flags: u8][payload...]
+
+  flags  name       payload
+  ─────  ─────────  ─────────────────────────────────────────────
+  0x01   START      [codec: u8]                    seq = 0, reserved
+  0x00   DATA       repeated [len: u16 BE][raw AAC frame]
+  0x02   END        [totalDataPackets: u16 BE][durationMs: u32 BE]
+  0x04   CANCELED   empty. receivers discard the whole burst.
+</pre>
+          <pre class="ascii">
+  A BURST, IN ORDER
+
+  press
+    │
+    │  START is sent with the FIRST CAPTURED FRAME, not on button-down.
+    │  A burst is only real once there is audio in it, and announcing one
+    │  before the microphone has produced anything turns a failed capture
+    │  into a live bubble on the far side that never plays.
+    ▼
+  seq 0   START   [codec 0x01]
+  seq 1   DATA    [len][frame][len][frame]        batched to fit 210 bytes
+  seq 2   DATA    ...
+  ...     ~15 packets per second
+  seq N   END     [totalDataPackets][durationMs]
+    │
+  release
+    │
+    └─ the same audio is ALSO finalised as an .m4a and sent as an
+       ordinary voice note, so the reliable copy lands in the thread
+</pre>
+          <div class="box">
+            <p class="box-title">A burst may legitimately begin at a DATA packet</p>
+            <p>
+              START is sent once. So a lost packet at the head of a burst, or
+              walking into range mid-sentence, would otherwise mean silence. Both
+              Airhop and bitchat open the assembly with the default codec in that
+              case. This is a small rule that makes the difference between "the
+              feature is unreliable" and "you hear the second half of what someone
+              said", which is what a walkie-talkie should do.
+            </p>
+          </div>
+          <p>
+            <code>CANCELED</code> exists so a user can abort mid-sentence and
+            have the partial burst discarded rather than played.
+          </p>
+
+          <h2 id="210">The 210 byte rule</h2>
+          <div class="box bad">
+            <p class="box-title">The single most important constant in this chapter</p>
+            <p>
+              A voice packet's content is capped at <strong>210 bytes</strong>
+              (<code>pttMaxBurstContentBytes</code>) so that the encoded frame
+              <strong>never enters the fragment scheduler</strong>.
+            </p>
+          </div>
+          <p>Three consequences follow, and each one is a rule elsewhere in the codebase:</p>
+          <ol>
+            <li>
+              <strong>Voice frames are never padded.</strong> Padding a roughly
+              309 byte burst would push it to the 512 byte block, past both the
+              fragment frame budget and most negotiated MTUs, which is exactly the
+              outcome the 210 byte budget exists to prevent. So
+              <code>padsBLEFrame</code> deliberately excludes
+              <code>VOICE_FRAME</code>.
+            </li>
+            <li>
+              <strong>The fragment scheduler caps concurrent transfers</strong>,
+              so a voice packet entering it would queue behind file fragments and
+              starve, and would in turn starve file sends while somebody talks.
+              Scenario M06 pins that talking while a file is in flight starves
+              neither.
+            </li>
+            <li>
+              <strong>DATA packets batch frames</strong>. Multiple encoded AAC
+              frames, each length-prefixed, are packed into one packet up to the
+              210 byte budget, so the packet rate stays around 15 per second
+              rather than one per frame.
+            </li>
+          </ol>
+          <p>
+            This is also why live voice kept working during the era when every
+            attachment silently failed: a burst never fragments, so the 557-byte
+            fragment bug could not touch it.
+          </p>
+
+          <h2 id="relay">Relaying live audio</h2>
+          <p>
+            Ordinary relay jitter is 10 to 220 ms. Three hops of that is up to
+            660 ms, which is nearly twice the entire playback buffer.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rule</th><th>Value</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td>Relay jitter</td><td><strong>8 to 25 ms</strong></td><td>Three hops is at most 75 ms, comfortably inside a 350 ms buffer.</td></tr>
+                <tr><td>TTL cap, sparse mesh</td><td>7</td><td>Voice should reach as far as text does when there is airtime for it.</td></tr>
+                <tr><td>TTL cap, dense mesh (degree 6+)</td><td><strong>5</strong></td><td>A sustained stream flooded to full depth in a busy graph would crowd out everything else.</td></tr>
+                <tr><td>Never gossiped</td><td></td><td>Replaying stale audio is worthless and would cost airtime that live audio needs. There is no sync bit for <code>0x29</code>.</td></tr>
+                <tr><td>Broadcast only for <code>0x29</code></td><td></td><td>A DM burst uses <code>NoisePayloadType 0x08</code> inside a session instead. A <code>0x29</code> that is not a broadcast is refused.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Fragments share the same time-critical policy for the same reason:
+            both are streams where per-hop delay accumulates into a user-visible
+            failure rather than into slowness.
+          </p>
+
+          <h2 id="jitter">The jitter buffer</h2>
+          <p>
+            Packets arriving over a mesh do not arrive evenly. Playing each one as
+            it lands produces stuttering. The buffer trades a fixed delay for
+            smooth output.
+          </p>
+          <pre class="ascii">
+  ARRIVALS       │ ▮  ▮▮   ▮      ▮▮▮   ▮   ▮▮      ▮
+                 └────────────────────────────────────▶ time
+                   uneven, because every hop adds jitter
+
+  BUFFER 350 ms  ┌──────────┐
+                 │ collect  │──────────▶ then play at a STEADY rate
+                 └──────────┘
+
+  PLAYBACK       │▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮
+                 └────────────────────────────────────▶ time
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constant</th><th>Value</th><th>Trade</th></tr></thead>
+              <tbody>
+                <tr><td>Buffer depth</td><td><strong>350 ms</strong></td><td>Too small and every jitter spike is a gap. Too large and the conversation stops feeling live. 350 ms absorbs several hops of relay jitter, which is what a mesh actually produces, and is inherited from bitchat's push-to-talk design.</td></tr>
+                <tr><td>Concurrent inbound bursts</td><td>8</td><td>Several people talking at once in a crowded room. Bounded so a flood of burst IDs cannot exhaust memory.</td></tr>
+                <tr><td>Per-burst cap</td><td>384 KiB in bitchat's design</td><td>A burst that never ends cannot grow without limit.</td></tr>
+                <tr><td>Max burst duration</td><td>120 s</td><td>Someone leaning on the button.</td></tr>
+                <tr><td>Stale cleanup</td><td>30 s</td><td>An assembly that stopped receiving is abandoned.</td></tr>
+                <tr><td>Flood protection</td><td>Drop inbound frames beyond about 2x realtime per sender</td><td>A hostile sender cannot make a receiver decode audio faster than it could ever be played.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            There are <strong>no delivery acknowledgements and no
+            retransmission</strong> for individual frames. That is correct for
+            live audio: by the time a retransmission arrived, the moment it
+            belongs to has already played. Reliability is provided by the fallback
+            voice note, which is sent as an ordinary file when the button is
+            released.
+          </p>
+
+          <h2 id="security">Security and replay</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>How</th></tr></thead>
+              <tbody>
+                <tr><td>Authenticity</td><td>Signed like a public message. An unsigned or forged frame is dropped before a decoder sees it. The audio path is the last place to be lenient about who sent something.</td></tr>
+                <tr><td>Confidentiality in a DM</td><td>The same payload inside <code>NoisePayloadType 0x08</code>, so it rides the Noise session.</td></tr>
+                <tr><td>Confidentiality in a room</td><td>None, by design. A public burst is public, exactly like the text beside it.</td></tr>
+                <tr><td><strong>Freshness</strong></td><td><strong>30 seconds</strong>, much tighter than the general 2 minute window. Matches bitchat's <code>pttPublicFrameMaxAgeSeconds</code>.</td></tr>
+                <tr><td>Blocked senders</td><td>Filtered at the single dispatch chokepoint before the handler runs, so a blocked peer's burst costs one signature check and nothing else.</td></tr>
+                <tr><td>Own echo</td><td>A burst from our own peer ID is dropped immediately.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The replay attack this closed</p>
+            <p>
+              <code>VOICE_FRAME</code> originally had no freshness window at all,
+              so a recorded burst could be replayed verbatim, later, at someone
+              else. Imagine capturing "the police are at the north gate" and
+              replaying it an hour later into a different crowd. It was a Medium
+              severity finding, fixed with a 30 second bound plus a broadcast
+              requirement, matching bitchat. Scenario M07 pins it: a recorded voice
+              burst cannot be replayed later at someone else.
+            </p>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The timing fingerprint that remains</p>
+            <p>
+              A steady ~15 packet per second cadence reveals that
+              <strong>someone is speaking to someone</strong>, even under Noise
+              encryption, because the packet rate is a signature of live audio.
+              An observer with a radio learns that a conversation is happening and
+              roughly how long each utterance was. Nothing in the design hides
+              that, and nothing cheaply could: padding to a constant rate would
+              mean transmitting continuously, which is a battery and airtime cost
+              nobody would accept. bitchat documents the same observation.
+            </p>
+          </div>
+
+          <h2 id="scopes">Where it works</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Scope</th><th>Live</th><th>Voice note fallback</th></tr></thead>
+              <tbody>
+                <tr><td>DM, peer connected on the mesh</td><td><strong>Yes</strong>, Noise-encrypted frames (<code>0x08</code>)</td><td>Yes</td></tr>
+                <tr><td>DM, peer reachable only via Nostr</td><td>No</td><td>Yes</td></tr>
+                <tr><td><code>#bluetooth</code> public room</td><td><strong>Yes</strong>, signed broadcast (<code>0x29</code>)</td><td>Yes</td></tr>
+                <tr><td>Location channels over Nostr</td><td>No</td><td>No, media does not ride Nostr</td></tr>
+                <tr><td>Private channels and groups</td><td>No</td><td>No, same media policy</td></tr>
+                <tr><td>To a bitchat peer</td><td><strong>Yes.</strong> <code>0x29</code> is one of the few types above <code>0x22</code> that bitchat-Android implements, so a live burst crosses between all three clients.</td><td>Yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Scenario M11 pins the cross-client case: a bitchat-Android voice burst
+            reaches an Airhop speaker.
+          </p>
+
+          <h2 id="alternatives">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Option</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Opus instead of AAC-LC</strong></td><td>Technically better: superior quality per bit at these rates, designed for real-time speech, better packet loss concealment. Rejected because bitchat uses AAC-LC and live voice interoperability across all three clients is worth more, and because AAC has hardware acceleration everywhere.</td></tr>
+                <tr><td><strong>Codec2 or similar at 1 to 3 kbps</strong></td><td>What Meshtastic-class LoRa systems would need. Robotic but intelligible. Unnecessary here: 2 KiB/s is only 11 percent of one BLE link, so there is nothing to buy with the quality loss.</td></tr>
+                <tr><td><strong>Full-duplex calling</strong></td><td>Two simultaneous streams, plus echo cancellation, plus much tighter latency requirements. The mesh's per-hop jitter makes sub-200 ms round trips unrealistic beyond one hop. Push-to-talk is the honest shape for this transport.</td></tr>
+                <tr><td><strong>Forward error correction on frames</strong></td><td>Would improve resilience to loss without retransmission. Costs bandwidth on every burst and cannot be adopted unilaterally without breaking bitchat compatibility.</td></tr>
+                <tr><td><strong>Video</strong></td><td>Not possible. The lowest usable video is an order of magnitude over the link budget, and the two same-platform fast paths cannot interoperate, so there is no cross-platform high-bandwidth link to build on. Packet type <code>0x30 VIDEO_FRAME</code> was specified and retired for exactly this reason, and the retirement is recorded in the packet codec so it is not reintroduced.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is 210 bytes the most important number in live voice?</span>
+              <span class="a">Because it keeps a burst out of the fragment scheduler. The scheduler caps concurrent transfers, so a voice packet entering it would queue behind file fragments and starve, and would in turn starve file sends while somebody talks. It is also why voice frames are never padded: padding a roughly 309 byte burst to the 512 byte block would push it past both the fragment frame budget and most negotiated MTUs, which is exactly the outcome the budget exists to prevent.</span>
+            </li>
+            <li>
+              <span class="q">Why does live voice get an 8 to 25 ms relay window instead of 10 to 220?</span>
+              <span class="a">Because the receiver plays out of a 350 ms jitter buffer, so relay delay is not a throughput question, it is the difference between hearing a sentence and hearing gaps. Three hops of the ordinary window is up to 660 ms, nearly twice the whole buffer. The tighter window makes three hops at most 75 ms. The TTL is also clamped to 5 in a dense mesh, because a sustained stream at full depth would crowd out everything else.</span>
+            </li>
+            <li>
+              <span class="q">Why is START sent with the first captured frame rather than on button-down?</span>
+              <span class="a">Because a burst is only real once there is audio in it. Announcing one before the microphone has produced anything turns a failed capture, a denied permission or a busy audio session into a live bubble on the far side that never plays. It also means a receiver must handle a burst that begins at a DATA packet, which happens when START is lost or when someone walks into range mid-sentence; both clients open the assembly with the default codec in that case.</span>
+            </li>
+            <li>
+              <span class="q">Why is there no retransmission of lost voice frames?</span>
+              <span class="a">Because by the time a retransmission arrived, the moment it belongs to has already played out of the jitter buffer. Live audio's correct failure mode is a small gap, not a delayed insert. Reliability is provided at a different layer: the same audio is finalised as an .m4a and sent as an ordinary voice note when the button is released, so anyone who missed the live version can still hear it.</span>
+            </li>
+            <li>
+              <span class="q">What does an observer with a radio learn while someone is using push to talk?</span>
+              <span class="a">That someone is speaking, and roughly for how long. A steady 15 packet per second cadence is a signature of live audio, and it is visible even when the frames are Noise-encrypted in a DM. Nothing hides it, and nothing cheaply could: padding to a constant rate means transmitting continuously, which no phone battery would accept. The content and, in a DM, the participants stay protected. The fact of a conversation does not.</span>
+            </li>
+            <li>
+              <span class="q">Why did live voice keep working during the period when no attachment ever arrived?</span>
+              <span class="a">Because a burst is capped at 210 bytes and never fragments, so the 557-byte over-budget fragment bug could not touch it. That is a good example of why the bug survived: the feature that looks most fragile, real-time audio over a mesh, was the one that was fine, while the boring one silently failed in both directions with no error at either end.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

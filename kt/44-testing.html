@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 44: Testing and simulation. The multi device simulator, invariants, chaos seeds, coverage." />
+    <title>44 Testing and simulation · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 44 · Adversaries and proof</p>
+          <h1>Testing and simulation</h1>
+          <p class="kt-lede">
+            You cannot unit test a mesh. So the project builds twenty phones in
+            one process, each a fully isolated copy of the app, drives them through
+            a modelled radio on a single fake clock, and asserts properties that
+            must hold under every interleaving.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#tiers">Four tiers</a></li>
+              <li><a href="#isolation">How twenty phones fit in one process</a></li>
+              <li><a href="#clock">One clock, one timeline</a></li>
+              <li><a href="#fabric">The radio fabric</a></li>
+              <li><a href="#invariants">Properties, not outcomes</a></li>
+              <li><a href="#bitchat">The bitchat actor</a></li>
+              <li><a href="#mint">A real mint in the process</a></li>
+              <li><a href="#catalogue">The scenario catalogue</a></li>
+              <li><a href="#conformance">Conformance against the vendored source</a></li>
+              <li><a href="#cannot">What cannot be tested this way</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              You cannot borrow twenty phones and twenty friends every time you
+              change one line of code. So the app builds twenty pretend phones
+              inside the computer, each one running the whole real app, and a
+              pretend room between them where messages take time to travel and
+              sometimes go missing. Then it tells a story: these five walk away,
+              this one's battery dies, this one is a liar. And afterwards it checks
+              the rules that should always be true, like "nobody saw the same
+              message twice".
+            </p>
+          </div>
+
+          <h2 id="tiers">Four tiers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tier</th><th>What it proves</th><th>Where</th></tr></thead>
+              <tbody>
+                <tr><td><strong>1. Unit</strong></td><td>Byte layouts, crypto vectors, pure helpers, store behaviour. ~90 files in <code>__tests__/</code> folders beside the code.</td><td><code>src/**/__tests__/</code></td></tr>
+                <tr><td><strong>2. Lifecycle</strong></td><td>The real app shell against a modelled OS: cold start, mid-session, teardown.</td><td><code>src/__tests__/lifecycle/</code></td></tr>
+                <tr><td><strong>3. Simulation</strong></td><td>Multi-device behaviour: delivery, convergence, adversaries, chaos.</td><td><code>src/__tests__/simulation/</code></td></tr>
+                <tr><td><strong>4. Conformance</strong></td><td>That Airhop's constants still match the <em>vendored bitchat sources</em>, parsed at test time.</td><td><code>simulation/conformance.test.ts</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Tier 1 is possible at all because <code>src/core/</code> has no native
+            dependencies. The entire protocol, both handshakes, the ratchet, the
+            wire format, gossip sync and the routing run in plain Node under jest
+            with no phone attached.
+          </p>
+
+          <h2 id="isolation">How twenty phones fit in one process</h2>
+          <p>
+            This is the trick the whole simulation rests on, and it is worth
+            understanding because it is genuinely clever.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The problem</p>
+            <p>
+              Airhop is full of module-scope singletons, by design.
+              <code>getMeshService()</code> returns one mesh.
+              <code>useChatStore</code> is one store.
+              <code>createMMKV({id})</code> returns one instance per id. That is
+              correct for an app, where there is one phone, and fatal for a
+              simulation, where twenty phones have to disagree with each other
+              about the state of the world.
+            </p>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The fix</p>
+            <p>
+              <code>jest.isolateModules</code>, which builds a fresh module
+              registry: a second copy of <code>mesh-service</code>, of every store,
+              of the MMKV mock, and critically of
+              <code>DeviceEventEmitter</code>, so native events raised inside one
+              phone cannot be heard by another.
+            </p>
+            <p>
+              Each phone is a closure over its own private copy of the entire app,
+              and <strong>nothing in <code>src/</code> had to change to allow
+              it</strong>. No dependency injection framework, no test-only
+              constructor parameters, no seams cut into production code.
+            </p>
+          </div>
+          <p>Two consequences follow, and both are load bearing:</p>
+          <ul>
+            <li>
+              <strong>Types cannot cross the boundary usefully.</strong> Device A's
+              message class identity differs from device B's. Everything the
+              harness hands back is structural, and every cross-device comparison
+              is by value.
+            </li>
+            <li>
+              <strong>The control surface is what a user can do</strong>, not what
+              an internal function can do: send, open, background, kill, wipe. That
+              is deliberate. If a scenario cannot be written against that surface,
+              <em>that is a finding about the app, not a gap in the harness</em>.
+            </li>
+          </ul>
+
+          <h2 id="clock">One clock, one timeline</h2>
+          <pre class="ascii">
+  THERE IS EXACTLY ONE CLOCK, AND IT IS JEST'S FAKE TIMERS.
+
+  Every device's OS model, every native module, the real mesh service's own
+  setTimeouts, and every fabric schedule onto it.
+
+  That is not a convenience. It is the property that makes the harness
+  trustworthy. Two clocks would let the simulation invent an interleaving
+  that hardware cannot produce, and a race-condition harness that reports
+  IMPOSSIBLE races is worse than no harness, because every failure has to
+  be argued about before it can be believed.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mechanism</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td><code>world.advance(ms, stepMs = 5)</code></td><td>Steps forward, flushing microtasks between steps so promise continuations (every native call is a promise) land in a realistic order relative to timers. <strong>5 ms matches the shortest thing Airhop schedules</strong>, the 8 ms voice relay jitter floor, so no scheduled event can be skipped over.</td></tr>
+                <tr><td><code>world.settle(budget, quiet)</code></td><td>Advances until nothing new happens. "Quiet" is defined as <strong>no new trace lines</strong> rather than no pending timers, because Airhop always has pending timers (announce, gossip, outbox sweep) so an empty timer queue would never arrive. What convergence actually needs is "the network has stopped saying anything new".</td></tr>
+                <tr><td>Two clocks in the API</td><td><code>world.now</code> is elapsed simulated time starting at 0. <code>world.wallClock()</code> is epoch milliseconds, which is what a packet timestamp field carries. A hand-forged packet stamped with <code>now</code> looks decades stale to the receiver's freshness window and is dropped for the wrong reason, so <strong>the test would pass for the wrong reason</strong>.</td></tr>
+                <tr><td>The merged timeline</td><td>Every device writes into one ordered trace tagged with who it was. A multi-device bug is never explained by one device's log; it is explained by seeing device B's scan start three milliseconds after device A's advertise stopped.</td></tr>
+                <tr><td>Seeded PRNG</td><td>Every scenario prints its seed. A red soak run is only useful if it can be re-run byte for byte.</td></tr>
+                <tr><td>Collect, then report</td><td>A scenario gathers every check and prints the whole account against the timeline, rather than throwing on the first mismatch. For a multi-device failure the interesting question is never "which assertion failed", it is "what was the sequence across five phones that got us there".</td></tr>
+                <tr><td>Timer leak detection</td><td>The scenario records the timer count at start and checks it at the end, so a subsystem that leaves a timer armed fails the scenario.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="fabric">The radio fabric</h2>
+          <p>
+            Everything above the fabric is the real Airhop. Everything below it is
+            physics. The fabric owns exactly the facts a radio cannot know about
+            itself, and nothing else.
+          </p>
+          <div class="box">
+            <p class="box-title">The rule that makes it useful</p>
+            <p>
+              The fabric has <strong>no idea what a packet means</strong>, which is
+              the point: a medium that understood the protocol could not find a
+              protocol bug. A bitchat node and an Airhop node are the same kind of
+              object to it, which is the only way a mixed mesh can be tested
+              honestly.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Behaviour modelled</th><th>Why it is there</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Discovery is not instant</strong></td><td>A scanner takes time to see an advertiser, and a GATT connection takes longer still. Code that assumes a peer is reachable the moment it is visible is wrong on hardware.</td></tr>
+                <tr><td><strong>A backgrounded iPhone is invisible to an Android scanner</strong></td><td>CoreBluetooth moves the service UUID into the advertisement overflow area and drops the local name. Established links keep working. <em>This asymmetry is the single most surprising thing about the real network and it is enforced here.</em></td></tr>
+                <tr><td>Links are ordered but lossy</td><td>GATT delivers in order on a given link, so <strong>reordering is off by default and must be asked for</strong>. Loss, duplication and corruption are all real and all off by default too.</td></tr>
+                <tr><td>Range is symmetric unless asked otherwise</td><td>Asymmetric range is a rabbit hole and the bugs being hunted do not need it.</td></tr>
+                <tr><td>Some Android chipsets cannot advertise</td><td><code>canAdvertise: false</code>, so the null-advertiser path is exercised.</td></tr>
+                <tr><td>Latency, jitter, loss, duplication, corruption</td><td>Per-link conditions a scenario dials in.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Five fabrics exist beside the radio one:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fabric</th><th>Models</th></tr></thead>
+              <tbody>
+                <tr><td><code>radio-fabric</code></td><td>The air between phones.</td></tr>
+                <tr><td><code>wifi-fabric</code></td><td>WiFi Aware links, Android to Android only.</td></tr>
+                <tr><td><code>relay-fabric</code>, <code>relay-node</code></td><td>Bare repeater hardware that holds no keys and never announces.</td></tr>
+                <tr><td><code>location-fabric</code></td><td>GPS fixes and geohash resolution.</td></tr>
+                <tr><td><code>media-fabric</code></td><td>Camera, files, and recorded voice.</td></tr>
+                <tr><td><code>mint-fabric</code></td><td>A real Cashu mint. See below.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Nostr is modelled through an offline socket that stands in for relays,
+            so gift wrap, geohash channels, gateway and bridge traffic all run
+            through real code paths.
+          </p>
+
+          <h2 id="invariants">Properties, not outcomes</h2>
+          <div class="box">
+            <p class="box-title">Why this file is the reason chaos tiers are worth running</p>
+            <p>
+              For two phones and a scripted exchange you can write down the
+              expected outcome. For twenty phones, a flapping radio and a
+              partitioned relay set you cannot: the number of legal outcomes is
+              enormous, and enumerating them would mean
+              <strong>encoding the implementation's behaviour as the
+              expectation</strong>, which tests nothing.
+            </p>
+            <p>
+              So the assertions are properties. "Everyone who could hear it ended
+              up with the same messages" is true of a correct system under every
+              interleaving and false under none of them. A property that survives a
+              thousand random schedules is evidence; a scripted expectation that
+              passes once is not.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Invariant</th><th>Statement</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Convergence</strong></td><td>Everyone who could hear a message ended up with it.</td></tr>
+                <tr><td><strong>No duplicates</strong></td><td>Nothing renders twice. Keyed on the protocol message id, which is exactly what dedup is supposed to key on: if two rows share an id, the app rendered one message twice.</td></tr>
+                <tr><td><strong>Nothing forged renders</strong></td><td>An unsigned or wrongly signed packet never reaches a bubble.</td></tr>
+                <tr><td><strong>Delivery state never runs backwards</strong></td><td>Read does not become delivered.</td></tr>
+                <tr><td><strong>Badges match their threads</strong></td><td>Unread counts agree with contents.</td></tr>
+                <tr><td><strong>Sender kept its own copy</strong></td><td>Separate from convergence, because it is a different failure: the message went out but the composer lost it.</td></tr>
+                <tr><td><strong>No sat is created or destroyed</strong></td><td>Checkable arithmetic, because the simulated mint tracks everything it issued and everything it kept in fees.</td></tr>
+                <tr><td><strong>No leaked timers</strong></td><td>The timer count at the end matches the start.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Two design details that keep the harness credible:</p>
+          <ul>
+            <li>
+              <strong>Convergence compares sets, not sequences.</strong> Two devices
+              can legitimately order two messages sent in the same millisecond
+              differently, because they arrived in different orders and the
+              tie-break is local. Requiring identical sequences would fail on
+              correct behaviour, which is how a harness loses its credibility.
+            </li>
+            <li>
+              <strong>A device is only expected to hold messages it did not
+              write.</strong> The sender's own copy is a different row with a
+              different id: the composer mints a local id for the optimistic echo
+              while the wire copy carries the protocol id. A broadcaster never
+              receives its own broadcast back, so comparing raw id sets across
+              devices would report a failure on a perfectly converged room.
+            </li>
+            <li>
+              <strong>Each check returns findings rather than throwing</strong>, so
+              one scenario reports every way it went wrong instead of only the
+              first.
+            </li>
+          </ul>
+
+          <h2 id="bitchat">The bitchat actor</h2>
+          <div class="box">
+            <p class="box-title">The most valuable single file in the test suite</p>
+            <p>
+              Wire compatibility is a non-negotiable in
+              <code>VISION.md</code>, and <code>PROGRESS.md</code> was honest that
+              it had never been proven anywhere but on paper. A compatibility test
+              that only checks Airhop against <em>itself</em> cannot find a
+              divergence, because both sides share the bug.
+            </p>
+            <p>
+              So this node is written <strong>to bitchat's rules rather than to
+              Airhop's</strong>, and its whole job is to disagree when Airhop is
+              wrong.
+            </p>
+          </div>
+          <ul>
+            <li>
+              It interprets <strong>only the packet types bitchat defines</strong>.
+              Airhop's extensions (<code>0x12</code>, <code>0x50</code>,
+              <code>0x51</code>) reach no handler, while still being
+              <strong>relayed</strong> like any other packet, because bitchat's type
+              switch logs <code>case .none</code> and falls through to its relay
+              scheduler. Both halves matter: Airhop's extras must cost bitchat
+              nothing <em>and</em> must still cross a mesh made of bitchat phones.
+            </li>
+            <li>
+              It <strong>refuses a courier envelope whose expiry is beyond 24 hours
+              plus 1 hour of slack</strong>, which is what bitchat's store does, and
+              which silently ate every Airhop envelope before that constant was
+              corrected.
+            </li>
+            <li>
+              It verifies signatures before displaying or relaying, and relays with
+              the TTL decrement and dedup any bitchat node performs.
+            </li>
+            <li>
+              It deliberately does <strong>not</strong> reuse Airhop's mesh service.
+              It does reuse <code>packet-codec</code>, because that file
+              <em>is</em> the claim under test: if Airhop's encoder and bitchat's
+              decoder disagree, the byte layout is wrong, and the layout is the
+              thing both projects have agreed on.
+            </li>
+          </ul>
+
+          <h2 id="mint">A real mint in the process</h2>
+          <p>
+            The wallet scenarios do not stub the mint. They run a real one.
+          </p>
+          <pre class="ascii">
+  The seam is globalThis.fetch, which is what @cashu/cashu-ts uses for
+  every call. So EVERYTHING ABOVE THE WIRE RUNS FOR REAL:
+
+     real blinding    real unblinding    real proof selection
+     real fee arithmetic                 real DLEQ verification
+
+  And the mint does REAL BDHKE, because it is only forty lines of
+  secp256k1, and a mint that returned made-up signatures would make
+  every DLEQ check pass or fail FOR THE WRONG REASON. DLEQ is precisely
+  what stands between a user and a forged token.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>What this buys that a stub cannot</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Double-spend is real.</strong> The mint keeps a spent set, and the second person to present a proof is refused by the same code path a real mint uses.</td></tr>
+                <tr><td><strong>Value conservation is checkable.</strong> Everything the mint ever signed is known, and so is everything it kept in fees, so "no sat was created or destroyed" is an arithmetic fact rather than an assumption. Both terms are needed once a mint charges: a swap reissues <em>less</em> than it takes, and the difference is not lost, it is the mint's.</td></tr>
+                <tr><td><strong>Failure is injectable at the transport</strong>, so "the mint went away mid-swap" is the same event the app would see in a tunnel.</td></tr>
+                <tr><td>NUT-19 response caching is modelled, so the interrupted-swap replay path is exercised against a mint that caches and one that does not.</td></tr>
+                <tr><td>BOLT-11 invoices are encoded properly, because cashu-ts decodes them and rejects a quote whose invoice disagrees with the amount.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="catalogue">The scenario catalogue</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Series</th><th>Count</th><th>Covers</th></tr></thead>
+              <tbody>
+                <tr><td><strong>A01 to A06</strong></td><td>6</td><td>Basics: cold start on both platforms, a public message reaching everyone once, a DM round trip with a receipt, simultaneous sends, and the responder speaking first.</td></tr>
+                <tr><td><strong>B01 to B07</strong></td><td>7</td><td>Multi-device: a chain of phones that cannot hear each other, a lossy and duplicating radio still converging, corrupted packets rejected without a crash, walking out of range parking a message, a backgrounded iPhone disappearing from Android but keeping its link, <strong>25 phones converging on one channel</strong>, and a forming crowd not drowning itself in control traffic.</td></tr>
+                <tr><td><strong>C01 to C09</strong></td><td>9</td><td>Adversarial and chaos: forged messages, forged announces, forged leaves, replay, Sybil floods, a phone killed mid-conversation, a panic wipe, and a <strong>seeded soak of hundreds of random events across eight phones</strong>.</td></tr>
+                <tr><td><strong>M01 to M12</strong></td><td>12</td><td>Media and voice: byte-exact photos, three simultaneous senders, a file lying about its type, voice notes, forged and misrouted attachments, replayed voice bursts, live push-to-talk, voice sharing a radio with a file transfer, private media sealed rather than signed in the open, and cross-client transfers in both directions.</td></tr>
+                <tr><td><strong>N01 to N14</strong></td><td>14</td><td>Gateway and bridge: reaching a city channel through a neighbour, turning the gateway off, two gateways not duplicating, a gateway losing signal, two islands sharing one room, nearby-only messages never bridged, a nine-seed sweep of gateway and bridge on one phone, a hostile network with a moving crowd, and four cross-client cases.</td></tr>
+                <tr><td><strong>R01 to R05</strong></td><td>5</td><td>Relay hardware: delivery through one relay, discovery without the relay entering the roster, a two-relay chain with no person between, a three-relay ring forwarding each packet once, and a private message crossing a node that cannot read it.</td></tr>
+                <tr><td><strong>S01 to S04</strong></td><td>4</td><td>Sync: catching up after a partition without re-flooding, requests and answers never leaving the link, an old packet refused despite a perfect signature, and a route planned by another node being followed rather than flooded.</td></tr>
+                <tr><td><strong>W01 to W21</strong></td><td>21</td><td>Wallet: real BDHKE, offline transfer with the radio off, double-spend refusal, reclaim, mint failure mid-swap, nutzaps end to end, Lightning in and out, recovery from twelve words, interrupted operations, Tor blocking mint traffic, tampered tokens, mint fees, and consolidation.</td></tr>
+                <tr><td><strong>F01 to F06</strong></td><td>6</td><td>Feature interactions: a private group unreadable to the phone beside it, a bulletin notice reaching a latecomer, a courier carrying for someone out of range, Tor failing closed, a gateway reaching a location channel, and two islands bridged.</td></tr>
+                <tr><td><strong>X01 to X03</strong></td><td>3</td><td>Conformance. See below.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="conformance">Conformance against the vendored source</h2>
+          <p>
+            The most unusual and most valuable idea in the suite: the tests
+            <strong>parse bitchat's Swift and Kotlin sources at test time</strong>
+            and fail on drift.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Check</th><th>Reads</th><th>Fails when</th></tr></thead>
+              <tbody>
+                <tr><td>File size ceiling</td><td><code>maxPayloadBytes</code> out of <code>FileTransferLimits.swift</code></td><td>Airhop's caps no longer fit under the ceiling it implies.</td></tr>
+                <tr><td>Packet type headroom</td><td>bitchat's <code>MessageType</code> enum</td><td>Their allocation comes within <strong>16</strong> of Airhop's <code>0x50</code> extension range, so a future collision surfaces in CI rather than in the field.</td></tr>
+                <tr><td>Courier constants</td><td><code>docs/spec/courier-test-vectors.json</code></td><td>The spec file and the code disagree, so drift fails CI rather than shipping a spec that quietly contradicts the implementation.</td></tr>
+                <tr><td>Compression parity</td><td>Pinned DEFLATE test vectors</td><td>Airhop's output stops being byte-identical to reference zlib.</td></tr>
+                <tr><td>Catalog rules</td><td>Every locale file</td><td>A catalog defines its own digits, or translates a string on the never-translate list.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            X01 is a live mixed mesh: an Airhop phone and a bitchat phone talking
+            to each other. X02 proves Airhop's private extensions cost a bitchat
+            node nothing while still crossing it. X03 is the constant check.
+          </p>
+
+          <h2 id="cannot">What cannot be tested this way</h2>
+          <div class="box warn">
+            <p class="box-title">The simulation models the OS contract. It cannot prove the hardware honours it.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Unverifiable without hardware</th><th>Risk</th></tr></thead>
+              <tbody>
+                <tr><td>Real BLE discovery timing</td><td>The fabric models delay; real chipsets vary widely by manufacturer and by how busy the band is.</td></tr>
+                <tr><td>MTU negotiation on real silicon</td><td>The write-type decision depends on what the peer actually grants.</td></tr>
+                <tr><td>CoreBluetooth behaviour in the field</td><td>State restoration, background throttling, and the overflow-area advertisement are modelled from documentation.</td></tr>
+                <tr><td>OEM battery managers</td><td>Xiaomi, Huawei and Oppo kill background apps in ways no model captures.</td></tr>
+                <tr><td>Real Tor circuits</td><td>Bootstrap timing, a network that blocks Tor, whether a bridge actually gets through, and how long Snowflake takes to find a volunteer.</td></tr>
+                <tr><td>Relay hardware</td><td>Bitle, ESP32 nodes, LoRa trunks. Simulated against a bare repeater; <strong>never run against hardware</strong>. Chapter <a href="47-lora-hardware.html">47</a>.</td></tr>
+                <tr><td>Apple's DEFLATE encoder</td><td>Compression parity is verified against zlib 1.3.1, which is what Android produces, but <strong>not against Apple's</strong>, which needs Apple hardware to run.</td></tr>
+                <tr><td>Battery consumption</td><td>The power policy is testable as a pure function; its effect on a real battery is not.</td></tr>
+                <tr><td>Crowds above the low tens</td><td>25 phones converge (B06). 200 is untested, and full fanout is the reason that matters. Chapter <a href="45-scaling.html">45</a>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">How do twenty independent copies of a singleton-heavy app run in one process?</span>
+              <span class="a"><code>jest.isolateModules</code> builds a fresh module registry per device: a separate mesh service, separate stores, a separate MMKV mock, and critically a separate <code>DeviceEventEmitter</code>, so native events raised inside one phone cannot be heard by another. Each phone is a closure over its own copy of the app, and nothing in the production source had to change to allow it. The cost is that types cannot cross the boundary, so every cross-device comparison is structural.</span>
+            </li>
+            <li>
+              <span class="q">Why does the harness insist on a single clock?</span>
+              <span class="a">Because two clocks would let the simulation invent an interleaving that hardware cannot produce, and a race-condition harness that reports impossible races is worse than no harness: every failure has to be argued about before anyone believes it. Jest's fake timers are the one clock, and every device's OS model, every native module, the real mesh service's own timeouts and every fabric schedule onto it.</span>
+            </li>
+            <li>
+              <span class="q">Why assert properties rather than expected outcomes?</span>
+              <span class="a">Because for twenty phones with a flapping radio and a partitioned relay set, the number of legal outcomes is enormous. Enumerating them means encoding the implementation's current behaviour as the expectation, which tests nothing and passes even when the behaviour is wrong. "Everyone who could hear it ended up with it" and "nothing renders twice" are true of any correct system under every interleaving and false under none, so surviving a thousand random schedules is evidence.</span>
+            </li>
+            <li>
+              <span class="q">Why does the bitchat actor not reuse Airhop's mesh service?</span>
+              <span class="a">Because a compatibility test that checks Airhop against itself cannot find a divergence: both sides share the bug. The actor is written to bitchat's rules, so its job is to disagree when Airhop is wrong. It does reuse <code>packet-codec</code>, deliberately, because that file <em>is</em> the claim under test: if Airhop's encoder and bitchat's decoder disagree, the byte layout is wrong, and the layout is the thing both projects agreed on.</span>
+            </li>
+            <li>
+              <span class="q">Why run a real Cashu mint rather than stubbing it?</span>
+              <span class="a">Because a mint that returned made-up signatures would make every DLEQ check pass or fail for the wrong reason, and DLEQ is precisely what stands between a user and a forged token. A real forty-line BDHKE mint also makes double-spend real, since the second presenter is refused by the same code path a real mint uses, and makes value conservation an arithmetic fact rather than an assumption, since everything issued and everything kept in fees is known.</span>
+            </li>
+            <li>
+              <span class="q">What would you tell an auditor the simulation does not prove?</span>
+              <span class="a">Anything about hardware. Real BLE discovery timing, MTU negotiation on real silicon, CoreBluetooth's actual background behaviour, OEM battery managers, real Tor circuits, and relay hardware are all modelled from documentation rather than measured. Compression parity is verified against zlib but not against Apple's encoder. And crowd behaviour above the low tens is untested, which matters specifically because full fanout is implemented where the spec documents subsetting.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

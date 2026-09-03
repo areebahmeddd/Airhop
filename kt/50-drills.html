@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 50: Glossary and drills. Every term, and the questions you should be able to answer cold." />
+    <title>50 Glossary and drills · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 50 · Verdict</p>
+          <h1>Glossary and drills</h1>
+          <p class="kt-lede">
+            Every term in one place, then the questions you should be able to
+            answer without notes, arranged by who is asking.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#numbers">The numbers, one table</a></li>
+              <li><a href="#glossary">Glossary</a></li>
+              <li><a href="#elevator">The elevator answers</a></li>
+              <li><a href="#skeptic">For a sceptic</a></li>
+              <li><a href="#security">For a security engineer</a></li>
+              <li><a href="#backend">For a backend or devops engineer</a></li>
+              <li><a href="#mobile">For a mobile engineer</a></li>
+              <li><a href="#crypto">For a cryptographer</a></li>
+              <li><a href="#designer">For a designer</a></li>
+              <li><a href="#product">For a product person</a></li>
+              <li><a href="#ten">For a ten year old</a></li>
+              <li><a href="#hard">The five hardest questions</a></li>
+            </ol>
+          </div>
+
+          <h2 id="numbers">The numbers, one table</h2>
+          <p>The constants worth knowing by heart, with the reason attached.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Value</th><th>What</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td><strong>7</strong></td><td>TTL, max hops</td><td>210 to 350 m of real reach, which is a venue. Cost grows with depth.</td></tr>
+                <tr><td><strong>512</strong></td><td>Bytes, BLE frame budget</td><td>The ATT maximum attribute value. Not negotiable.</td></tr>
+                <tr><td><strong>467</strong></td><td>Data bytes per fragment</td><td>512 minus 16 header, 8 sender, 8 recipient, 13 fragment header.</td></tr>
+                <tr><td><strong>18 KiB/s</strong></td><td>BLE throughput</td><td>467 bytes every 25 ms. The delay is required.</td></tr>
+                <tr><td><strong>10 to 220 ms</strong></td><td>Relay jitter</td><td>Prevents the broadcast storm. Widens with degree.</td></tr>
+                <tr><td><strong>8 to 25 ms</strong></td><td>Time-critical jitter</td><td>Voice and fragments, so three hops fit inside a 350 ms buffer.</td></tr>
+                <tr><td><strong>1000 / 5 min</strong></td><td>Dedup LRU and window</td><td>Per device. Cannot be the replay bound on its own.</td></tr>
+                <tr><td><strong>+/- 2 min</strong></td><td>Packet freshness</td><td>The replay bound that travels. Phones are NTP synced.</td></tr>
+                <tr><td><strong>15 min</strong></td><td>Announce freshness</td><td>Symmetric. The union of what both bitchat clients accept.</td></tr>
+                <tr><td><strong>30 s</strong></td><td>Voice freshness</td><td>Staleness is itself the attack.</td></tr>
+                <tr><td><strong>4 s / 15 to 30 s</strong></td><td>Announce cadence</td><td>Fast while isolated so lone phones meet, then back off.</td></tr>
+                <tr><td><strong>45 s / 60 s</strong></td><td>Direct / mesh peer timeout</td><td>Direct is shorter because a real drop fires an event; relayed packets arrive late.</td></tr>
+                <tr><td><strong>15 s</strong></td><td>Gossip sync interval</td><td>Catch-up for a peer returning from out of range.</td></tr>
+                <tr><td><strong>400 bytes / P=7</strong></td><td>GCS filter and parameter</td><td>~355 elements at a 1 percent false positive rate, in one frame.</td></tr>
+                <tr><td><strong>8 per 30 s</strong></td><td>Sync response limit</td><td>Amplification bound, attributed by link.</td></tr>
+                <tr><td><strong>40 / 20 / 5 / 2</strong></td><td>Courier pool, verified sub-cap, contact quota, stranger quota</td><td>Bounds how much of your phone somebody else can use.</td></tr>
+                <tr><td><strong>24 h + 1 h</strong></td><td>Envelope TTL and slack</td><td>bitchat's wire rule. Slack absorbs clock skew only.</td></tr>
+                <tr><td><strong>4, max 8</strong></td><td>Spray budget</td><td>Full budget to each of up to 4 couriers, halved on each meeting.</td></tr>
+                <tr><td><strong>7 days</strong></td><td>Outbox TTL</td><td>The one deliberate divergence. Local only, nothing on the wire.</td></tr>
+                <tr><td><strong>255 bytes</strong></td><td>DM content cap</td><td>A one-byte TLV length in <code>PrivateMessagePacket</code>, on all three implementations.</td></tr>
+                <tr><td><strong>512 KiB / 1 MiB / 256 KiB</strong></td><td>Photo cap, file cap, sent photo cap</td><td>The third is half the second because bitchat expires assemblies 30 s from the <em>first</em> fragment.</td></tr>
+                <tr><td><strong>210 bytes</strong></td><td>Voice burst content</td><td>Keeps a burst out of the fragment scheduler.</td></tr>
+                <tr><td><strong>350 ms</strong></td><td>Voice jitter buffer</td><td>Absorbs several hops of relay jitter.</td></tr>
+                <tr><td><strong>128 / 30 s</strong></td><td>Fragment assemblies and idle timeout</td><td>Idle from the last fragment, not the first.</td></tr>
+                <tr><td><strong>6</strong></td><td>Concurrent BLE central links</td><td>Android controllers refuse around 7 with status 133.</td></tr>
+                <tr><td><strong>200</strong></td><td>Peer registry and radar cap</td><td>Sybil bound. Direct peers never evicted.</td></tr>
+                <tr><td><strong>16</strong></td><td>Group members</td><td>bitchat compatible, creator-signed roster.</td></tr>
+                <tr><td><strong>5</strong></td><td>Relays per geohash cell</td><td>Nearest to the <em>cell centre</em>, so everyone converges.</td></tr>
+                <tr><td><strong>1024</strong></td><td>Noise replay window</td><td>Tolerates reordering, makes replay impossible inside it.</td></tr>
+                <tr><td><strong>1000</strong></td><td>Ratchet MAX_SKIP</td><td>Stops a one-packet denial of service.</td></tr>
+                <tr><td><strong>35</strong></td><td>Languages, 1,535 strings each</td><td>Bundled, never fetched.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="glossary">Glossary</h2>
+
+          <h3>Cryptography</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>AEAD</strong></td><td>Authenticated encryption with associated data. Encrypts and authenticates in one operation, plus extra bytes authenticated but not encrypted.</td></tr>
+                <tr><td><strong>ChaCha20-Poly1305</strong></td><td>The AEAD used throughout. Software cipher with no table lookups, so it is naturally constant time.</td></tr>
+                <tr><td><strong>XChaCha20-Poly1305</strong></td><td>Same, with a 24-byte nonce, so random nonces are safe. Used for private channels and Nostr DMs.</td></tr>
+                <tr><td><strong>Curve25519</strong></td><td>The elliptic curve. X25519 is its key agreement form, Ed25519 its signature form.</td></tr>
+                <tr><td><strong>DLEQ</strong></td><td>Discrete log equivalence. A zero-knowledge proof that a Cashu mint signed a proof, verifiable offline. Proves origin, not freshness.</td></tr>
+                <tr><td><strong>Double Ratchet</strong></td><td>Signal's algorithm. A symmetric ratchet per message plus a DH ratchet per reply, giving per-message forward secrecy and post-compromise security.</td></tr>
+                <tr><td><strong>Exporter secret</strong></td><td>A third HKDF output of the Noise split, descending from the chaining key. What Airhop seeds the ratchet from.</td></tr>
+                <tr><td><strong>Forward secrecy</strong></td><td>A key stolen tomorrow does not reveal messages sent today.</td></tr>
+                <tr><td><strong>Handshake hash (<code>h</code>)</strong></td><td>A running digest of every byte that went over the wire. <strong>Public.</strong> Safe as a channel binder, never as key material.</td></tr>
+                <tr><td><strong>HKDF</strong></td><td>Extract then expand. Turns non-uniform input into any number of independent keys.</td></tr>
+                <tr><td><strong>HMAC</strong></td><td>Keyed hash. Not vulnerable to length extension, unlike a bare hash of key plus message.</td></tr>
+                <tr><td><strong>Noise XX</strong></td><td>Three-message mutually authenticating handshake with forward secrecy and identity hiding. Airhop's session protocol.</td></tr>
+                <tr><td><strong>Noise X</strong></td><td>One-way sealing to a known static key. No forward secrecy. Used for courier envelopes.</td></tr>
+                <tr><td><strong>Post-compromise security</strong></td><td>The conversation becomes secure again after a compromise, once fresh entropy is injected. Needs a reply.</td></tr>
+                <tr><td><strong>Prologue</strong></td><td>Bytes mixed into the Noise handshake hash at initialisation. Empty here, but the mix step still runs, and skipping it broke interoperability.</td></tr>
+                <tr><td><strong>Safety number</strong></td><td>Six words over both parties' keys, read aloud to verify.</td></tr>
+                <tr><td><strong>secp256k1</strong></td><td>Bitcoin's curve. Used for Nostr identity, geohash identities and Cashu.</td></tr>
+                <tr><td><strong>TOFU</strong></td><td>Trust on first use. The first key seen for a peer stands, and no announce may replace it.</td></tr>
+                <tr><td><strong>X3DH</strong></td><td>Signal's asynchronous key agreement using published prekeys. Deliberately not used: Noise seeds the ratchet, and prekeys are gossiped rather than published to a server.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Radio and transport</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>ATT</strong></td><td>Attribute Protocol. The layer under GATT. Its 512-byte maximum attribute value is Airhop's frame budget.</td></tr>
+                <tr><td><strong>BLE</strong></td><td>Bluetooth Low Energy. Not Bluetooth Classic. No pairing required, which is what makes a stranger mesh possible.</td></tr>
+                <tr><td><strong>dBm</strong></td><td>Power relative to a milliwatt, logarithmic. +3 dB doubles, -6 dB halves distance in free space.</td></tr>
+                <tr><td><strong>Duty cycle</strong></td><td>Fraction of time a radio transmits or scans. A battery lever on BLE, a <em>legal limit</em> on LoRa.</td></tr>
+                <tr><td><strong>Fresnel zone</strong></td><td>The ellipsoid around a radio path that needs clearing. Why height beats antenna gain.</td></tr>
+                <tr><td><strong>GATT</strong></td><td>The service and characteristic model over ATT. Airhop uses one service and one characteristic as a byte pipe.</td></tr>
+                <tr><td><strong>LoRa</strong></td><td>Chirp spread spectrum on sub-GHz. Kilometres of range for kilobits. No phone has the radio.</td></tr>
+                <tr><td><strong>mDNS</strong></td><td>Multicast DNS, local service discovery. The designed and unshipped LAN transport.</td></tr>
+                <tr><td><strong>MTU</strong></td><td>The negotiated ATT message size. Decides whether a write can be unacknowledged. Distinct from the 512-byte attribute limit.</td></tr>
+                <tr><td><strong>RSSI</strong></td><td>Received signal strength in dBm. Always negative. <strong>Not distance.</strong></td></tr>
+                <tr><td><strong>Spreading factor</strong></td><td>LoRa's range-versus-airtime dial, SF7 to SF12. Each step doubles airtime.</td></tr>
+                <tr><td><strong>WiFi Aware</strong></td><td>Android's direct device-to-device WiFi. API 26 to discover, <strong>API 29 for the data path</strong>. Never cross-platform.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Protocol</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Announce</strong></td><td>Packet <code>0x01</code>. Signed presence with nickname, both public keys, capabilities and the Nostr key.</td></tr>
+                <tr><td><strong>Courier</strong></td><td>Store and forward by physical carriage. Packet <code>0x04</code>.</td></tr>
+                <tr><td><strong>Dedup</strong></td><td>The 1000-entry seen set on content-derived packet IDs.</td></tr>
+                <tr><td><strong>Fanout</strong></td><td>How many links a relay writes to. Airhop uses all of them; bitchat uses a subset.</td></tr>
+                <tr><td><strong>GCS</strong></td><td>Golomb coded set. A compact probabilistic set summary. False positives, never false negatives.</td></tr>
+                <tr><td><strong>Gossip sync</strong></td><td>Reconciling recent packets between two peers using GCS filters, every 15 seconds.</td></tr>
+                <tr><td><strong>IS_RSR</strong></td><td>The flag marking a solicited sync response. Normalised out of the signing preimage.</td></tr>
+                <tr><td><strong>Packet ID</strong></td><td><code>SHA-256(type | sender | timestamp | payload)[0:16]</code>. Excludes TTL, so one logical packet has one ID.</td></tr>
+                <tr><td><strong>Peer ID</strong></td><td><code>hex(SHA-256(noiseStaticPubKey))[0:16]</code>. Cannot be chosen, does not rotate.</td></tr>
+                <tr><td><strong>Signing preimage</strong></td><td>The packet re-encoded with ttl 0, IS_RSR cleared, unsigned, <strong>always padded</strong>.</td></tr>
+                <tr><td><strong>Spray and wait</strong></td><td>Bounded-copy DTN routing. Half the budget on each courier-to-courier meeting.</td></tr>
+                <tr><td><strong>TLV</strong></td><td>Type, length, value. Unknown types are skipped by length, which is what makes extensions safe.</td></tr>
+                <tr><td><strong>TTL</strong></td><td>Hop counter, decremented per relay. Plaintext and forgeable, so never a trust input alone.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Identity, contacts and permissions</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Binding check</strong></td><td><code>SHA-256(noisePub)[0:8] == peerID</code>. Applied to every card from every route. The reason a peer ID means anything.</td></tr>
+                <tr><td><strong>BleBlocker</strong></td><td>The one reason the mesh cannot run, as a union of eight values. Each maps to a distinct banner and a distinct button.</td></tr>
+                <tr><td><strong>Composition root</strong></td><td>The one place all the independent pieces are built and wired together. Here, <code>MeshService</code>.</td></tr>
+                <tr><td><strong>Contact</strong></td><td>A <em>known</em> identity, stored durably with its keys. Distinct from a peer, which is a <em>reachable</em> one and is forgotten on restart.</td></tr>
+                <tr><td><strong>Contact card</strong></td><td>106 to 138 bytes: peer ID, Noise key, signing key, nickname, Nostr key. Shared as <code>airhop:v1/&lt;base64url&gt;</code>.</td></tr>
+                <tr><td><strong><code>inPerson</code></strong></td><td>Whether a card was read off the other phone through this camera. The only thing that earns the right to re-pin keys already bound to a peer ID.</td></tr>
+                <tr><td><strong>Local nickname</strong></td><td>A label only you see. Never announced, never carried in a card, kept apart from the peer's own name so that name stays checkable.</td></tr>
+                <tr><td><strong><code>neverForLocation</code></strong></td><td>Android manifest flag promising scan results are not used to derive a position. Releases BLE scanning from the location permission and toggle.</td></tr>
+                <tr><td><strong>Permission primer</strong></td><td>The one-time sheet explaining the asks before the OS makes them. Not a gate: it resolves however it is dismissed.</td></tr>
+                <tr><td><strong>Safety number</strong></td><td>Six words from 42 bits over both parties' Noise and signing keys, sorted then hashed. Read aloud over a channel the two people already trust.</td></tr>
+                <tr><td><strong><code>source</code></strong></td><td>How a contact's keys arrived: <code>qr</code>, <code>link</code> or <code>manual</code>. Never decreases. Independent of whether a human checked them.</td></tr>
+                <tr><td><strong><code>verification</code></strong></td><td>Whether a human confirmed the keys, and how: <code>in-person</code> or <code>fingerprint</code>. Never removed once earned.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Links and the LAN transport</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Client isolation</strong></td><td>An access point that forwards traffic to the internet but blocks phone-to-phone traffic. On by default at most venues, undetectable before trying, and indistinguishable from an empty network.</td></tr>
+                <tr><td><strong><code>degree()</code></strong></td><td>Connected Bluetooth PEERS, not links and not every transport. Bluetooth is dual-role, so a neighbour is two links; and the jitter exists for radio contention, which a socket does not compete for.</td></tr>
+                <tr><td><strong>Dial ring</strong></td><td>Every mDNS name, ours included, sorted into one ring; each device links to the four either side and dials only those sorting after its own. Both ends compute the same ring without negotiating.</td></tr>
+                <tr><td><strong>Instance name</strong></td><td>16 random hex characters published in the mDNS record, minted per publishing session. Never the peer ID, because a record is cleartext and is logged.</td></tr>
+                <tr><td><strong><code>LinkRegistry</code></strong></td><td>Every link across BLE, WiFi Aware and LAN, and the only place bytes are written to one. Holds links and answers questions; decides nothing.</td></tr>
+                <tr><td><strong><code>linkFor(peerID)</code></strong></td><td>The best link a peer has, in <code>SEND_PREFERENCE</code> order. The entire transport decision for a courier handover.</td></tr>
+                <tr><td><strong>mDNS</strong></td><td>DNS with no server: ask over multicast, every device answers for itself. The protocol behind AirPlay and printer discovery.</td></tr>
+                <tr><td><strong><code>MAX_LAN_LINKS</code></strong></td><td>8. Sized against bitchat's <code>bleMaxCentralLinks</code> of 6, so a LAN room reads the way a Bluetooth room does to every Bluetooth-tuned constant.</td></tr>
+                <tr><td><strong><code>PeerRegistry</code></strong></td><td>Who a peer is and what we know about them: keys, nickname, pinned signing key, capabilities. Filled by announces from any distance. Distinct from the link registry, which answers how to reach them.</td></tr>
+                <tr><td><strong><code>SEND_PREFERENCE</code></strong></td><td>wifi, lan, ble. Which link to USE. Distinct from <code>TRANSPORT_KINDS</code>, which is what order to LIST things in and is ble, wifi, lan.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Internet layer</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Arti</strong></td><td>The Tor Project's Rust client. Embedded on iOS, SOCKS5 on <code>127.0.0.1:39050</code>.</td></tr>
+                <tr><td><strong>Bridge (mesh)</strong></td><td>Stitching two out-of-range mesh islands together over a Nostr rendezvous cell. Off by default.</td></tr>
+                <tr><td><strong>Bridge (Tor)</strong></td><td>An unlisted Tor entry node. <strong>Airhop has none.</strong> Different meaning from the above.</td></tr>
+                <tr><td><strong>Gateway</strong></td><td>Lending your connection so a nearby offline phone can reach location channels. Off by default.</td></tr>
+                <tr><td><strong>Geohash</strong></td><td>Latitude and longitude encoded as a string, where a longer prefix is a smaller cell.</td></tr>
+                <tr><td><strong>Gift wrap</strong></td><td>NIP-59. Rumor 14 inside seal 13 inside wrap 1059, so the relay learns neither sender nor content.</td></tr>
+                <tr><td><strong>Nostr</strong></td><td>Notes and Other Stuff Transmitted by Relays. Signed JSON events, dumb independent servers, keypair identity.</td></tr>
+                <tr><td><strong>Arti</strong></td><td>The Tor Project's Rust implementation of Tor. Embedded as a library on both platforms, so there is no <code>tor</code> binary, no torrc and no control port.</td></tr>
+                <tr><td><strong>Bridge</strong></td><td>An unlisted entry relay. Defeats blocking by address; does not by itself hide that the traffic is Tor.</td></tr>
+                <tr><td><strong>Pluggable transport</strong></td><td>A local SOCKS5 proxy that disguises the connection to a bridge. Airhop ships obfs4 and Snowflake, compiled in rather than spawned, because iOS forbids an app spawning an executable.</td></tr>
+                <tr><td><strong>Relay (Nostr)</strong></td><td>A WebSocket server that stores and forwards signed events. Opposite meaning to an AT Protocol relay.</td></tr>
+                <tr><td><strong>nip44-v2</strong></td><td>bitchat's <em>non-standard</em> DM cipher. <strong>Not the published NIP-44.</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Power, radio exposure and Lightning</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Battery band</strong></td><td>normal above 20 percent, low at or below 20, critical at or below 10. bitchat's thresholds, adopted deliberately.</td></tr>
+                <tr><td><strong>Doze</strong></td><td>Android's screen-off deferral of network and wakelocks. A foreground service with the connectedDevice type is exempt.</td></tr>
+                <tr><td><strong>Hysteresis</strong></td><td>3 percent, applied upward only. Entering a lower band is immediate; leaving it needs the threshold plus 3, so a phone parked at 20 percent does not flip modes on every report.</td></tr>
+                <tr><td><strong>HTLC</strong></td><td>Hash time-locked contract. Pay out only against the preimage of a hash, within N blocks. What makes Lightning routing trustless across strangers.</td></tr>
+                <tr><td><strong>Ionising</strong></td><td>Photon energy above roughly 10 eV, enough to knock electrons off atoms. Bluetooth at 2.4 GHz carries about a millionth of the energy needed to break one chemical bond, so it is firmly non-ionising.</td></tr>
+                <tr><td><strong>Melt</strong></td><td>NUT-05. Handing proofs to the mint so it pays a bolt11 invoice. The unused routing reserve returns as NUT-08 change.</td></tr>
+                <tr><td><strong>Mint (verb)</strong></td><td>NUT-04. Paying a mint's bolt11 invoice and receiving signed proofs in exchange. The quote walks UNPAID to PAID to ISSUED.</td></tr>
+                <tr><td><strong>Payment channel</strong></td><td>A 2-of-2 multisig funded on chain, updated thousands of times off chain, closed on chain. Publishing a revoked state forfeits the channel, which is what makes cheating irrational.</td></tr>
+                <tr><td><strong>Power mode</strong></td><td>performance, balanced, power-saver, ultra-low-power. Chosen by background state first, charging second, battery band last.</td></tr>
+                <tr><td><strong>Preimage</strong></td><td>The random value whose hash is in a bolt11 invoice. Revealing it claims the payment and is also the receipt: only the payee could have produced it.</td></tr>
+                <tr><td><strong>SAR</strong></td><td>Specific Absorption Rate, watts of radio energy absorbed per kilogram of tissue. FCC 1.6 W/kg, ICNIRP 2.0 W/kg, both far above where BLE sits.</td></tr>
+                <tr><td><strong>Scan throttling</strong></td><td>Android 7 and later silently ignores a scan restarted more than five times in 30 seconds. The reason a power policy must return null when nothing changed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Interface and design system</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Concentric radius</strong></td><td><code>inner = outer - padding</code>. The only value at which a nested rounded box holds a constant gap around the corner.</td></tr>
+                <tr><td><strong>Doherty threshold</strong></td><td>Interaction stays engaging below about 400ms of response. Why every tap has an immediate pressed treatment.</td></tr>
+                <tr><td><strong>Fitts's Law</strong></td><td>Acquiring a target is a function of its distance and size. Produced <code>MIN_TOUCH</code> 44 and <code>hitSlopFor()</code>.</td></tr>
+                <tr><td><strong>Hairline inset</strong></td><td>A separator starts where the <em>label</em> starts, never at the row's padding, so the icon column reads as a channel.</td></tr>
+                <tr><td><strong><code>hitSlopFor(size)</code></strong></td><td>Grows a small control's touch area to 44pt without changing how it looks. Computed, never typed.</td></tr>
+                <tr><td><strong>Jakob's Law</strong></td><td>People expect your app to work like the others they use. The reason delivery ticks, long-press menus and unified search look familiar.</td></tr>
+                <tr><td><strong><code>MIN_TOUCH</code></strong></td><td>44. Apple's 44pt and Material's 48dp round to the same practical floor; WCAG 2.5.8 asks 24x24 with 44 as the AAA target.</td></tr>
+                <tr><td><strong>Pressed treatment</strong></td><td>Darken a neutral fill, dim an accent fill. Chosen by what the surface already is, because each fails on the other.</td></tr>
+                <tr><td><strong>Semantic colour</strong></td><td>A colour locked to one meaning. Green is encrypted, blue is verified, and nothing decorative may be either.</td></tr>
+                <tr><td><strong>Tesler's Law</strong></td><td>Complexity is conserved; the only question is who absorbs it. Here, the app absorbs transport selection and session state.</td></tr>
+                <tr><td><strong>Token</strong></td><td>A named value in <code>theme.ts</code>. A value is right when a rule produced it and wrong when somebody picked it.</td></tr>
+                <tr><td><strong><code>useThemeColors()</code></strong></td><td>The only sanctioned way to read the palette. Importing <code>Colors</code> directly is how a screen ends up ignoring the theme setting.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Tor, bridges and the native build</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Active probing</strong></td><td>A censor connects to a suspicious address itself to check whether it speaks Tor. obfs4 defeats it by refusing to respond correctly without a certificate the client already holds.</td></tr>
+                <tr><td><strong>Domain fronting</strong></td><td>Making a connection appear to be to a large CDN the censor will not block wholesale. Snowflake uses it to reach its broker, which is what <code>fronts=</code> in a bridge line is.</td></tr>
+                <tr><td><strong>Dormancy</strong></td><td>Arti's <code>DormantMode</code>. Used instead of stopping when the app backgrounds, because stopping drops the guards and presents the device to a guard as a new client on every return.</td></tr>
+                <tr><td><strong>Guard</strong></td><td>The sticky first relay in a circuit, held for weeks. Rotating it means eventually picking a hostile one; keeping one means a single chance of that.</td></tr>
+                <tr><td><strong>IPtProxy</strong></td><td>The library packaging Lyrebird (obfs4) and Snowflake for mobile. Built from source in <code>native/iptproxy</code>, never vendored prebuilt.</td></tr>
+                <tr><td><strong>Managed transport</strong></td><td>Tor spawning a transport as a child process. Unavailable on iOS, which is why Airhop compiles both transports in and passes Arti their loopback ports as unmanaged transports.</td></tr>
+                <tr><td><strong>Moat</strong></td><td>The Tor Project endpoint serving built-in bridge lines, the same source Tor Browser uses. Synced weekly into <code>src/data/bridges.ts</code> by a workflow that opens a pull request.</td></tr>
+                <tr><td><strong>obfs4</strong></td><td>A pluggable transport whose output is uniformly random bytes with no header or fixed length. Fast, and enumerable, because it needs a bridge address.</td></tr>
+                <tr><td><strong>Snowflake</strong></td><td>A pluggable transport that looks like a WebRTC video call and finds a volunteer proxy through a broker, so there is no address list to enumerate. Slow, and works where obfs4 does not.</td></tr>
+                <tr><td><strong><code>TOOLCHAIN.env</code></strong></td><td>One file pinning every input to both native builds: Rust, Go, the NDK, gomobile, IPtProxy by version and commit, a Debian snapshot and a fixed source epoch.</td></tr>
+                <tr><td><strong>Unobservability</strong></td><td>Whether the network can tell you are using Tor. Distinct from anonymity, and the problem bridges and transports exist for.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Money</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>BDHKE</strong></td><td>Blind Diffie-Hellman Key Exchange. Cashu's blind signature scheme on secp256k1.</td></tr>
+                <tr><td><strong>Cashu</strong></td><td>Chaumian ecash backed by Bitcoin and Lightning. Tokens are bearer strings.</td></tr>
+                <tr><td><strong>Melt</strong></td><td>Withdraw. Hand proofs to the mint, it pays a Lightning invoice.</td></tr>
+                <tr><td><strong>Mint</strong></td><td>The issuer and redeemer. The only trusted party in the payment system.</td></tr>
+                <tr><td><strong>Mint (verb)</strong></td><td>Deposit. Pay a Lightning invoice, receive proofs.</td></tr>
+                <tr><td><strong>NUT</strong></td><td>A numbered Cashu specification, the equivalent of a NIP.</td></tr>
+                <tr><td><strong>Nutzap</strong></td><td>NIP-61. Ecash over Nostr, P2PK-locked to the recipient's key.</td></tr>
+                <tr><td><strong>P2PK</strong></td><td>NUT-11. A spending condition locking a proof to a public key.</td></tr>
+                <tr><td><strong>Proof</strong></td><td>One coin: amount, keyset id, secret, and the mint's signature.</td></tr>
+                <tr><td><strong>Reserved</strong></td><td>Proofs set aside for a serialised send. Unspendable and reclaimable.</td></tr>
+                <tr><td><strong>Swap</strong></td><td>Exchanging proofs for new ones at the mint. The basis of receiving and making change.</td></tr>
+                <tr><td><strong>Token</strong></td><td>One or more proofs plus a mint URL, as a <code>cashuB…</code> string.</td></tr>
+                <tr><td><strong>Unverified</strong></td><td>A proof received offline: genuine by DLEQ, not confirmed unspent.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="elevator">The elevator answers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr><td>What is it?</td><td>A messaging app that works with no internet, by passing messages phone to phone over Bluetooth, up to seven hops.</td></tr>
+                <tr><td>Why?</td><td>Every mainstream messenger stops when the network does, and networks are shut down, congested and surveilled routinely.</td></tr>
+                <tr><td>How is it private?</td><td>Noise XX sessions with a Double Ratchet on top, so the phones relaying carry sealed envelopes they cannot open.</td></tr>
+                <tr><td>Do I need an account?</td><td>No. Your identity is a key pair made on the phone. There is no create-account screen anywhere.</td></tr>
+                <tr><td>Who runs the servers?</td><td>Nobody. There are none. The internet layer uses hundreds of independent Nostr relays that other people run.</td></tr>
+                <tr><td>How far does it reach?</td><td>210 to 350 metres, if there are people with the app standing in between. Density is the limit, not distance.</td></tr>
+                <tr><td>Can it send money?</td><td>Yes, Cashu ecash, offline, phone to phone. Internet is needed only to top up or cash out.</td></tr>
+                <tr><td>What is the catch?</td><td>Other people need it installed. That is the honest weakness, and it is why the wire protocol is shared with bitchat.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="skeptic">For a sceptic</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">"Nobody else has this installed, so it is useless."</span>
+              <span class="a">Correct, and it is the real limitation. Two mitigations exist. Airhop shares bitchat's wire protocol byte for byte, so both user bases form one mesh with no configuration. And relay hardware puts a node where nobody stands. Neither makes an empty field work. The product is designed to be installed before it is needed, which makes distribution the hard problem rather than engineering.</span>
+            </li>
+            <li>
+              <span class="q">"Bluetooth mesh apps have been tried and failed."</span>
+              <span class="a">Bridgefy is the usual example, and it failed on security rather than on the mesh: it was found to be unencrypted and trivially impersonable during exactly the protests it was promoted for. That is an argument for getting the cryptography right, which is why every packet here is signed, sessions are Noise XX, and the threat model assumes an attacker in the room. Briar has run the same architecture successfully for years.</span>
+            </li>
+            <li>
+              <span class="q">"Why not just use Signal?"</span>
+              <span class="a">Use Signal. It is better at what it does, and this is not competing with it. Signal ties an account to a phone number and stops entirely when the network does. Airhop is aimed at the moment after that, when there is no network to be excellent on.</span>
+            </li>
+            <li>
+              <span class="q">"Seven hops of 30 metres is nothing."</span>
+              <span class="a">It is a venue, a city block, a march, a campus, which is exactly the scale the product targets. And it is not the whole story: the internet layer covers distance when a connection exists, and the courier covers time when it does not, by having a person physically carry a sealed message until they meet the recipient.</span>
+            </li>
+            <li>
+              <span class="q">"This is a hackathon project."</span>
+              <span class="a">It started as one. What it is now is 200,000 lines with a multi-device simulator running fully isolated copies of the app on a modelled radio, conformance tests that parse another project's source and fail on drift, and a documented list of its own flaws including the ones it cannot fix. The right criticism is the absence of an external audit, which the project states in its own README and has scheduled.</span>
+            </li>
+          </ul>
+
+          <h2 id="security">For a security engineer</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">State the threat model.</span>
+              <span class="a">Anyone in radio range can transmit anything: forge every plaintext header field, replay captured packets, mint unlimited internally-consistent identities, and drop or alter anything passing through them. They cannot break Ed25519, X25519, ChaCha20-Poly1305 or SHA-256 preimage resistance. Out of scope and stated: physical proximity, a stable peer ID, courier tag linkability, who is talking to whom on the mesh, the fact that Tor is in use, traffic timing correlation, a compromised OS, and mint trust.</span>
+            </li>
+            <li>
+              <span class="q">Why does a valid signature not stop impersonation?</span>
+              <span class="a">Because an announce is signed with a key inside that same announce, so it proves internal consistency only. The victim's Noise public key is broadcast in the clear, so an attacker copies the peer ID and Noise key, attaches their own signing key, and signs. Both checks pass. Only refusing to replace a key already pinned to that peer ID stops it, with the single exception of a key proven inside a completed Noise session, which requires the private half.</span>
+            </li>
+            <li>
+              <span class="q">What was the worst bug found, and why did it matter?</span>
+              <span class="a">The Double Ratchet root key was seeded from the Noise handshake hash. <code>mixHash</code> absorbs only bytes that went over the wire, so that value is public, and handshakes flood the mesh at TTL 7. Any bystander could capture the three packets, recompute the root key, and forge or decrypt every ratcheted message in that conversation. Fixed by seeding from the exporter secret, a third HKDF output of the same split, which descends from the chaining key and therefore from ephemeral private keys destroyed at split.</span>
+            </li>
+            <li>
+              <span class="q">How is Sybil handled?</span>
+              <span class="a">Bounded damage rather than prevention, and the design says so. Caps with eviction that protects physical facts: registry and radar at 200 with oldest-first eviction that never drops a peer holding a real link, and direct standing following the link lifecycle rather than a forgeable TTL field. There is no proof of work and no cost to identity creation, so an attacker can still fill the non-direct slots. That is the available answer in a permissionless system.</span>
+            </li>
+            <li>
+              <span class="q">Where does the design fall short of its own claims?</span>
+              <span class="a">Prekey bundles are not reconciled through gossip sync, so courier envelopes silently fall back to static-key sealing and lose the forward secrecy the README advertises. Nostr DMs have no forward secrecy at all. Private channel keys never rotate and cannot be revoked. There is no key rotation or revocation anywhere. And there is no external audit yet.</span>
+            </li>
+          </ul>
+
+          <h2 id="backend">For a backend or devops engineer</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">How does it scale?</span>
+              <span class="a">Not the way a server does, because there is no capacity to add. The scarce resource is airtime in a fixed, shared 2.4 GHz band. More users improves reach and increases contention simultaneously. The real question is at what density delivery probability drops below useful, and the levers are transmissions per message and hop depth. 25 phones converge in the simulation; 200 is untested, and the documented mitigation, fanout subsetting, is not implemented.</span>
+            </li>
+            <li>
+              <span class="q">What is your amplification story?</span>
+              <span class="a">TTL bounds depth. Dedup bounds repetition. Degree-scaled jitter prevents the broadcast storm. Sync requests and every packet answering one ride at TTL 0 so they stop at the requester, responses are capped at 8 per peer per 30 seconds, and the rate limit is checked before the expensive diff pass. Gateway uplinks are capped at 10 per depositor per minute with the depositor's signature verified. Courier deposits are capped by pool, tier and depositor. Decompression is bounded at the declared size while inflating, not after.</span>
+            </li>
+            <li>
+              <span class="q">How do you observe a system with no telemetry?</span>
+              <span class="a">You largely do not, and that is a deliberate cost of sending nothing anywhere. The substitute is a simulation you can re-run: every scenario prints a seed, so a failure is reproducible byte for byte, and the invariants are properties that hold under any interleaving rather than scripted expectations. The gap worth closing is local diagnostics a field tester can read and report themselves.</span>
+            </li>
+            <li>
+              <span class="q">What is your retry and backoff strategy?</span>
+              <span class="a">Layered. Radio controllers are reconcilers: a desired state, an observed outcome, one idempotent pass, and a backoff ladder, with "unsupported" latched forever because that is not a state a device leaves. Fragment writes back off 60 ms on refusal and give up after 250 consecutive. The outbox retries event-driven with a 10 second floor and a 45 second sweep, capped at 8 attempts over 7 days. A refused write is explicitly not a dead link, because the stack says the same thing when its queue is merely full.</span>
+            </li>
+            <li>
+              <span class="q">What breaks in a partition?</span>
+              <span class="a">Nothing, structurally. A partition is the normal case. Messages queue in the outbox, courier envelopes are handed to people who might walk across the gap, and gossip sync reconciles the history when the partition heals. If one side has internet, the mesh bridge can stitch two islands over a geohash rendezvous cell.</span>
+            </li>
+          </ul>
+
+          <h2 id="mobile">For a mobile engineer</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why one TypeScript codebase rather than two native ones?</span>
+              <span class="a">Because bitchat's two codebases drifted until an Android fragment size mismatch broke cross-platform messaging for months with nobody noticing. One implementation means a protocol bug exists on both platforms or neither, and a fix lands on both at the same instant. The cost is a JavaScript bridge in the path, which is not the bottleneck: the radio moves 18 KiB/s.</span>
+            </li>
+            <li>
+              <span class="q">How do you keep the mesh alive in the background?</span>
+              <span class="a">iOS: <code>bluetooth-central</code> and <code>bluetooth-peripheral</code> background modes, plus CoreBluetooth state restoration, which relaunches the app on a BLE event and is why the keychain item must be <code>AFTER_FIRST_UNLOCK</code>. Android: a foreground service typed <code>connectedDevice</code>, plus <code>neverForLocation</code> on <code>BLUETOOTH_SCAN</code>, without which the service ran and no scan results were delivered at all.</span>
+            </li>
+            <li>
+              <span class="q">What is the most surprising platform behaviour?</span>
+              <span class="a">A backgrounded iPhone is invisible to an Android scanner. CoreBluetooth moves the service UUID into the advertisement overflow area and drops the local name, so only another iOS device can discover it. Established links keep working, so the symptom is specifically "cannot find" rather than "cannot message". Not fixable in app code, and modelled explicitly in the simulation's radio fabric so it cannot be forgotten.</span>
+            </li>
+            <li>
+              <span class="q">How is battery handled?</span>
+              <span class="a">Policy in TypeScript as a pure function of four facts, mechanism in Kotlin. Four modes moving five knobs together, because a duty-cycled low-power scan beside a full-power advertise saves almost nothing. Backgrounded gives power saver, charging in the foreground gives performance, otherwise the battery band decides, and foreground on battery is balanced rather than performance. Hysteresis of +3 percent to climb out of a band, because bitchat re-resolves per 1 percent and every flip restarts the scanner. iOS is a declared no-op, because CoreBluetooth exposes no scan-rate control.</span>
+            </li>
+            <li>
+              <span class="q">What must a new contributor never do?</span>
+              <span class="a">Run <code>npx expo prebuild</code>, which regenerates the native trees and deletes every module. Rename a keychain item, an HKDF separator or an MMKV partition id, which are addresses rather than labels. Change a shared wire constant. And treat a refused GATT write as a dead link.</span>
+            </li>
+          </ul>
+
+          <ul class="drill">
+            <li>
+              <span class="q">When does Airhop ask for each permission, and why in that order?</span>
+              <span class="a">Bluetooth first, before the mesh starts, because nothing works without it and on Android a second refusal makes it permanently blocked. A one-time primer sheet precedes it, explaining the asks. Location next, folded into the Bluetooth batch on Android 11 and below where BLE scanning genuinely needs it, and asked separately on iOS after the mesh is already running. Notifications last, because its consequence is the mildest. Camera, photos and microphone are asked on demand, at the moment the feature needs them, which is the only time no explanation is required. Every ask outside the batched Bluetooth run is awaited one at a time: concurrent prompts on a fresh install swallowed the notification prompt and sometimes crashed.</span>
+            </li>
+            <li>
+              <span class="q">The BLE permission prompt never returns. What happens to the app?</span>
+              <span class="a">Nothing bad. Every await before the mesh is created is time-boxed, and this one at 60 seconds. Past the deadline nothing is published about the permission, because "the OS never answered" is not one of the answers it could have given, and guessing would put a red banner over a permission the user may have granted. The mesh starts anyway, and the radio controller reads the real grant off the device on its first reconcile. The prompt really can be orphaned: it is hosted by another process, and an OEM that reaps the Activity behind a foreground service destroys it mid-dialog.</span>
+            </li>
+            <li>
+              <span class="q">Someone pastes you a contact code. What can you do with it, and what can it not do?</span>
+              <span class="a">You can encrypt to that identity and open a DM route immediately, because the card carries the Noise key, the signing key and the Nostr key, and its peer ID is checked against SHA-256 of its own Noise key before anything is stored. What it cannot do is overwrite keys already bound to that peer ID, because nothing about a pasted card proves who sent it. It is stored as <code>source: "link"</code> with no verification. Only a camera scan of the other person's live screen earns <code>inPerson</code>, and only that may re-pin. The gap is closed later by comparing a six word safety number over a channel you already trust, which imports no keys and therefore needs no such gate.</span>
+            </li>
+          </ul>
+
+          <h2 id="crypto">For a cryptographer</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Walk me through Noise XX.</span>
+              <span class="a">Message one: the initiator sends a fresh ephemeral public key in the clear. Message two: the responder sends its ephemeral, mixes <code>ee</code> which creates the first cipher key, then sends its static key <em>encrypted</em> under it, then mixes <code>es</code>. Message three: the initiator sends its static key encrypted and mixes <code>se</code>. Three DH operations: <code>ee</code> gives forward secrecy, <code>es</code> authenticates the responder, <code>se</code> authenticates the initiator. The static keys are transmitted after the first DH, which is what gives identity hiding.</span>
+            </li>
+            <li>
+              <span class="q">Why not use the transcript hash as the ratchet seed?</span>
+              <span class="a">Because <code>mixHash</code> absorbs only bytes that went over the wire, so it is public to anyone who captured the handshake. The exporter secret descends from the chaining key, which absorbed ephemeral DH outputs whose private halves are destroyed at split, so it cannot be reconstructed from long-term keys or recomputed by an observer. It is free because HKDF chains: asking for a third output leaves the first two bit-identical, so bitchat's transport keys are unchanged.</span>
+            </li>
+            <li>
+              <span class="q">Justify a zero nonce in the Double Ratchet.</span>
+              <span class="a">The rule is never to reuse a (key, nonce) pair. The ratchet derives a fresh 32-byte message key per message from the chain, so each key is used exactly once, and with a single-use key there is no second message under it for the nonce to collide with. Any fixed nonce is safe. The dangerous case is a fixed nonce with a reused key, which the Noise transport avoids with a counter and which XChaCha20 avoids with a 24-byte random nonce.</span>
+            </li>
+            <li>
+              <span class="q">Where is forward secrecy absent?</span>
+              <span class="a">Nostr DMs, entirely: a static ECDH between two long-lived secp256k1 identities, so compromising either key opens every archived gift wrap. Courier envelopes sealed to a static key when no prekey bundle was available, which happens silently because prekeys are not reconciled through gossip sync. Private channels, which use one symmetric key that never rotates. Group messages within an epoch. And attachments, which never get ratchet treatment.</span>
+            </li>
+            <li>
+              <span class="q">Why not MLS for groups?</span>
+              <span class="a">MLS needs a delivery service giving every member the same ordered sequence of commits, and a flooding mesh with partitions cannot provide one: two members in separate partitions would advance to incompatible epochs with no reconciliation path. Its logarithmic advantage also only appears at hundreds of members, where Airhop caps at 16. The honest counterpoint is that Airhop's groups have no per-message forward secrecy within an epoch, which is genuinely weaker.</span>
+            </li>
+          </ul>
+
+          <h2 id="designer">For a designer</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">How does this app decide what a spacing, a radius or a duration should be?</span>
+              <span class="a">It does not decide, it looks it up. Nine spacings on a 4pt grid, nine type sizes, seven radii, three durations, one accent. The rule is that a value is right when a rule produced it and wrong when somebody picked it, and the corollary is that solving something once is only half the job: it is finished when the answer is a token, a shared component or a lint rule. Every inconsistency that ever shipped in this codebase was a correct decision that never propagated.</span>
+            </li>
+            <li>
+              <span class="q">Name three details users will never consciously notice and explain why each was worth the effort.</span>
+              <span class="a">Concentric radius, where <code>inner = outer - padding</code> is the only value at which a nested box holds a constant corner gap; below it the corners pinch and above it they bulge, and the eye reads two shapes fighting rather than one nesting. Letter-spacing applied after the last glyph, which makes a tracked string measure wider than it draws so centring leaves it half a track short. And <code>includeFontPadding: false</code>, an Android default that reserves ascender room a digit never uses, so a numeral centred in a circle sits correctly on iOS and low on Android. None of the three shows in a screenshot and all three show in the hand, which is the whole argument for them.</span>
+            </li>
+            <li>
+              <span class="q">Which apps does this borrow from, and where does it deliberately not?</span>
+              <span class="a">Delivery ticks, message-info sheets and document subtitles from WhatsApp; the inverted outgoing bubble from iMessage; unified cross-thread search from the WhatsApp, Telegram and Signal convention; the activity tab from Instagram; safety numbers and keep-anyone-you-message from Signal; the 44pt floor, separator inset and sheet drag behaviour from Apple HIG and Material 3 where the two agree. That is Jakob's Law applied deliberately. The divergence is colour: every one of those apps uses a brand hue as its accent and this one uses near-black, because it has four network states, two trust levels and three delivery states that all genuinely need distinguishing, and a brand colour competing with them would make the meaningful ones harder to read.</span>
+            </li>
+          </ul>
+
+          <h2 id="product">For a product person</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Who is this for?</span>
+              <span class="a">People whose network is unavailable, surveilled or shut down: national shutdowns, disaster zones, mass gatherings where cells are congested, and places with no coverage. It is installed before it is needed, which is why the languages shipped are the ones spoken where shutdowns happen: Persian, Arabic, Urdu, Hindi, Bengali, Punjabi, Tamil, Indonesian, Filipino, Nepali, Ukrainian and Russian.</span>
+            </li>
+            <li>
+              <span class="q">What is the hardest UX problem?</span>
+              <span class="a">Telling the truth about uncertainty. A message can leave the radio and reach nobody. A peer can be visible and unreachable. Money can be committed and undeliverable. The rule is that an honest uncertain state beats a confident wrong one, and it is enforced in type signatures rather than copy: send results carry link counts, the wipe reports whether the keys actually went, offline ecash is stored as unverified.</span>
+            </li>
+            <li>
+              <span class="q">Why does the app open on the Mesh tab?</span>
+              <span class="a">Because the first question a user of this app has is whether it is working and whether anyone is nearby. In a normal messenger connectivity is assumed, so opening to conversations answers the right question. Here connectivity is the variable.</span>
+            </li>
+            <li>
+              <span class="q">Why is there no account recovery?</span>
+              <span class="a">Because recovery requires a party who can restore your identity, and that party is exactly what the product refuses to have. The identity is a key on one phone, stored <code>THIS_DEVICE_ONLY</code> so it is excluded even from encrypted backups. Losing the phone means losing the identity. The five-second key generation screen exists specifically so the user learns this at the start rather than discovering it.</span>
+            </li>
+          </ul>
+
+          <h2 id="ten">For a ten year old</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr><td>What does it do?</td><td>Lets you message people when there is no phone signal, by passing the message from phone to phone until it gets there.</td></tr>
+                <tr><td>Can other people read it?</td><td>No. It is locked in a way only your friend's phone can open. The phones in the middle are carrying a locked box.</td></tr>
+                <tr><td>How far does it go?</td><td>About as far as a football pitch is long, if there are people with the app standing in between. Each person passes it a bit further.</td></tr>
+                <tr><td>What if nobody is in between?</td><td>Someone can carry it, like a letter, and hand it over when they bump into your friend.</td></tr>
+                <tr><td>Do I need to sign up?</td><td>No. The app makes you a secret key when you open it, and that key is you.</td></tr>
+                <tr><td>What if someone takes my phone?</td><td>Tap the panic button three times and everything is destroyed in about a second.</td></tr>
+                <tr><td>Can I send money?</td><td>Yes, like handing over a note with a bank's stamp on it. It works even with no internet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="hard">The five hardest questions</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">"Your README says four things ship that do not."</span>
+              <span class="a">That is correct, and it is the top finding in chapter 49. iOS MultipeerConnectivity, the local AI assistant, and the AT Protocol and ActivityPub bridges are all presented as features and are roadmap items or removed code. The comparison table also lists desktop, web and CLI platforms that do not exist. The fix is a status column, not a rewrite. It matters because a reviewer who finds one overstatement discounts the security claims too, and those are sound.</span>
+            </li>
+            <li>
+              <span class="q">"Prove your crypto is right."</span>
+              <span class="a">I cannot, and neither can the project, and it says so. What exists: audited primitive libraries, constructions that follow published specifications, byte-level test vectors, a conformance harness that parses another implementation's source, and two critical findings already caught and fixed. What does not exist: an external audit, which is scheduled for v1.9.0. Anyone treating "not obviously wrong to a careful reviewer" as equivalent to "audited" is making a mistake the project has explicitly warned against.</span>
+            </li>
+            <li>
+              <span class="q">"What happens at 500 users in one square?"</span>
+              <span class="a">Unknown, honestly. 25 phones converge in the simulation and a seeded soak holds every invariant across eight. Above the low tens is untested. The reason it worries me specifically is that Airhop relays to every non-ingress link where bitchat relays to a message-ID-seeded subset, and Airhop's own protocol document specifies the subset. The repair mechanism that makes subsetting safe, gossip sync, is already running. So the mitigation is known, specified, and not implemented.</span>
+            </li>
+            <li>
+              <span class="q">"Is courier mail really anonymous?"</span>
+              <span class="a">No, and the project says so first. The carrier cannot read the content and cannot tell who sent it. But the routing tag is an HMAC keyed on the recipient's <em>public</em> Noise key, which every announce broadcasts, so anyone who has heard one announce can compute that peer's tags for any day and follow their mail. It is inherited from bitchat, which documents the same flaw in its own implementation and notes that its whitepaper's unlinkability claim does not hold. Fixing it needs a v2 tag keyed on a shared secret, agreed across implementations.</span>
+            </li>
+            <li>
+              <span class="q">"Why should anyone trust a solo project with this?"</span>
+              <span class="a">They should not trust it more than the evidence supports, and the README says exactly that: not externally security-reviewed, do not rely on it for sensitive use cases. What the evidence does support is that the protocol is correct against a vendored reference, that it is tested with a multi-device simulator most funded teams do not build, and that the project documents its own flaws before anyone else finds them. Bus factor of one is the real risk, and it is a reason to contribute rather than a reason to dismiss.</span>
+            </li>
+          </ul>
+
+          <div class="box ok">
+            <p class="box-title">The last thing</p>
+            <p>
+              If you remember one sentence from this manual, make it this one:
+              <strong>never claim more than you know</strong>. It explains the
+              delivery states, the wipe result, the DLEQ result, the Tor banner, the
+              radar rings, the unverified ecash bucket, and the honest list of what
+              is out of scope. It is also the standard the documentation should be
+              held to, which is the substance of chapter
+              <a href="49-review.html">49</a>.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

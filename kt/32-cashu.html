@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 32: Cashu ecash. Blind signatures, BDHKE, proofs, DLEQ, mints, and the NUTs." />
+    <title>32 Cashu ecash · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 32 · Money</p>
+          <h1>Cashu ecash</h1>
+          <p class="kt-lede">
+            Money that moves between two phones with no internet on either. That
+            sentence sounds impossible, and the reason it is not comes down to a
+            1982 idea about signing something you cannot see.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#lightning">Bitcoin and Lightning</a></li>
+              <li><a href="#why">Why ecash and not Lightning</a></li>
+              <li><a href="#blind">Blind signatures</a></li>
+              <li><a href="#bdhke">BDHKE, the actual construction</a></li>
+              <li><a href="#proof">Proofs, tokens, keysets</a></li>
+              <li><a href="#dleq">DLEQ, and what it does not prove</a></li>
+              <li><a href="#nuts">The NUTs Airhop implements</a></li>
+              <li><a href="#mint">The mint, and what you trust it with</a></li>
+              <li><a href="#offline">The offline story, precisely</a></li>
+              <li><a href="#detection">Token detection in messages</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine a fairground where you swap real money for tokens at a
+              booth. The clever part is how the booth stamps them: you put a blank
+              token inside a sealed envelope with carbon paper, the booth stamps
+              through the envelope without ever seeing the token, and you take the
+              stamped token out. The booth knows it stamped one token, but not
+              which one. So when you later hand that token to a friend and they
+              bring it back, the booth cannot tell it came from you. And handing
+              it to your friend needs no booth at all. It is just a piece of paper
+              with a stamp on it.
+            </p>
+          </div>
+
+          <h2 id="lightning">Bitcoin and Lightning, in one section</h2>
+          <p>
+            Every Cashu balance is backed by bitcoin held over Lightning, so the
+            two ends of the system need naming before the comparison below makes
+            sense. No prior knowledge assumed.
+          </p>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Bitcoin is a shared notebook that everyone in the world keeps a copy
+              of. Writing in it is slow and costs money, because thousands of
+              people have to agree on the entry. Lightning is what two people do
+              when they expect to pay each other a lot: they write <em>one</em>
+              entry that locks some money in a shared box, then keep score between
+              themselves privately, and write a second entry only when they are
+              done. If enough people have boxes with enough other people, a payment
+              can hop across a chain of boxes to somebody you have never met.
+            </p>
+          </div>
+          <h3>The base layer</h3>
+          <p>
+            Bitcoin settles roughly every ten minutes, globally, with every full
+            node verifying every transaction. That is what makes it hard to
+            censor, and it is also why it cannot be a payment rail on its own:
+            latency is minutes to hours, fees are set by an open fee market and
+            can exceed the value of a small payment, and every transaction is
+            public forever.
+          </p>
+          <h3>Payment channels</h3>
+          <pre class="ascii">
+  ON CHAIN                          OFF CHAIN                     ON CHAIN
+  ────────                          ─────────                     ────────
+
+  funding tx                thousands of updates,               closing tx
+  2-of-2 multisig           each a signed new split,            final split
+  A: 100k  B: 0             never broadcast                     broadcast
+       │                                                              │
+       │      A: 90k B: 10k -> A: 70k B: 30k -> A: 75k B: 25k         │
+       ▼                                                              ▼
+  ═════════════════════════════════════════════════════════════════════
+        one block                                            one block
+
+  Each update revokes the one before it. Publishing a revoked state
+  lets the other side take the whole channel, which is what makes
+  cheating irrational rather than merely detectable.
+</pre>
+          <h3>Routing, and the HTLC</h3>
+          <p>
+            A payment from someone with no channel to you hops across other
+            people's channels. The problem is trusting the intermediaries with
+            money in flight, and the answer is a hash time-locked contract.
+          </p>
+          <pre class="ascii">
+  1.  BOB picks a random PREIMAGE and hashes it
+         payment_hash = SHA-256(preimage)
+      and puts the hash in an invoice he gives ALICE
+
+  2.  ALICE offers CAROL:  "pay out if you show me the preimage
+                            for this hash, within N blocks"
+      CAROL offers BOB the same, minus a fee
+
+      ALICE ──HTLC──▶ CAROL ──HTLC──▶ BOB
+
+  3.  BOB reveals the preimage to claim from CAROL
+      CAROL now HAS the preimage, and claims from ALICE
+
+      ALICE ◀──preimage── CAROL ◀──preimage── BOB
+
+  Either the whole chain settles or all of it expires. Nobody can be
+  left having paid out without being paid. The preimage is also the
+  receipt: only Bob could have produced it.
+</pre>
+          <p>
+            A <strong>bolt11</strong> invoice is the encoding of that request: an
+            amount, the payment hash, an expiry, routing hints, and a signature
+            from the recipient's node. It starts <code>lnbc</code> on mainnet,
+            which is exactly what the wallet's invoice check tests for.
+          </p>
+          <div class="box warn">
+            <p class="box-title">What Lightning costs, and why a phone cannot pay it</p>
+            <p>
+              A Lightning node has to hold channels open, keep the funds inside
+              them, and be online to receive. Being offline means being unable to
+              accept a payment, and a channel is an on-chain transaction to open
+              and another to close. None of that survives a phone in a pocket with
+              no internet, which is the entire scenario Airhop is built for.
+            </p>
+          </div>
+          <h3>Where the mint sits</h3>
+          <pre class="ascii">
+                       THE MINT RUNS THE LIGHTNING NODE
+
+     your phone                    mint                     Lightning
+     ──────────                    ────                     ─────────
+
+  DEPOSIT  (NUT-04)
+     ask for a quote ─────────────▶ creates a bolt11 invoice ◀──── node
+     pay it from any  ───────────────────────────────────────────▶ node
+     Lightning wallet                quote: UNPAID -> PAID
+     send blinded messages ────────▶ signs them
+     unblind             ◀─────────  quote: PAID -> ISSUED
+     = ecash proofs, offline from here on
+
+  WITHDRAW  (NUT-05)
+     hand over a bolt11 ──────────▶ quotes amount + fee_reserve
+     send proofs + NUT-08 blanks ─▶ takes the inputs
+                                    pays the invoice ────────────▶ node
+     change   ◀───────────────────  signs blanks for the unused
+     + payment_preimage             part of the reserve
+
+  The fee reserve is an UPPER BOUND: routing may cost less, and
+  whatever it does not consume comes back. So the UI says "up to".
+</pre>
+          <p>
+            So the division of labour is: Lightning does the part that needs to be
+            online and connected to the wider bitcoin economy, and ecash does the
+            part that has to work in a field with no signal. The mint is the
+            hinge, and what it costs you to use one is chapter
+            <a href="34-custody.html">34</a>.
+          </p>
+
+          <h2 id="why">Why ecash and not Lightning</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Lightning</th><th>Cashu ecash</th></tr></thead>
+              <tbody>
+                <tr><td>Payment needs internet</td><td><strong>Yes.</strong> Routing happens live, node to node, at the moment of payment.</td><td><strong>No.</strong> A token is a string. Handing it over is the payment.</td></tr>
+                <tr><td>What moves</td><td>Channel state updates between nodes</td><td>A bearer instrument</td></tr>
+                <tr><td>Custody</td><td>Self-custodial, with channel liquidity to manage</td><td>The mint holds the backing bitcoin</td></tr>
+                <tr><td>Privacy</td><td>The route is visible to the nodes on it</td><td>Blind signatures make issuance and redemption unlinkable</td></tr>
+                <tr><td>Smallest unit</td><td>Practically limited by fees</td><td>1 satoshi</td></tr>
+                <tr><td>Suits this app</td><td>As a rail in and out</td><td><strong>As the offline transfer</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop uses both, in the roles each is good at: Cashu for transfer
+            between people, Lightning to move value in and out through a mint. The
+            deciding property is that a Cashu token is
+            <strong>a string that carries value</strong>, so it flows over
+            Bluetooth exactly like any other message, in a DM or even in a channel.
+          </p>
+
+          <h2 id="blind">Blind signatures</h2>
+          <p>
+            David Chaum's 1982 idea, and the whole basis of the system.
+          </p>
+          <pre class="ascii">
+  THE CARBON PAPER ANALOGY
+
+  1. You write a serial number on a piece of paper.
+  2. You seal it in an envelope lined with CARBON PAPER.
+  3. The bank stamps the OUTSIDE of the envelope.
+     The stamp presses through the carbon onto the paper inside.
+  4. You open the envelope. The paper is stamped.
+     The bank has NEVER SEEN the serial number.
+
+  Later you spend it. The bank sees the serial number for the first
+  time, verifies its own stamp, and marks it spent.
+
+  IT CANNOT LINK WHO WITHDREW IT TO WHO SPENT IT.
+</pre>
+          <p>
+            Two properties come out of this, and they are what make ecash
+            different from a database entry at a payment company:
+          </p>
+          <ul>
+            <li>
+              <strong>Unlinkability.</strong> The mint knows it issued N satoshis
+              and later redeemed N satoshis, but cannot connect a specific
+              issuance to a specific redemption. It cannot build a transaction
+              graph.
+            </li>
+            <li>
+              <strong>Bearer.</strong> Possession is ownership. Nothing is
+              registered to a person. That is also the risk: lose the string, lose
+              the money, exactly like cash.
+            </li>
+          </ul>
+
+          <h2 id="bdhke">BDHKE, the actual construction</h2>
+          <p>
+            Cashu does not use RSA blind signatures. It uses
+            <strong>Blind Diffie-Hellman Key Exchange</strong> on secp256k1,
+            which is smaller and fits the Bitcoin ecosystem's existing curve.
+          </p>
+          <pre class="ascii">
+  NOTATION
+    G           the secp256k1 generator point
+    k           the MINT's private key for one denomination
+    K = kG      the mint's PUBLIC key for that denomination
+    H(x)        hash_to_curve: maps a byte string to a curve point
+
+  ─────────────────────────────────────────────────────────────────
+  MINTING
+
+  ALICE                                        MINT
+    x = 32 random bytes            (the secret)
+    Y = H(x)                       (a point)
+    r = random blinding factor
+    B_ = Y + rG                    (BLINDED)
+                        ──── B_ ────▶
+                                                C_ = k * B_
+                        ◀─── C_ ─────
+    C = C_ - rK
+      = k(Y + rG) - r(kG)
+      = kY + krG - krG
+      = kY                         ← the UNBLINDED signature over Y
+
+    PROOF = (x, C)
+
+  ─────────────────────────────────────────────────────────────────
+  REDEEMING
+
+  ALICE                                        MINT
+                        ──── (x, C) ───▶
+                                                recompute Y = H(x)
+                                                check  C == k * Y
+                                                check  x not already spent
+                                                mark x spent
+
+  THE MINT SAW B_ AND C_ AT ISSUANCE.
+  IT SEES x AND C AT REDEMPTION.
+  r IS RANDOM AND SECRET, SO IT CANNOT CONNECT THE TWO.
+</pre>
+          <div class="box">
+            <p class="box-title">Why denominations are powers of two</p>
+            <p>
+              The mint has a separate key pair per denomination: 1, 2, 4, 8, 16,
+              32 and so on. Any amount is a sum of powers of two, so 100 satoshis
+              is 64 + 32 + 4, three proofs. This is why a wallet holds many small
+              proofs rather than one balance, why "send exactly 100" usually
+              works, and why the offline proof selector in
+              <code>cashu.ts</code> notes that an exact subset usually exists.
+            </p>
+            <p>
+              It is also why a proof's amount must match a key the mint actually
+              issues. A proof claiming a denomination the mint does not have is a
+              forgery, and Airhop's DLEQ check treats a throw from the keyset
+              lookup as exactly that rather than as an inconclusive result.
+            </p>
+          </div>
+
+          <h2 id="proof">Proofs, tokens, keysets</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Term</th><th>What it is</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Proof</strong></td><td>One coin. An amount, a keyset id, a random secret only its owner knows, and the mint's unblinded signature <code>C</code>. Optionally a DLEQ witness and a P2PK witness.</td></tr>
+                <tr><td><strong>Token</strong></td><td>One or more proofs plus a mint URL and a unit, packed into a single <code>cashuB...</code> string. This is what actually moves between devices.</td></tr>
+                <tr><td><strong>Keyset</strong></td><td>The mint's set of public keys, one per denomination, with an id. Mints rotate keysets, so a wallet caches several.</td></tr>
+                <tr><td><strong>Unit</strong></td><td>Usually <code>sat</code>. A mint can issue other units. Airhop keeps balances per (mint, unit) and never pools them.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="code">
+  TOKEN FORMATS (NUT-00)
+
+    cashuA&lt;base64url&gt;   V3, JSON, legacy. Decoded, never emitted.
+    cashuB&lt;base64url&gt;   V4, CBOR, compact. WHAT AIRHOP EMITS.
+    cashu:&lt;token&gt;       URI form
+    cashu://&lt;token&gt;     URI form
+</pre>
+          <p>
+            A token names <strong>exactly one mint</strong>. Ecash from two mints
+            can never be combined into one token, which is why
+            <code>consolidateMints</code> exists (chapter
+            <a href="33-wallet-ops.html">33</a>) and why balances are always shown
+            per mint.
+          </p>
+          <div class="box warn">
+            <p class="box-title">A decoding trap worth knowing</p>
+            <p>
+              V4 tokens carry <em>short</em> keyset ids. Resolving them requires
+              knowing the mint's keysets, and <code>mapShortKeysetIds</code>
+              <strong>throws</strong> on any v2 short id (those beginning
+              "01") when it cannot resolve them. Passing no keyset ids to the
+              decoder is therefore not a neutral default: a perfectly good token
+              from such a mint came back null and was reported to the user as
+              unreadable.
+            </p>
+            <p>
+              NUT-00 requires the throw. An unresolved short id means the wallet
+              does not know which keyset signed the proof, so it can neither
+              verify it nor price its fee, and guessing would be worse than
+              refusing. The fix is to supply what is already cached rather than to
+              swallow the error, so callers pass the keysets of every mint the
+              wallet knows.
+            </p>
+          </div>
+
+          <h2 id="dleq">DLEQ, and what it does not prove</h2>
+          <p>
+            NUT-12. A <strong>discrete log equivalence</strong> proof: the mint
+            proves that the same private key <code>k</code> relates
+            <code>G</code> to <code>K</code> and <code>B_</code> to
+            <code>C_</code>, without revealing <code>k</code>.
+          </p>
+          <pre class="code">
+  The mint proves:   log_G(K) == log_B_(C_)
+
+  A Schnorr-style proof (e, s) attached to the proof.
+  The recipient can verify it against the mint's cached PUBLIC keys,
+  with NO NETWORK CONNECTION AT ALL.
+</pre>
+          <p>
+            This is the piece that makes offline receipt meaningful. Without it, a
+            token handed to you in a dead zone is an unverifiable string. With it,
+            you can confirm the mint really signed these proofs before the store
+            ever sees them.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Result</th><th>Meaning</th><th>Airhop's behaviour</th></tr></thead>
+              <tbody>
+                <tr><td><code>valid</code></td><td>Every witness present verified against cached keys. <strong>The mint definitely signed this.</strong></td><td>Accept, still stored as unverified until a mint round trip confirms it is unspent.</td></tr>
+                <tr><td><code>invalid</code></td><td>A witness failed, or a proof claims a denomination the mint does not issue.</td><td><strong>Rejected before the store sees it.</strong> This is a forgery or corruption.</td></tr>
+                <tr><td><code>unchecked</code></td><td>No witnesses present, or no cached keys for this mint or keyset.</td><td>Reported as unchecked, <strong>never as valid</strong>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">DLEQ proves origin, not freshness</p>
+            <p>
+              A valid witness proves the mint signed that proof. It
+              <strong>cannot prove the sender has not already spent it</strong>.
+              Only the mint knows that, and only over the network. This is the
+              single most important limitation in the whole payment system and it
+              is the reason offline-received proofs are stored as
+              <em>unverified</em> and never claimed as confirmed.
+            </p>
+            <p>
+              The implementation detail that enforces honesty here:
+              <code>verifyTokenOffline</code> returns
+              <code>unchecked</code> when there is nothing to check against, rather
+              than true. An implementation that returns true both when a witness
+              is missing and when the check throws is one that can only ever say
+              yes.
+            </p>
+          </div>
+          <p>
+            One subtlety in the check: <code>require: false</code> accepts a proof
+            carrying no witness at all, which is the NUT-12 "MUST verify if
+            present" rule. A mint that predates DLEQ is not a mint issuing bad
+            proofs. Anything that <em>does</em> carry a witness must verify.
+          </p>
+
+          <h2 id="nuts">The NUTs Airhop implements</h2>
+          <p>
+            A NUT is a numbered Cashu specification, the equivalent of a NIP on
+            the Nostr side. The client library is
+            <code>@cashu/cashu-ts</code>, pinned at <code>^4.10.0</code> in
+            <code>package.json</code>. That is the v4 API: <code>Wallet</code>,
+            <code>Mint</code> and <code>KeyChain</code>, rather than the older
+            <code>CashuWallet</code> and <code>CashuMint</code> pair.
+          </p>
+          <div class="box ok">
+            <p class="box-title">How this table was built</p>
+            <p>
+              Every row was checked against the source rather than against the
+              Cashu specification index, and the last column names the file. A
+              NUT that the library supports but this app never reaches is not
+              listed as implemented.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>NUT</th><th>Name</th><th>What Airhop uses it for</th><th>Where</th></tr></thead>
+              <tbody>
+                <tr><td><code>00</code></td><td>Notation and token format</td><td>Encoding and decoding. <code>cashuA</code> (V3, JSON) is read for compatibility; <code>cashuB</code> (V4, CBOR) is what Airhop emits. Also the <code>sat</code> default unit, and the rule that an unresolved short keyset id must throw rather than be guessed.</td><td><code>core/payments/cashu.ts</code></td></tr>
+                <tr><td><code>01</code></td><td>Mint public keys</td><td>The keys a DLEQ witness is verified against, cached per mint so verification works with no network at all.</td><td><code>core/payments/cashu.ts</code></td></tr>
+                <tr><td><code>02</code></td><td>Keysets and fees</td><td>Keyset ids, rotation, and the input fee schedule in parts per thousand. Fee maths runs from the cache, so a send can be priced offline.</td><td><code>core/payments/cashu.ts</code></td></tr>
+                <tr><td><code>03</code></td><td>Swap</td><td>Exchanging proofs for fresh ones. The basis of receiving, splitting and making change.</td><td><code>services/wallet-service.ts</code></td></tr>
+                <tr><td><code><strong>04</strong></code></td><td><strong>Mint</strong></td><td>Deposit. Get a bolt11 invoice from the mint, pay it from any Lightning wallet, receive proofs. The quote walks UNPAID to PAID to ISSUED, and only PAID can be minted, once.</td><td><code>createMintQuoteBolt11</code></td></tr>
+                <tr><td><code><strong>05</strong></code></td><td><strong>Melt</strong></td><td>Withdraw. Hand proofs to the mint, it pays a bolt11 invoice, and the unused part of the routing reserve comes back as change.</td><td><code>createMeltQuoteBolt11</code></td></tr>
+                <tr><td><code>06</code></td><td>Mint information</td><td>The /v1/info response: name, description, and the list of NUTs the mint declares. Stored verbatim so a wallet can be rebuilt from cache, and read by <code>requireNut()</code> to refuse an operation the mint has itself said it cannot do.</td><td><code>services/wallet-service.ts</code></td></tr>
+                <tr><td><code><strong>07</strong></code></td><td><strong>Proof state</strong></td><td>Asking the mint which proofs are spent. This is what turns an offline-received token from unverified into either confirmed or removed.</td><td><code>services/wallet-service.ts</code></td></tr>
+                <tr><td><code><strong>08</strong></code></td><td><strong>Lightning fee return</strong></td><td>Blank outputs sent with a melt so the mint can sign change for whatever routing did not consume. They are signed <em>after</em> the mint takes the inputs, which is why a melt whose change cannot be rebuilt is a paid invoice with a stuck refund rather than a failed payment.</td><td><code>services/wallet-service.ts</code></td></tr>
+                <tr><td><code>09</code></td><td>Restore signatures</td><td>Asking a mint which of a set of blinded messages it has already signed. The recovery mechanism, and the backstop when a replay is refused.</td><td><code>core/payments/swap-preview.ts</code></td></tr>
+                <tr><td><code>10</code></td><td>Spending conditions</td><td>The generic well-known secret format that NUT-11 is an instance of. Present through P2PK rather than used on its own.</td><td><code>via NUT-11</code></td></tr>
+                <tr><td><code><strong>11</strong></code></td><td><strong>P2PK</strong></td><td>Locking a proof to a public key so only its holder can spend it. The basis of nutzaps.</td><td><code>core/payments/nutzap.ts</code></td></tr>
+                <tr><td><code><strong>12</strong></code></td><td><strong>DLEQ</strong></td><td>Offline proof that the mint really signed this proof. The MUST-verify-if-present rule is honoured exactly: a witness that is present and wrong is fatal, a witness that is absent is not.</td><td><code>core/payments/cashu.ts</code></td></tr>
+                <tr><td><code><strong>13</strong></code></td><td><strong>Deterministic secrets</strong></td><td>Deriving proof secrets from a BIP-39 seed as (seed, keyset id, counter), so they can be re-derived on a new device. The substrate every other recovery path stands on.</td><td><code>core/payments/wallet-seed.ts</code></td></tr>
+                <tr><td><code>14</code></td><td>HTLC</td><td>Recognised, not used. The stored proof model carries a <code>witness</code> field annotated for both P2PK and HTLC, so an HTLC-locked proof survives storage intact, but nothing in the app constructs or redeems one.</td><td><code>store/wallet-store.ts</code></td></tr>
+                <tr><td><code>19</code></td><td>Cached responses</td><td>Replaying an interrupted swap or melt byte-identically against the mint cache, rather than risking a double-spend of the inputs. The one thing that makes a blind retry safe.</td><td><code>core/payments/swap-preview.ts</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Declared but not implemented</h3>
+          <p>
+            Named so that each absence reads as a decision rather than an
+            oversight.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>NUT</th><th>What it would add</th><th>Why not</th></tr></thead>
+              <tbody>
+                <tr><td><code>15</code></td><td>Multi-path payments: one Lightning payment split across several mints</td><td>Useful at larger amounts than this app is designed for, and it multiplies the number of mints that must be reachable at once.</td></tr>
+                <tr><td><code>17</code></td><td>WebSocket subscriptions, so a mint pushes quote state instead of being polled</td><td>A real improvement to deposit latency, and worth doing. It is also a long-lived socket per mint, which interacts awkwardly with the Tor path on iOS where Arti wraps WebSockets but not fetch. Polling is the conservative choice for now.</td></tr>
+                <tr><td><code>18</code></td><td>Payment requests: a structured ask-me-for-money object</td><td>Nutzaps already cover the request-free case, and a second request format is a second thing to explain in a wallet that is not the point of the app.</td></tr>
+                <tr><td><code>20</code></td><td>Signing a mint quote to a public key, so only the holder of that key may claim it</td><td>Worth adding. It closes a real gap: today a mint quote id, if seen, can be claimed by whoever saw it. Recorded as a finding in chapter <a href="49-review.html">49</a>.</td></tr>
+                <tr><td><code>21</code>, <code>22</code></td><td>Clear-auth and blind-auth, for mints that require accounts</td><td>A mint that requires an account is a mint this app should not be recommending.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">NIPs, not NUTs</p>
+            <p>
+              Two Nostr specifications sit alongside these and are easy to file in
+              the wrong list. <strong>NIP-61</strong> nutzaps are implemented:
+              kind 10019 announces where and how to pay you, kind 9321 carries the
+              payment itself. <strong>NIP-60</strong>, Nostr-hosted wallet state,
+              is deliberately <strong>not</strong> implemented: publishing your
+              proofs to a relay, even encrypted, puts your balance history
+              somewhere you do not control. History stays on the device. Chapter
+              <a href="34-custody.html">34</a>.
+            </p>
+          </div>
+
+          <h2 id="mint">The mint, and what you trust it with</h2>
+          <p>
+            The mint is the only trusted party in the payment system, and being
+            precise about what that trust covers is the difference between a
+            sensible product and a scam.
+          </p>
+          <div class="grid two">
+            <div class="box bad">
+              <p class="box-title">You DO trust the mint to</p>
+              <ul>
+                <li><strong>Honour redemption.</strong> It holds the backing bitcoin. It can refuse to pay, or run away with it.</li>
+                <li><strong>Stay online.</strong> If it disappears, tokens issued by it are unspendable.</li>
+                <li><strong>Not inflate.</strong> It could issue proofs it has no backing for.</li>
+              </ul>
+            </div>
+            <div class="box ok">
+              <p class="box-title">You do NOT trust the mint with</p>
+              <ul>
+                <li><strong>Custody of your proofs.</strong> They are on your device, encrypted at rest.</li>
+                <li><strong>Knowing your transaction graph.</strong> Blind signatures make issuance and redemption unlinkable.</li>
+                <li><strong>Knowing who you paid.</strong> A transfer between two people never touches the mint.</li>
+                <li><strong>Your identity.</strong> There is no account at a mint.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mitigation</th><th>How</th></tr></thead>
+              <tbody>
+                <tr><td>The user chooses which mints to trust</td><td>Airhop ships with <strong>no default mint</strong>. The user adds one, or runs their own.</td></tr>
+                <tr><td>One mint failing cannot take the rest</td><td>Balances are per (mint, unit) and never pooled. This is also why the balance screen cannot show one number.</td></tr>
+                <tr><td>Incoming ecash is only redeemed at a known mint</td><td>A nutzap naming a mint the wallet does not already hold is refused outright, which is what NIP-61 assumes. This was a High severity finding.</td></tr>
+                <tr><td>Test mints are labelled</td><td>A heuristic on the mint's own name, description and hostname (<code>testnut</code>, <code>fakewallet</code>, <code>regtest</code>, <code>signet</code>). Deliberately permissive, because a false positive costs a needless badge while a false negative lets someone mistake fake sats for real ones. It only ever adds a warning, never blocks.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="offline">The offline story, precisely</h2>
+          <pre class="ascii">
+  WHAT WORKS WITH NO INTERNET ON EITHER PHONE
+
+    ✓  Building a token from proofs you already hold
+    ✓  Sending it over Bluetooth in a DM
+    ✓  Receiving it
+    ✓  DLEQ-verifying it against cached mint keys
+    ✓  Storing it
+    ✓  Sending it onward to a third person
+    ✓  Reclaiming a send that never reached anyone
+
+  WHAT NEEDS INTERNET
+
+    ✗  Topping up (NUT-04 mint, needs Lightning)
+    ✗  Cashing out (NUT-05 melt, needs Lightning)
+    ✗  Confirming a received token is UNSPENT (NUT-07)
+    ✗  Swapping it into your own secrets
+    ✗  Adding a new mint (its keys must be fetched once)
+</pre>
+          <div class="box bad">
+            <p class="box-title">The double-spend window, stated honestly</p>
+            <p>
+              Offline, the sender can hand the same token to two people. Both
+              copies are cryptographically valid. Whoever reaches the mint first
+              keeps the value; the second redemption is refused.
+            </p>
+            <p>
+              Nothing can fix this without a network, because the only party who
+              knows whether a proof is spent is the mint. So the design does the
+              only honest thing available: an offline-received proof is stored as
+              <strong>unverified</strong> and shown as such, never folded into the
+              headline balance as settled money.
+            </p>
+          </div>
+          <p>
+            One consequence shows up in the offline proof selector, and it is a
+            deliberate choice worth understanding. When selecting proofs to send,
+            <strong>unverified proofs go first</strong>, largest first within each
+            group. An unverified proof is the one most likely to be spent already,
+            and the risk grows the longer it is held, so passing it on moves it
+            toward a mint sooner than this wallet would reach one. The recipient
+            is shown it as unverified rather than as settled. The usual defence,
+            that they will swap immediately, does not apply in an app built for
+            recipients with no signal.
+          </p>
+          <p>
+            That ordering is <em>wrong</em> for a melt, where the mint checks
+            every input at once and an unverified one only raises the chance of
+            failure, so <code>payLightningInvoice</code> selects with the library
+            instead.
+          </p>
+
+          <h2 id="detection">Token detection in messages</h2>
+          <p>
+            A payment is a message whose body contains a token string. The same
+            channel or DM that carries text carries the payment, and the app
+            renders it as a payment card.
+          </p>
+          <pre class="code">
+  Detection pattern, byte for byte the same as bitchat's:
+
+    /\bcashu[AB][A-Za-z0-9._-]{40,}\b/g
+
+  Bounds on hostile input:
+    MAX_TOKEN_LENGTH       60,000 characters
+    MAX_SCAN_LENGTH        120,000 characters
+    MAX_TOKENS_PER_MESSAGE 3 cards
+    MAX_AMOUNT             2.1e15, more sats than will ever exist
+</pre>
+          <p>
+            The pattern is deliberately identical to bitchat's, down to the
+            character class and the 40-character minimum body. Both apps read the
+            same messages off the same mesh, so a string that renders as a payment
+            chip on one must render as a payment chip on the other. Being more
+            permissive here would show a card where bitchat shows raw text.
+          </p>
+          <p>
+            One divergence: bitchat renders a generic chip for a V4 payload its
+            minimal CBOR reader cannot walk. Airhop uses a full CBOR decoder, so
+            a failure to decode means the token really is malformed, and no card is
+            shown. Displaying a card for something that cannot be priced would be
+            worse than showing the raw string.
+          </p>
+          <p>
+            Every displayed field from a token is sanitised, because it is
+            attacker-controlled text sitting next to an amount: the unit must be
+            alphanumeric and at most 12 characters or it falls back to
+            <code>sat</code>, the mint host is lowercased and truncated to 48
+            characters, and the memo has control characters and newlines stripped
+            (which would otherwise let a sender fake extra UI lines) and is capped
+            at 80 characters.
+          </p>
+          <div class="box warn">
+            <p class="box-title">A token in a public channel is money on a noticeboard</p>
+            <p>
+              It is a bearer instrument. Anyone reading the channel can redeem it.
+              The UI states this before sending, and it is not a bug: the same
+              property that lets a token cross a dead zone in a DM makes it
+              claimable by anyone who reads it in the open.
+            </p>
+          </div>
+
+          <h2 id="alternatives">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Option</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Lightning alone</strong></td><td>Rejected as the transfer mechanism. Routing happens live, so payment needs internet at the moment it is made, which is precisely the moment this app assumes there is none. Used as the rail in and out instead.</td></tr>
+                <tr><td><strong>On-chain bitcoin</strong></td><td>Rejected. Needs internet, confirmation times in tens of minutes, and fees that make small payments absurd.</td></tr>
+                <tr><td><strong>Fedimint</strong></td><td>The closest relative: also Chaumian ecash, but federated across a group of guardians so no single party can run off with the backing. Genuinely better on the trust dimension. Heavier to run, less mature client tooling, and no bitchat compatibility. A reasonable future addition rather than a replacement.</td></tr>
+                <tr><td><strong>A stablecoin or an L2 token</strong></td><td>Rejected. Introduces a chain dependency, gas, an account model, and usually a compliance surface.</td></tr>
+                <tr><td><strong>UPI or a bank rail</strong></td><td>On the roadmap as an <em>online-only convenience</em>, explicitly not a private rail. Every UPI transaction is KYC-linked and visible to the operator, which is the opposite of what this system is for. Cashu remains the offline payment system.</td></tr>
+                <tr><td><strong>An IOU ledger with no mint</strong></td><td>Rejected. Without a party who can be redeemed against, a token is a promise between strangers, and settling it needs exactly the coordination that is missing.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">If you removed payments entirely</p>
+            <p>
+              Airhop would lose its most distinctive feature and gain a
+              considerably smaller attack surface. Payments bring a third-party
+              library, a network dependency the rest of the app does not have, an
+              encrypted storage partition, bearer secrets on disk, and an entire
+              class of "did the money actually move" states the UI has to be
+              honest about. It is the right feature for the product's mission,
+              settling a bill in a dead zone is a real need, and it is also the
+              part of the codebase where a bug costs the user money rather than a
+              message.
+            </p>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Explain in one paragraph why a Cashu payment works with no internet.</span>
+              <span class="a">Because a token is a bearer instrument rather than a state update. The mint has already signed the proofs, blindly, at some earlier moment when there was a connection. Handing the string to someone else transfers the value, because value is possession of the string. No third party needs to be consulted, no route needs to be found, and no ledger needs updating at the moment of payment. What needs internet is putting value in, taking it out, and confirming a received token has not already been spent.</span>
+            </li>
+            <li>
+              <span class="q">What exactly does a DLEQ proof tell you, and what does it not?</span>
+              <span class="a">It tells you the mint really signed this proof, verifiable offline against the mint's cached public keys. It tells you nothing about whether the proof has already been spent, because only the mint knows that and only over the network. So a DLEQ-valid token received in a dead zone is genuine and possibly worthless. That is why offline-received proofs are stored as unverified and never folded into the headline balance as settled money.</span>
+            </li>
+            <li>
+              <span class="q">A sender hands the same token to two people offline. What happens?</span>
+              <span class="a">Both copies are cryptographically valid and both DLEQ-verify. Whoever reaches the mint first swaps successfully; the second is refused as already spent, and the wallet removes it from the balance rather than showing it as money. Nothing can prevent this without a network. The design's response is honesty rather than a fix: the unverified state exists precisely to represent "genuine, and not yet confirmed unspent".</span>
+            </li>
+            <li>
+              <span class="q">Why does the wallet spend unverified proofs first?</span>
+              <span class="a">Because an unverified proof is the one most likely to already be spent, and the risk grows the longer it is held. Passing it on moves it toward a mint sooner than this wallet would reach one, and the recipient sees it labelled unverified rather than settled. The usual argument, that a recipient will swap immediately, does not hold in an app whose users may have no signal for days. The ordering is deliberately reversed for a melt, where the mint checks every input at once and an unverified one only raises the chance the whole operation fails.</span>
+            </li>
+            <li>
+              <span class="q">Why are denominations powers of two?</span>
+              <span class="a">Because the mint holds one key pair per denomination, and powers of two let any amount be expressed as a small sum. 100 satoshis is 64 plus 32 plus 4, three proofs. That is why a wallet holds many small proofs rather than one balance, why exact offline sends usually succeed, and why a proof claiming an amount the mint does not issue is a forgery rather than an inconclusive case.</span>
+            </li>
+            <li>
+              <span class="q">What is the strongest criticism of using Cashu here, and what is the answer?</span>
+              <span class="a">That it reintroduces a trusted third party into a product whose entire premise is having none. The answer has three parts. The trust is narrow and named: the mint can refuse redemption or inflate, and it cannot see your transaction graph, hold your proofs, or know who you paid. The user chooses the mint, and the app ships with none. And balances are per mint and never pooled, so one mint failing cannot take the rest. It is a real compromise, and the honest framing is that offline value transfer is not possible without one.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

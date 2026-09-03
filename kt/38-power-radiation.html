@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 38: Battery, power and radiation. The four power modes, hysteresis, OEM battery killers, and what constant BLE actually emits." />
+    <title>38 Battery, power and radiation · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 38 · The device</p>
+          <h1>Battery, power and radiation</h1>
+          <p class="kt-lede">
+            An app whose whole purpose is running in a pocket all day has one
+            cost that dominates every other: how hard it drives the radio. This
+            is the policy that decides that, the operating systems that fight it,
+            and an honest answer to the question everybody eventually asks about
+            keeping Bluetooth on all the time.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#problem">The problem</a></li>
+              <li><a href="#modes">Four power modes</a></li>
+              <li><a href="#hysteresis">Hysteresis, and why it exists</a></li>
+              <li><a href="#ordering">The ordering is the policy</a></li>
+              <li><a href="#where">Where the policy lives</a></li>
+              <li><a href="#os">The operating system fights back</a></li>
+              <li><a href="#oem">The OEM problem</a></li>
+              <li><a href="#ios">iOS, which is a different animal</a></li>
+              <li><a href="#radiation">Radiation: the honest answer</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Listening for other phones is like shouting "anyone there?" and
+              then holding your ear open for a reply. Doing that constantly, as
+              loudly and as often as possible, wears you out. So the app has four
+              speeds. Plugged in and you are looking at it: shout often. In your
+              pocket: shout rarely, because nobody is waiting. Nearly out of
+              battery: shout hardly at all. The trick is not the four speeds. It
+              is that changing speed itself costs energy, so it refuses to
+              change speed for a small wobble.
+            </p>
+          </div>
+
+          <h2 id="problem">The problem</h2>
+          <p>
+            Airhop scans and advertises at the most aggressive settings the
+            platform offers, <code>LOW_LATENCY</code> both ways with
+            <code>TX_POWER_HIGH</code>. Originally it did so identically whether
+            the app was on screen or pocketed, and whether the phone was at 100
+            percent or 4 percent.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The scale of it</p>
+            <p>
+              Continuous <code>LOW_LATENCY</code> scanning is roughly
+              <strong>an order of magnitude</strong> more expensive than
+              <code>LOW_POWER</code>. For an app that is meant to sit in a pocket
+              all day, that single setting is the largest battery cost the app
+              has. Nothing else in the codebase is close.
+            </p>
+          </div>
+          <p>
+            The reason it matters more here than in a normal app is the mesh
+            argument: a phone that dies at 4pm has stopped being a relay for
+            everyone else, not just a client for its owner. Battery policy is
+            therefore a network property, not only a courtesy.
+          </p>
+
+          <h2 id="modes">Four power modes</h2>
+          <p>
+            <code>src/services/power-policy.ts</code>. Two inputs from the
+            device, one from the app, and a pure function between them.
+          </p>
+          <pre class="ascii">
+  inputs                          modes
+  ──────                          ─────
+  batteryPercent  0..100 | null   performance        plugged in, on screen
+  charging        bool            balanced           on battery, on screen
+  appForeground   bool            power-saver        pocketed, or low battery
+                                  ultra-low-power    critical battery
+
+
+  bands, from the battery percentage
+
+    normal     > 20 %
+    low        &lt;= 20 %          LOW_BATTERY_PERCENT
+    critical   &lt;= 10 %          CRITICAL_BATTERY_PERCENT
+
+
+  modeFor(inputs, previousBand)          checked IN THIS ORDER
+
+    1.  !appForeground   ->  critical ? ultra-low-power : power-saver
+    2.  charging         ->  performance
+    3.  band critical    ->  ultra-low-power
+    4.  band low         ->  power-saver
+    5.  otherwise        ->  balanced
+</pre>
+          <div class="box ok">
+            <p class="box-title">Where the thresholds come from</p>
+            <p>
+              The bands and the mode table follow bitchat-android's
+              <code>PowerProfileResolver</code> in
+              <code>mesh/PowerManager.kt</code>, deliberately. It is the
+              reference implementation for this protocol, its thresholds are
+              field-tested, and inventing different numbers would be guessing.
+              Two things are Airhop's own: the hysteresis, and where the policy
+              lives.
+            </p>
+          </div>
+
+          <h2 id="hysteresis">Hysteresis, and why it exists</h2>
+          <p>
+            bitchat re-resolves on every <code>ACTION_BATTERY_CHANGED</code>,
+            which fires on every one percent step. A phone sitting at 20 percent
+            while discharging, or wobbling either side of it while charging,
+            flips modes repeatedly. Every flip restarts the scanner, which costs
+            more than the mode change saves.
+          </p>
+          <pre class="ascii">
+  HYSTERESIS_PERCENT = 3,  and it is asymmetric on purpose
+
+   %
+  25 ─────────────────────────────────────────────
+                                    ╭─── leaves "low" only at 23 %
+  23 ─────────────────────────────╮ │
+  20 ══ LOW threshold ════════════╪═╪═════════════
+                       ╭──────────╯ │
+                       │            │
+  13 ──────────────────┼────────────┼─────────────
+  10 ══ CRITICAL ══════╪════════════╪═════════════
+                       │            │
+       enters "low"    │            │
+       IMMEDIATELY at  │            │
+       20 %  ──────────╯            ╰── climbing back needs
+                                        threshold + 3
+
+  Down is immediate. Up is sticky. Running too hard on a nearly
+  flat phone is the failure that matters; running too gently for
+  another 3 % of charge is not.
+</pre>
+          <p>
+            The other half of the mechanism is in <code>PowerPolicy.next()</code>:
+            it returns <code>null</code> when nothing has changed, rather than
+            returning the unchanged mode. That is what keeps a battery report
+            crossing no boundary from restarting the scanner at all. A caller
+            that ignored the difference would undo the whole optimisation.
+          </p>
+          <p>
+            <code>reset()</code> exists for one case: the radios going down. The
+            next start then applies its mode explicitly rather than assuming
+            native still holds the one it was last told.
+          </p>
+
+          <h2 id="ordering">The ordering is the policy</h2>
+          <p>
+            The five checks in <code>modeFor</code> are not interchangeable.
+            Each position encodes a decision:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Rule</th><th>Position</th><th>Why there</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Background dominates everything</td>
+                  <td>First</td>
+                  <td>Off screen, nobody is waiting on discovery latency, so there is no reason to pay for it. This is also where a phone spends almost all of its day, so it is the branch that determines the daily cost.</td>
+                </tr>
+                <tr>
+                  <td>Charging beats battery level</td>
+                  <td>Second</td>
+                  <td>Plugged in, the cost is somebody else's. A phone on a charger is the best relay in the room and should behave like one.</td>
+                </tr>
+                <tr>
+                  <td>Critical before low</td>
+                  <td>Third and fourth</td>
+                  <td>Ordinary threshold ordering.</td>
+                </tr>
+                <tr>
+                  <td>Foreground on battery is <em>balanced</em>, not <em>performance</em></td>
+                  <td>Last</td>
+                  <td>A balanced scan still discovers peers in seconds, which is fast enough for somebody watching the Mesh tab. Reserving the most expensive setting for "plugged in" is what keeps the app from being the reason a phone dies.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">A null battery reading is treated as healthy</p>
+            <p>
+              <code>batteryPercent</code> is <code>null</code> until the platform
+              reports. That resolves to the <code>normal</code> band, not to a
+              cautious one. Refusing to scan properly because a percentage could
+              not be read is a worse failure than the one it would avoid: it
+              produces an app that finds nobody, on a device with a full
+              battery, for a reason nothing on screen can explain.
+            </p>
+          </div>
+
+          <h2 id="where">Where the policy lives</h2>
+          <p>
+            In TypeScript, not in the native module, and the split is worth
+            stating precisely.
+          </p>
+          <pre class="ascii">
+  TypeScript                        Native (Kotlin / Swift)
+  ──────────                        ───────────────────────
+  power-policy.ts                   observes the battery
+    bandFor()                       reports the percentage
+    modeFor()                       applies whichever mode
+    PowerPolicy (hysteresis)          it is told
+
+  radio-controller.ts               NO POLICY ON THAT SIDE
+    owns "whether at all"
+    owns "how hard"
+</pre>
+          <p>
+            Two reasons. The radios are already owned by one reconciler, and
+            "how hard" belongs next to "whether at all" rather than in a
+            different language. And it makes the decision a pure function, so the
+            entire policy is exercised in Jest rather than on a device: you
+            cannot easily test "what happens at 19 percent while charging" on
+            real hardware, and you can trivially test it here.
+          </p>
+
+          <h2 id="os">The operating system fights back</h2>
+          <p>
+            Even a perfectly behaved app is throttled by the platform. The
+            relevant mechanisms, and what Airhop does about each:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Mechanism</th><th>What it does</th><th>Response</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Doze</strong> (Android 6+)</td>
+                  <td>With the screen off and the device stationary, network access and wakelocks are deferred into maintenance windows.</td>
+                  <td>A foreground service with the <code>connectedDevice</code> type, which is exempt. It is also why the app shows a persistent notification.</td>
+                </tr>
+                <tr>
+                  <td><strong>App Standby buckets</strong></td>
+                  <td>Rarely used apps are progressively restricted.</td>
+                  <td>The foreground service keeps the process in an active bucket while the mesh is running.</td>
+                </tr>
+                <tr>
+                  <td><strong>Scan throttling</strong> (Android 7+)</td>
+                  <td>Starting and stopping a scan more than five times in 30 seconds gets the scan silently ignored.</td>
+                  <td>The reconciler never restarts a scan it does not have to, which is precisely what the <code>null</code> return from <code>PowerPolicy.next()</code> protects.</td>
+                </tr>
+                <tr>
+                  <td><strong>Battery optimisation whitelist</strong></td>
+                  <td>Apps not on it get more aggressive Doze treatment.</td>
+                  <td>The Mesh tab can send the user to the list. See below.</td>
+                </tr>
+                <tr>
+                  <td><strong>iOS background execution</strong></td>
+                  <td>Backgrounded apps get a restricted CoreBluetooth mode: no scanning for a service UUID without specifying it, slower duty cycle, and advertising moves into an overflow area other iOS devices can see and Android usually cannot.</td>
+                  <td>Declared background modes, and the acceptance that iOS-to-Android in the background is weaker. Chapter <a href="08-ble.html">08</a>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="oem">The OEM problem</h2>
+          <p>
+            This is the part that no amount of correct code fixes.
+            <code>src/platform/battery-optimization.ts</code> exists entirely
+            because of it.
+          </p>
+          <div class="box bad">
+            <p class="box-title">Aggressive skins reap foreground services</p>
+            <p>
+              Xiaomi MIUI, Samsung One UI, Huawei EMUI, Oppo ColorOS and vivo
+              Funtouch all kill foreground services that stock Android would
+              leave alone. That breaks BLE scanning, the foreground service
+              holding the process up, and the Nostr relay socket, all at once.
+              <strong>The app cannot fix this from code.</strong> The only fix is
+              the user whitelisting Airhop, and there is no single Android screen
+              for that.
+            </p>
+          </div>
+          <p>
+            So the module answers a narrower question: <em>where should this
+            device be sent</em>, as an ordered list of targets to try. The caller
+            walks it and stops at the first one that opens.
+          </p>
+          <pre class="ascii">
+  resolveBatterySettingsTargets(os, brand)
+
+    os !== "android"        ->  []          iOS has no equivalent concept
+
+    brand matches an OEM    ->  [ { url: "miui://battery/autostart" },
+    deep link                     { intent: IGNORE_BATTERY_OPTIMIZATION_
+                                             SETTINGS } ]
+
+    otherwise               ->  [ { intent: IGNORE_BATTERY_OPTIMIZATION_
+                                             SETTINGS } ]
+
+  The standard action is ALWAYS appended, never replaced. Every OEM
+  scheme is undocumented and disappears between skin versions, so it
+  is only ever the first thing tried.
+</pre>
+          <p>
+            Two lists, answering two different questions, and conflating them
+            was the bug that produced the split:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>List</th><th>Question it answers</th><th>Contents</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>AGGRESSIVE_OEMS</code></td>
+                  <td>Does this brand kill background services? Drives whether the Mesh tab says anything at all.</td>
+                  <td>xiaomi, redmi, poco, samsung, huawei, honor, oppo, realme, oneplus, vivo</td>
+                </tr>
+                <tr>
+                  <td><code>OEM_DEEP_LINKS</code></td>
+                  <td>Does this brand expose a screen we can deep-link to?</td>
+                  <td>Only the MIUI, ColorOS and Funtouch families. Samsung's sleeping-apps screen lives inside <code>com.samsung.android.lool</code> and Huawei's protected-apps inside <code>com.huawei.systemmanager</code>, neither reachable by a public action, so both are in the first list only.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Two implementation traps, both recorded at the call site</p>
+            <p>
+              <strong>A settings action is not a URL.</strong> React Native's
+              <code>Linking.openURL</code> builds
+              <code>Intent(ACTION_VIEW, Uri.parse(url))</code> and never calls
+              <code>Intent.parseUri</code>, so an
+              <code>intent:#Intent;action=...;end</code> string resolves to
+              nothing and throws.
+              <code>Linking.sendIntent(action)</code> builds
+              <code>Intent(action)</code> and pre-resolves it against the package
+              manager, rejecting cleanly when nothing handles it. Hence a target
+              that declares which of the two it is.
+            </p>
+            <p>
+              <strong>The list action, not the dialog.</strong>
+              <code>ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code> pops a
+              one-tap "allow?" dialog, but it needs the
+              <code>REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code> permission, which
+              Google Play restricts to a short list of app categories Airhop is
+              not in. Shipping it risks the store listing for a convenience. The
+              list is one extra tap and no policy exposure.
+            </p>
+          </div>
+
+          <h2 id="ios">iOS, which is a different animal</h2>
+          <p>
+            <code>resolveBatterySettingsTargets</code> returns an empty array on
+            iOS, and that is correct rather than a stub. Background BLE on iOS is
+            an <em>entitlement</em> declared in the bundle, not a per-app
+            permission a user can revoke, so there is no screen to send anyone
+            to. Low Power Mode still throttles, and the user can turn it off, but
+            there is no Airhop-specific setting that would help.
+          </p>
+          <p>
+            The trade is real and runs the other way from Android. iOS gives less
+            control and more predictability: no OEM skin is going to reap the
+            process for reasons nobody documented.
+          </p>
+
+          <h2 id="radiation">Radiation: the honest answer</h2>
+          <p>
+            An app that asks a phone to transmit continuously, all day, in a
+            pocket, invites a fair question. Here is the physics, then the
+            numbers, then what is genuinely unknown.
+          </p>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              There are two kinds of "radiation". One kind, like X-rays, carries
+              enough energy in each tiny packet to knock pieces off the atoms in
+              your body. That is the dangerous kind. The other kind, like radio,
+              light from a lamp, and the heat from your hand, does not have
+              enough energy per packet to do that, no matter how much of it there
+              is. Bluetooth is the second kind, and it is one of the weakest
+              radios in the phone.
+            </p>
+          </div>
+          <h3>Ionising and non-ionising</h3>
+          <p>
+            The dividing line is a physical one, not a matter of degree. A photon
+            ionises an atom only above roughly 10 electronvolts, which starts in
+            the far ultraviolet. Everything below that, including all radio, can
+            deposit energy as <em>heat</em> and nothing else.
+          </p>
+          <pre class="ascii">
+  photon energy, log scale
+
+  radio        microwave      infrared   visible   UV      X-ray
+   |               |             |          |       |        |
+   ▼               ▼             ▼          ▼       ▼        ▼
+  ─────────────────────────────────────────────────┬──────────────▶
+   10⁻⁶ eV      10⁻⁵ eV      0.01 eV    2 eV    │ 10 eV    1000 eV
+                                                  │
+    Bluetooth 2.4 GHz                        IONISING
+    ≈ 10 microelectronvolts                  THRESHOLD
+    about a millionth of the
+    energy needed to break
+    a single chemical bond
+</pre>
+          <h3>What the phone actually emits</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Source</th><th>Typical transmit power</th><th>Relative</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>BLE at <code>TX_POWER_HIGH</code></td><td>about 1 to 10 mW (0 to +10 dBm)</td><td>baseline</td></tr>
+                <tr><td>WiFi</td><td>about 30 to 100 mW</td><td>10 to 100x BLE</td></tr>
+                <tr><td>Cellular, good signal</td><td>a few mW</td><td>similar to BLE</td></tr>
+                <tr><td>Cellular, weak signal</td><td>up to 2,000 mW (+33 dBm)</td><td>200 to 2,000x BLE</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The comparison that settles the practical question</p>
+            <p>
+              A phone hunting for a weak cell tower transmits two to three orders
+              of magnitude more power than BLE ever does, and every phone with a
+              SIM does that already, all day, with no app installed. Running
+              Airhop adds a radio that is a rounding error next to the one the
+              phone was already using. If continuous BLE were a meaningful
+              exposure, wireless earbuds, fitness trackers, car key fobs and
+              every shop's beacon network would be a far larger one.
+            </p>
+          </div>
+          <h3>The regulatory frame</h3>
+          <p>
+            Exposure limits are set by ICNIRP internationally and by the FCC in
+            the United States, expressed as Specific Absorption Rate, the watts
+            of radio energy absorbed per kilogram of tissue. The limits are
+            deliberately set well below the level at which measurable tissue
+            heating occurs.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Limit</th><th>Value</th><th>Where BLE sits</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>FCC, partial body, 1 g</td><td>1.6 W/kg</td><td>Orders of magnitude below. Devices are certified against their cellular and WiFi radios, which dominate.</td></tr>
+                <tr><td>ICNIRP, localised, 10 g</td><td>2.0 W/kg</td><td>Same.</td></tr>
+                <tr><td>WHO classification of RF fields</td><td>Group 2B, "possibly carcinogenic"</td><td>The same category as pickled vegetables and aloe vera extract. It denotes limited evidence, not established risk.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Where honesty requires a hedge</p>
+            <p>
+              The consensus position is that non-ionising radio at these power
+              levels has no established health effect, and the mechanism by which
+              it could have one is not known. That is not the same as proof of
+              zero effect, and long-horizon epidemiology on any technology is
+              genuinely hard. What can be said precisely is narrower and more
+              useful: <strong>Airhop does not change the order of magnitude of
+              anything.</strong> It adds the phone's weakest radio to a device
+              already running its strongest. Anyone who wants to reduce exposure
+              should look at the cellular modem and at holding the phone away
+              from the head, not at Bluetooth.
+            </p>
+          </div>
+          <h3>The cost that is real</h3>
+          <p>
+            Battery, not biology. That is why this chapter is mostly about power
+            policy: the measurable, defensible cost of running the mesh all day
+            is charge, and the entire design above exists to bound it.
+          </p>
+          <div class="box bad">
+            <p class="box-title">What has not been measured, and should be</p>
+            <p>
+              There is no published battery-drain figure for Airhop: no
+              milliamp-hours per hour per mode, on named handsets, over a
+              measured period. The power policy is sound in structure and its
+              thresholds come from a field-tested reference implementation, but
+              "power-saver costs X percent per hour on a Pixel 8" is an empirical
+              claim nobody in this repository has made. It belongs on the
+              roadmap, and it is listed as a gap in chapter
+              <a href="49-review.html">49</a>. Until it exists, treat every
+              statement about relative cost here as a description of the design
+              rather than as a measurement.
+            </p>
+          </div>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>20 %</td><td><code>LOW_BATTERY_PERCENT</code></td><td>bitchat's <code>AppConstants.Power</code>. Field-tested; inventing a different number would be guessing.</td></tr>
+                <tr><td>10 %</td><td><code>CRITICAL_BATTERY_PERCENT</code></td><td>Same source.</td></tr>
+                <tr><td>3 %</td><td><code>HYSTERESIS_PERCENT</code></td><td>Applied upward only. Enough to absorb charge-level noise; small enough that the phone does not stay throttled long after recovering.</td></tr>
+                <tr><td>4</td><td>Power modes</td><td>performance, balanced, power-saver, ultra-low-power.</td></tr>
+                <tr><td>3</td><td>Battery bands</td><td>normal, low, critical.</td></tr>
+                <tr><td>about 10x</td><td>Cost of <code>LOW_LATENCY</code> against <code>LOW_POWER</code> scanning</td><td>The reason this whole chapter exists.</td></tr>
+                <tr><td>10</td><td>Brands in <code>AGGRESSIVE_OEMS</code></td><td>Known to reap foreground services.</td></tr>
+                <tr><td>4</td><td>OEM deep-link schemes</td><td>MIUI, ColorOS (shared by realme and OnePlus), Funtouch. Every one undocumented.</td></tr>
+                <tr><td>1 to 10 mW</td><td>BLE transmit power</td><td>0 to +10 dBm. Two to three orders of magnitude under a cellular modem on a weak signal.</td></tr>
+                <tr><td>1.6 / 2.0 W/kg</td><td>FCC / ICNIRP SAR limits</td><td>Set well below the threshold for measurable tissue heating; BLE sits far under both.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>Re-resolving on every battery tick.</strong> The bug the
+              hysteresis prevents. A phone at exactly 20 percent flips modes on
+              every one percent report, and every flip restarts the scanner,
+              which costs more than the mode change saves. Worse on Android 7 and
+              above, where more than five scan restarts in 30 seconds gets the
+              scan silently ignored.
+            </li>
+            <li>
+              <strong>Returning the unchanged mode instead of <code>null</code>.</strong>
+              Structurally the same bug one layer up. The caller cannot tell "the
+              answer is the same" from "apply this", so it applies it, and the
+              scanner restarts anyway.
+            </li>
+            <li>
+              <strong>Treating a null battery reading as low.</strong> Produces a
+              phone that finds nobody on a full charge, for a reason nothing on
+              screen can explain.
+            </li>
+            <li>
+              <strong>An OEM deep link used as the only target.</strong> Every
+              one of those schemes is undocumented and disappears between skin
+              versions. Without the standard action appended behind it, a skin
+              update silently leaves the user with a button that does nothing.
+            </li>
+            <li>
+              <strong>Posting a settings action through <code>openURL</code>.</strong>
+              Throws, because React Native never parses an intent URI. The two
+              dispatch paths are distinguished in the type for exactly this
+              reason.
+            </li>
+            <li>
+              <strong>Shipping the one-tap battery dialog.</strong> Not a runtime
+              failure but a distribution one: the permission it requires is
+              Play-restricted to categories this app is not in.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            The mesh would work perfectly and drain a phone in a few hours. The
+            failure would be silent and would look like a hardware problem: a
+            user who leaves the app running finds a flat phone by mid-afternoon,
+            with no screen anywhere attributing it to the scan mode. Removing
+            only the hysteresis would be subtler and arguably worse, because it
+            produces a phone that scans <em>less</em> effectively at exactly the
+            battery level where it is flipping modes fastest, and on Android 7
+            and above can get the scan throttled away entirely. Removing only the
+            OEM module leaves the app working on stock Android and mysteriously
+            dead on roughly half the handsets in the world.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Approach</th><th>How it works</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Policy in the native module</td>
+                  <td>Kotlin and Swift each decide their own mode from the battery they already observe</td>
+                  <td>Two implementations to keep in step, neither testable without a device, and "how hard to scan" separated from "whether to scan at all", which one reconciler already owns.</td>
+                </tr>
+                <tr>
+                  <td>Continuous scaling</td>
+                  <td>Map the battery percentage onto a scan interval on a curve</td>
+                  <td>Every percentage change becomes a new interval and therefore a scanner restart. The discrete bands exist precisely so that most reports change nothing.</td>
+                </tr>
+                <tr>
+                  <td>Learn the user's charging habits</td>
+                  <td>Scan harder when a charger is historically near</td>
+                  <td>A behavioural profile of when and where somebody charges their phone, held by an app whose threat model includes device seizure. The privacy cost is not worth a modest battery gain.</td>
+                </tr>
+                <tr>
+                  <td>Let the user pick the mode</td>
+                  <td>A setting: aggressive, balanced, saver</td>
+                  <td>Reasonable as an addition and not as a replacement. Most users will never open it, and the ones who do cannot see the background and charging state that dominate the decision.</td>
+                </tr>
+                <tr>
+                  <td>Ask for the one-tap battery exemption dialog</td>
+                  <td><code>ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code></td>
+                  <td>Better UX, Play-policy restricted to app categories this is not in. One extra tap is cheaper than a listing review.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">A user says the app flattens their phone. What do you check, in order?</span>
+              <span class="a">First whether the mode is actually being applied: <code>PowerPolicy.next()</code> returns <code>null</code> when nothing changed, so a caller that treats <code>null</code> as "no mode" rather than "no change" would leave the radio at whatever it started on. Then whether the app is genuinely being backgrounded, since background is the first check in the resolver and dominates everything else, and an app kept alive by something else may never see the transition. Then charging state, because plugged in resolves to performance by design. Only after those does the band matter. And note the honest limit: there is no measured drain figure for any mode, so the answer at that point becomes an investigation rather than a lookup.</span>
+            </li>
+            <li>
+              <span class="q">Why is the hysteresis one-directional?</span>
+              <span class="a">Because the two errors are not symmetric. Dropping into a lower band late means running the most expensive scan setting on a phone that is nearly flat, which is the failure that actually costs the user something. Climbing out of a lower band late means running a gentler scan for another three percent of charge, which costs almost nothing. So entering a band happens immediately at the threshold and leaving it needs the threshold plus three. Without any hysteresis, a phone parked at the threshold flips on every one percent report, and each flip restarts the scanner, which costs more than the mode change saves and on Android 7 and above can trip the five-restarts-per-30-seconds throttle that silently ignores the scan.</span>
+            </li>
+            <li>
+              <span class="q">Someone asks whether keeping Bluetooth on all day is bad for them. Answer it without either dismissing them or overclaiming.</span>
+              <span class="a">Bluetooth is non-ionising radio: each photon carries roughly a millionth of the energy needed to break a chemical bond, so the only physical mechanism available to it is mild heating, and the regulatory limits are set well below where that becomes measurable. On magnitudes, BLE transmits about 1 to 10 milliwatts, while a phone hunting a weak cell tower transmits up to about 2 watts, two to three orders of magnitude more, and it does that already with no app installed. So Airhop does not change the order of magnitude of anything. The honest hedge is that no established health effect and no known mechanism is not the same as proof of zero effect, and long-horizon epidemiology is hard. Anyone wanting to reduce exposure should look at the cellular modem, not at Bluetooth. The cost that is genuinely real and genuinely caused by this app is battery.</span>
+            </li>
+            <li>
+              <span class="q">Why does <code>resolveBatterySettingsTargets</code> always append the standard action instead of returning the OEM deep link alone?</span>
+              <span class="a">Because every one of those schemes is undocumented and disappears between skin versions. <code>miui://battery/autostart</code> is not an API, it is an observed behaviour of one settings app, and a MIUI update can remove it without anybody noticing. The standard <code>IGNORE_BATTERY_OPTIMIZATION_SETTINGS</code> action exists on every Android 6 and later device including all of those skins, and it is where the whitelist actually lives. So the deep link is a shortcut to a better screen when it happens to work, and the standard action is the guarantee that the button always does something.</span>
+            </li>
+            <li>
+              <span class="q">Why is a Samsung in the aggressive list but not in the deep-link list?</span>
+              <span class="a">Because those two lists answer different questions and conflating them was the bug that produced the split. "This brand kills background services" is about whether the Mesh tab should say anything at all, and Samsung does kill them. "This brand exposes a screen we can deep-link to" is about whether a shortcut exists, and Samsung's sleeping-apps screen lives inside <code>com.samsung.android.lool</code> with no public action pointing at it. Same for Huawei's protected-apps inside <code>com.huawei.systemmanager</code>. Both belong in the first list and neither in the second; they get the standard battery-optimisation list, which is where the whitelist lives on those devices too.</span>
+            </li>
+            <li>
+              <span class="q">Why is the power policy a pure function rather than a method on the radio controller?</span>
+              <span class="a">Because the interesting cases are almost impossible to produce on a device and trivial to produce in a test. "What happens at 19 percent while charging with the app backgrounded" needs a specific phone at a specific charge in a specific state; as a pure function it is one line of Jest. The hysteresis in particular has a stateful component, which is why <code>PowerPolicy</code> is a small class that remembers the previous band, but the decision itself, <code>bandFor</code> and <code>modeFor</code>, stays pure and takes the previous band as an argument. Native keeps only mechanism: observe the battery, report it, apply whichever mode it is told, no policy on that side.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

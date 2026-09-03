@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 06: The algorithm graveyard. AES, RSA, SHA-1, ECDSA and the rest. What broke, and what replaced it." />
+    <title>06 The algorithm graveyard · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 06 · Foundations</p>
+          <h1>The algorithm graveyard</h1>
+          <p class="kt-lede">
+            Every algorithm Airhop uses beat a field of alternatives, and most of
+            those alternatives are dead for interesting reasons. This chapter is
+            the whole field: what broke, how it broke, what replaced it, and why
+            Airhop chose what it chose.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#hashes">Hash functions</a></li>
+              <li><a href="#ciphers">Symmetric ciphers</a></li>
+              <li><a href="#aesvschacha">AES against ChaCha20, properly</a></li>
+              <li><a href="#modes">Cipher modes, and why AEAD won</a></li>
+              <li><a href="#signatures">Signature schemes</a></li>
+              <li><a href="#ed25519">Ed25519 in detail</a></li>
+              <li><a href="#curves">Which curve, and the NIST question</a></li>
+              <li><a href="#kdf">Key derivation and password hashing</a></li>
+              <li><a href="#pq">Post-quantum</a></li>
+              <li><a href="#scorecard">Airhop's scorecard</a></li>
+              <li><a href="#lessons">The patterns behind every failure</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Locks get picked. When somebody finds a way to pick a kind of lock,
+              everybody has to change to a new kind, and the old one goes in the
+              bin. This is the bin. Some locks were bad from the start, some were
+              fine until computers got fast, some were fine until somebody found a
+              clever shortcut, and a few were fine but too fiddly to fit correctly
+              so people kept installing them wrong.
+            </p>
+          </div>
+
+          <h2 id="hashes">Hash functions</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Algorithm</th><th>Output</th><th>Status</th><th>What happened</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>MD5</strong> (1992)</td><td>128 bit</td><td><span class="pill bad">broken</span></td>
+                  <td>Collisions found in 2004, then in <em>seconds</em> on a laptop. In 2012 the <strong>Flame</strong> malware used an MD5 collision to forge a Microsoft code-signing certificate and impersonate Windows Update. Still, disgracefully, found in the wild for "checksums".</td>
+                </tr>
+                <tr>
+                  <td><strong>SHA-1</strong> (1995)</td><td>160 bit</td><td><span class="pill bad">broken</span></td>
+                  <td>Theoretically weakened from 2005. In 2017 Google's <strong>SHAttered</strong> produced two different PDFs with the same hash. In 2020 <strong>chosen-prefix</strong> collisions made forging realistic documents practical. Git is still migrating away from it.</td>
+                </tr>
+                <tr>
+                  <td><strong>SHA-2</strong> (2001)</td><td>224 to 512 bit</td><td><span class="pill ok">solid</span></td>
+                  <td>No meaningful attack in 24 years. Same Merkle-Damgard structure as SHA-1, but a much stronger compression function. <strong>SHA-256 is what Airhop uses everywhere.</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>SHA-3</strong> (2015)</td><td>224 to 512 bit</td><td><span class="pill ok">solid</span></td>
+                  <td>A completely different construction (sponge, Keccak), chosen by open competition as insurance in case SHA-2 ever fell. Slower in software. <strong>Not needed here</strong>, and using it would break bitchat compatibility.</td>
+                </tr>
+                <tr>
+                  <td><strong>BLAKE2 / BLAKE3</strong></td><td>Variable</td><td><span class="pill ok">solid, faster</span></td>
+                  <td>Genuinely better than SHA-256 on speed. Rejected for one reason only: the wire format is shared, and every packet ID, peer ID and gossip filter hash must match bitchat byte for byte.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">Length extension, and why HMAC exists</p>
+            <p>
+              SHA-1 and SHA-2 are Merkle-Damgard constructions: they process the
+              input in blocks, carrying state forward. The final state
+              <em>is</em> the output. So an attacker who sees
+              <code>SHA-256(secret || message)</code> can resume from that state
+              and compute <code>SHA-256(secret || message || padding || evil)</code>
+              <strong>without knowing the secret at all</strong>.
+            </p>
+            <p>
+              That is why naive "authentication" by hashing a secret with a
+              message is broken, and why HMAC's nested double-hash construction
+              exists. SHA-3's sponge construction is immune by design. Airhop uses
+              HMAC for the courier tag, the geohash seed, the channel identity
+              derivation and every ratchet chain step.
+            </p>
+          </div>
+
+          <h2 id="ciphers">Symmetric ciphers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cipher</th><th>Status</th><th>What happened</th></tr></thead>
+              <tbody>
+                <tr><td><strong>DES</strong> (1977)</td><td><span class="pill bad">dead</span></td><td>56-bit key. Brute-forced publicly in 1998 by a purpose-built machine in 56 hours, then in 22 hours. Today, minutes.</td></tr>
+                <tr><td><strong>3DES</strong></td><td><span class="pill bad">retired</span></td><td>DES three times over. Slow, and its 64-bit block size makes it vulnerable to birthday attacks on long connections (<strong>Sweet32</strong>, 2016). Formally deprecated.</td></tr>
+                <tr><td><strong>RC4</strong> (1987)</td><td><span class="pill bad">broken</span></td><td>Its keystream is measurably biased in the first bytes. Broke WEP WiFi entirely, and then TLS. Banned in TLS since 2015.</td></tr>
+                <tr><td><strong>AES</strong> (2001)</td><td><span class="pill ok">solid</span></td><td>Chosen by open competition. No practical break in 24 years. <strong>Airhop uses AES-256 in exactly one place:</strong> encrypting the wallet's MMKV partition at rest, where the OS and the storage library provide it.</td></tr>
+                <tr><td><strong>ChaCha20</strong> (2008)</td><td><span class="pill ok">solid</span></td><td>Daniel Bernstein's stream cipher. Simpler than AES, no lookup tables, naturally constant time in software. <strong>Airhop's cipher everywhere on the wire.</strong></td></tr>
+                <tr><td><strong>Salsa20</strong></td><td><span class="pill ok">fine</span></td><td>ChaCha20's predecessor. ChaCha improved diffusion per round. No reason to choose it now.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="aesvschacha">AES against ChaCha20, properly</h2>
+          <p>
+            Both are secure. The choice is entirely about how they behave on the
+            hardware you actually have.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>AES</th><th>ChaCha20</th></tr></thead>
+              <tbody>
+                <tr><td>Type</td><td>Block cipher, 128-bit blocks</td><td>Stream cipher</td></tr>
+                <tr><td>Key sizes</td><td>128, 192, 256 bit</td><td>256 bit only</td></tr>
+                <tr><td>Structure</td><td>Substitution-permutation, with <strong>lookup tables</strong> in software</td><td>Add, rotate, XOR. <strong>No tables.</strong></td></tr>
+                <tr><td>With hardware support</td><td><strong>Very fast.</strong> AES-NI on x86, ARMv8 crypto extensions.</td><td>Fast</td></tr>
+                <tr><td>Without hardware support</td><td><strong>Slower, and dangerous</strong></td><td><strong>Fast and safe</strong></td></tr>
+                <tr><td>Constant time in pure software</td><td><span class="pill bad">hard</span></td><td><span class="pill ok">natural</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The cache timing attack, which is the whole argument</p>
+            <p>
+              A software AES implementation looks up values in tables indexed by
+              <em>key-dependent</em> data. Table lookups hit or miss the CPU cache,
+              and a cache miss is measurably slower. An attacker running code on
+              the same machine, or in some cases just measuring response times, can
+              observe which table entries were touched and reconstruct the key.
+              This is not theoretical: practical extractions have been demonstrated
+              repeatedly.
+            </p>
+            <p>
+              ChaCha20 has no lookups. It performs the same additions, rotations
+              and XORs regardless of the key, so its timing carries no information.
+              That is why it was added to TLS, why WireGuard uses it exclusively,
+              and why every Noise suite anyone actually deploys is the ChaCha
+              variant.
+            </p>
+          </div>
+          <p>
+            For Airhop the decision is doubly forced. The target devices include
+            cheap Android phones where hardware AES cannot be assumed, and the
+            cryptography runs in <strong>JavaScript</strong>, which is the worst
+            possible place to implement a table-based cipher safely. And the
+            protocol name <code>Noise_XX_25519_ChaChaPoly_SHA256</code> is mixed
+            into the handshake's initial state, so a different cipher is not a
+            configuration change, it is a different protocol that no bitchat node
+            can speak.
+          </p>
+
+          <h2 id="modes">Cipher modes, and why AEAD won</h2>
+          <p>
+            A block cipher encrypts one fixed-size block. A <em>mode</em> is how
+            you use it on a real message, and the history of modes is a history of
+            footguns.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mode</th><th>Status</th><th>Failure</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>ECB</strong></td><td><span class="pill bad">never</span></td>
+                  <td>Each block encrypted independently, so identical plaintext blocks give identical ciphertext blocks. The famous encrypted penguin image, still clearly a penguin. Leaks structure directly.</td>
+                </tr>
+                <tr>
+                  <td><strong>CBC</strong></td><td><span class="pill warn">legacy</span></td>
+                  <td>Fixes the pattern leak, but with no authentication it is vulnerable to <strong>padding oracle</strong> attacks: an attacker submits modified ciphertexts and learns the plaintext from whether the padding error differs from other errors. Broke TLS repeatedly (BEAST, Lucky 13, POODLE).</td>
+                </tr>
+                <tr>
+                  <td><strong>CTR</strong></td><td><span class="pill warn">needs a MAC</span></td>
+                  <td>Turns a block cipher into a stream cipher. Fine, and catastrophic on nonce reuse.</td>
+                </tr>
+                <tr>
+                  <td><strong>Encrypt-then-MAC</strong></td><td><span class="pill warn">correct but manual</span></td>
+                  <td>The right composition, and people got the order wrong constantly. MAC-then-encrypt and encrypt-and-MAC are both attackable.</td>
+                </tr>
+                <tr>
+                  <td><strong>AES-GCM</strong></td><td><span class="pill ok">good, sharp edges</span></td>
+                  <td>Proper AEAD. But nonce reuse is <em>catastrophic</em> in a specific way: it leaks the authentication subkey, which lets an attacker forge <em>arbitrary</em> messages, not just replay one. With a 96-bit nonce, random generation becomes risky after about 2<sup>32</sup> messages.</td>
+                </tr>
+                <tr>
+                  <td><strong>ChaCha20-Poly1305</strong></td><td><span class="pill ok">Airhop's choice</span></td>
+                  <td>AEAD, no tables, and the same nonce-reuse warning without the table-lookup class of side channel.</td>
+                </tr>
+                <tr>
+                  <td><strong>XChaCha20-Poly1305</strong></td><td><span class="pill ok">Airhop's choice where there is no counter</span></td>
+                  <td>Extends the nonce to 192 bits, which makes random nonces safe indefinitely. Used for private channels and Nostr DMs, where members have no shared counter and could not have one.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">AEAD is the lesson, not the algorithm</p>
+            <p>
+              Two decades of TLS vulnerabilities came from people composing
+              encryption and authentication by hand and getting it subtly wrong.
+              AEAD makes the composition one indivisible operation with no way to
+              use only half of it. A failed tag returns <strong>nothing</strong>,
+              not partial plaintext, not garbage. That is the design pattern worth
+              carrying into anything you build.
+            </p>
+          </div>
+
+          <h2 id="signatures">Signature schemes</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Scheme</th><th>Key size at ~128-bit security</th><th>Status</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>RSA</strong> (1977)</td><td><strong>3072 bit</strong> (384 bytes)</td><td><span class="pill warn">works, unwieldy</span></td>
+                  <td>Security rests on factoring. Still unbroken at proper sizes, but keys are 12 times larger than an elliptic curve key, signing is slow, and the padding schemes have a bad history: PKCS#1 v1.5 gave the world Bleichenbacher's attack, which keeps resurfacing (ROBOT, 2017). Also easy to misuse: small exponents, shared moduli, no padding.</td>
+                </tr>
+                <tr>
+                  <td><strong>DSA</strong></td><td>3072 bit</td><td><span class="pill bad">retired</span></td>
+                  <td>Requires a fresh random nonce per signature. Reuse or bias reveals the private key algebraically.</td>
+                </tr>
+                <tr>
+                  <td><strong>ECDSA</strong></td><td><strong>256 bit</strong> (32 bytes)</td><td><span class="pill warn">works, dangerous</span></td>
+                  <td>Small and fast. Same fatal nonce requirement as DSA. This is what killed the PlayStation 3's code signing and drained Android Bitcoin wallets. Deterministic ECDSA (RFC 6979) fixes it, and plenty of deployments never adopted it. Bitcoin's original scheme.</td>
+                </tr>
+                <tr>
+                  <td><strong>Schnorr / BIP-340</strong></td><td>256 bit</td><td><span class="pill ok">good</span></td>
+                  <td>Simpler and more provable than ECDSA, and supports key aggregation. Bitcoin adopted it for taproot. <strong>Airhop uses it, on secp256k1, for every Nostr event</strong>, because that is what Nostr specifies.</td>
+                </tr>
+                <tr>
+                  <td><strong>Ed25519 / EdDSA</strong></td><td>256 bit</td><td><span class="pill ok">Airhop's choice</span></td>
+                  <td>Fast, small, <strong>deterministic</strong>, no invalid-curve pitfalls, no parameter choices to get wrong. See below.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="ed25519">Ed25519 in detail</h2>
+          <p>
+            This is the scheme signing every announce, every public message, every
+            attachment, every board post and every voice frame in the app, so it
+            is worth knowing properly.
+          </p>
+          <pre class="ascii">
+  THE SHAPE
+
+    curve       Edwards25519, a twisted Edwards curve, birationally
+                equivalent to Curve25519
+    private     32 bytes, hashed to produce a scalar and a prefix
+    public      32 bytes, a compressed curve point
+    signature   64 bytes: (R, s)
+
+  SIGNING message m with private key k
+
+    h        = SHA-512(k)             -> (a, prefix)
+    r        = SHA-512(prefix || m)   <- THE NONCE, DERIVED NOT RANDOM
+    R        = r·G
+    S        = SHA-512(R || A || m)
+    s        = r + S·a  mod L
+    signature = (R, s)
+
+  VERIFYING with public key A
+
+    S  = SHA-512(R || A || m)
+    check   s·G  ==  R + S·A
+
+  The verification equation only balances if the signer knew `a`.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Why it matters here</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Deterministic nonce</strong></td>
+                  <td>The single most important property. <code>r</code> comes from hashing the key with the message, <em>not</em> from the random number generator. So signing is safe on a device with broken randomness, which is exactly the failure that destroyed ECDSA in the PlayStation 3 and Android wallet cases. It also means the same message signed twice gives identical bytes, which is what keeps Airhop's content-derived packet IDs stable.</td>
+                </tr>
+                <tr>
+                  <td><strong>No parameter choices</strong></td>
+                  <td>There is no curve to pick, no hash to pick, no padding scheme. Whole classes of misuse simply do not exist.</td>
+                </tr>
+                <tr>
+                  <td><strong>Complete addition formulas</strong></td>
+                  <td>Edwards curves have addition formulas with no special cases, so implementations do not need branches. Branches are where timing leaks live.</td>
+                </tr>
+                <tr>
+                  <td><strong>Small and fast</strong></td>
+                  <td>32-byte keys, 64-byte signatures. A signature is 64 of the 512 bytes in a Bluetooth frame, which is 12.5 percent. RSA-3072 would be 384 bytes, which is <strong>75 percent of the entire frame</strong> and would make the protocol impossible.</td>
+                </tr>
+                <tr>
+                  <td><strong>Fast batch verification</strong></td>
+                  <td>Relevant for a node verifying many packets, though Airhop does not currently batch.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Ed25519's one genuine wart</p>
+            <p>
+              The original specification left some verification details ambiguous,
+              so different libraries disagree about which edge-case signatures are
+              valid: cofactor handling, non-canonical encodings, small-order
+              points. This produced real interoperability bugs in consensus
+              systems, where two nodes must agree exactly on validity.
+            </p>
+            <p>
+              RFC 8032 and later work tightened it. For Airhop it does not bite,
+              because a rejected signature means a dropped packet rather than a
+              network split, and because all three implementations use mainstream
+              libraries. It is worth knowing if anyone ever proposes using signature
+              validity as a consensus rule.
+            </p>
+          </div>
+          <div class="box">
+            <p class="box-title">Ed25519 and X25519 are the same curve, and Airhop still keeps two keys</p>
+            <p>
+              You <em>can</em> convert between the Edwards and Montgomery forms and
+              use one key pair for both signing and key agreement. Airhop
+              deliberately does not: cross-protocol attacks between signature and
+              key-agreement schemes are a live research area, and the two operations
+              stress a key differently. Two key pairs cost 32 extra bytes in the
+              keychain and remove the entire class. It also makes the roles legible
+              in code: <code>noiseStaticPrivKey</code> agrees,
+              <code>signingPrivKey</code> authenticates.
+            </p>
+          </div>
+
+          <h2 id="curves">Which curve, and the NIST question</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Curve</th><th>Used by</th><th>Assessment</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>NIST P-256</strong> (secp256r1)</td><td>TLS, smartcards, most enterprise</td>
+                  <td><span class="pill warn">works, unloved</span> Its constants were generated from unexplained seeds, so nobody outside the process can verify they were not chosen adversarially. There is no known weakness. But it also has awkward addition formulas requiring special cases, which makes constant-time implementation harder, and its history includes Dual_EC_DRBG, a NIST random generator with a plausible backdoor.</td>
+                </tr>
+                <tr>
+                  <td><strong>Curve25519</strong></td><td>Signal, WireGuard, SSH, TLS 1.3, <strong>Airhop</strong></td>
+                  <td><span class="pill ok">the default choice</span> Every constant is explained and derivable from design criteria, which is what "nothing up my sleeve" means. Fast, safe formulas, no special cases, hard to implement wrongly.</td>
+                </tr>
+                <tr>
+                  <td><strong>secp256k1</strong></td><td>Bitcoin, Nostr, Cashu, <strong>Airhop</strong></td>
+                  <td><span class="pill ok">fine, and mandatory here</span> A Koblitz curve, chosen for efficiency. Airhop uses it not by preference but because Nostr is defined on it and Cashu is Bitcoin-adjacent. Neither is negotiable.</td>
+                </tr>
+                <tr>
+                  <td><strong>Curve448</strong></td><td>Rare</td><td>Roughly 224-bit security. Slower and larger for a margin nothing needs today.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop therefore runs <strong>two curves</strong>, which is one more
+            than ideal, and the reason is interoperability rather than taste.
+            Curve25519 for everything on the mesh, secp256k1 for everything on the
+            internet and in the wallet, bridged by an HKDF that derives the Nostr
+            key from the signing key.
+          </p>
+
+          <h2 id="kdf">Key derivation and password hashing</h2>
+          <p>Two related jobs that people confuse constantly.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Function</th><th>Job</th><th>Airhop</th></tr></thead>
+              <tbody>
+                <tr><td><strong>HKDF</strong></td><td>Turn one <em>high-entropy</em> secret into many independent keys. Extract, then expand.</td><td><span class="pill ok">used</span> Nostr key from signing key, ratchet root from exporter secret, and inside Noise.</td></tr>
+                <tr><td><strong>PBKDF2</strong></td><td>Stretch a <em>low-entropy</em> password. Iteration count only.</td><td><span class="pill warn">obsolete</span> GPUs parallelise it trivially.</td></tr>
+                <tr><td><strong>bcrypt</strong></td><td>Password stretching with some memory cost.</td><td>Better than PBKDF2, superseded.</td></tr>
+                <tr><td><strong>scrypt</strong></td><td>Deliberately <strong>memory-hard</strong>, so custom hardware gains less.</td><td>Good.</td></tr>
+                <tr><td><strong>Argon2id</strong></td><td>The current answer. Memory-hard, side-channel aware, winner of the Password Hashing Competition.</td><td><span class="pill">not needed</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">Airhop has no passwords at all, and that is a security property</p>
+            <p>
+              There is no login, no passphrase, no PIN protecting the identity. So
+              there is no password to phish, to reuse across sites, to brute force,
+              or to be compelled to reveal. Key material is protected by the OS
+              keychain, which is hardware-backed on modern devices and gated by the
+              device unlock the user already has.
+            </p>
+            <p>
+              The one place a human-memorable secret appears is the
+              <strong>optional</strong> 12-word BIP-39 wallet recovery phrase, and
+              even there the words <em>are</em> the entropy (128 bits of it) rather
+              than a password protecting something else, so no stretching function
+              is required.
+            </p>
+          </div>
+
+          <h2 id="pq">Post-quantum</h2>
+          <p>
+            A sufficiently large quantum computer would run Shor's algorithm and
+            break every public-key algorithm in this chapter. None exists, and the
+            engineering gap is enormous, but the threat has a name worth knowing.
+          </p>
+          <pre class="ascii">
+  WHAT A QUANTUM COMPUTER WOULD BREAK
+
+    Shor's algorithm     factoring and discrete logarithms
+                         => RSA, DSA, ECDSA, Ed25519, X25519, ALL of it
+                         COMPLETELY broken, not weakened
+
+    Grover's algorithm   generic search, square-root speedup
+                         => symmetric ciphers and hashes lose HALF
+                            their bit strength
+                         AES-256 -> ~128 bit, still fine
+                         SHA-256 -> ~128 bit, still fine
+
+  SO: asymmetric is destroyed, symmetric is merely halved.
+</pre>
+          <div class="box warn">
+            <p class="box-title">"Harvest now, decrypt later"</p>
+            <p>
+              An adversary can record encrypted traffic today and decrypt it in
+              twenty years when the hardware exists. That makes the threat present
+              tense for anything with long-term value.
+            </p>
+            <p>
+              It is a much smaller problem for Airhop than for most systems,
+              because <strong>forward secrecy already deletes the keys</strong>.
+              Noise XX's ephemeral private halves are destroyed at split, and the
+              Double Ratchet deletes each message key immediately after use. A
+              recorded session cannot be decrypted later even with a quantum
+              computer, because the key it would recover no longer exists anywhere.
+            </p>
+            <p>
+              The exposures that remain are the ones without forward secrecy:
+              <strong>Nostr DMs</strong>, which use a static ECDH between two
+              long-lived identities, and <strong>courier envelopes sealed to a
+              static key</strong> when no prekey was available. Both are already
+              listed as gaps in chapter <a href="49-review.html">49</a> for
+              non-quantum reasons, and this is a second reason.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Post-quantum candidate</th><th>Job</th><th>Cost</th></tr></thead>
+              <tbody>
+                <tr><td><strong>ML-KEM</strong> (Kyber)</td><td>Key agreement</td><td>~1.2 KB public key against Curve25519's 32 bytes</td></tr>
+                <tr><td><strong>ML-DSA</strong> (Dilithium)</td><td>Signatures</td><td>~1.3 KB public key, ~2.4 KB signature</td></tr>
+                <tr><td><strong>SLH-DSA</strong> (SPHINCS+)</td><td>Signatures, hash-based, very conservative</td><td>~8 to 30 KB signatures</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">Why Airhop cannot adopt these today</p>
+            <p>
+              A Bluetooth frame is <strong>512 bytes</strong>. An ML-DSA signature
+              alone is roughly five times that. A single packet would become five
+              fragments before carrying any content, on a radio that moves 18 KiB
+              per second. The protocol would not merely slow down, it would stop
+              being viable.
+            </p>
+            <p>
+              What everybody else does is <strong>hybrid</strong>: run the classical
+              exchange and a post-quantum one and combine both outputs, so it is
+              secure if <em>either</em> holds. Signal shipped PQXDH, iMessage
+              shipped PQ3, TLS 1.3 has hybrid key exchange. All of those are on
+              transports with megabytes of headroom. On a 512-byte frame it is a
+              research problem, not an engineering task.
+            </p>
+          </div>
+
+          <h2 id="scorecard">Airhop's scorecard</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Job</th><th>Chosen</th><th>Beat</th><th>Deciding reason</th></tr></thead>
+              <tbody>
+                <tr><td>Hash</td><td>SHA-256</td><td>SHA-3, BLAKE3</td><td>Wire compatibility. Also unbroken and universally available.</td></tr>
+                <tr><td>Keyed hash</td><td>HMAC-SHA256</td><td>KMAC, raw hashing</td><td>Immune to length extension. Universal.</td></tr>
+                <tr><td>Key derivation</td><td>HKDF-SHA256</td><td>Ad-hoc hashing</td><td>Proper extract-and-expand with domain separation.</td></tr>
+                <tr><td>Cipher</td><td>ChaCha20-Poly1305</td><td>AES-GCM</td><td>No cache timing side channel in software, which matters because this is JavaScript on cheap phones. And the Noise suite name fixes it.</td></tr>
+                <tr><td>Cipher, big nonce</td><td>XChaCha20-Poly1305</td><td>ChaCha20 with a counter</td><td>Random nonces are safe where there is no shared counter.</td></tr>
+                <tr><td>Cipher at rest</td><td>AES-256</td><td>n/a</td><td>What MMKV and the OS provide.</td></tr>
+                <tr><td>Key agreement</td><td>X25519</td><td>P-256, RSA</td><td>Explained constants, safe formulas, 32 bytes.</td></tr>
+                <tr><td>Signatures, mesh</td><td>Ed25519</td><td>ECDSA, RSA, Schnorr</td><td><strong>Deterministic nonce</strong>, 64-byte signatures, no parameters to get wrong.</td></tr>
+                <tr><td>Signatures, Nostr</td><td>Schnorr, BIP-340</td><td>n/a</td><td>Nostr specifies it. Not a choice.</td></tr>
+                <tr><td>Handshake</td><td>Noise XX</td><td>TLS, X3DH, IK</td><td>No certificate authorities, mutual authentication, identity hiding.</td></tr>
+                <tr><td>Message ratchet</td><td>Double Ratchet</td><td>Session keys only</td><td>Per-message forward secrecy and post-compromise security.</td></tr>
+                <tr><td>Set reconciliation</td><td>Golomb coded set</td><td>Bloom, cuckoo, IBLT</td><td>Near the information-theoretic floor, fits one 512-byte frame.</td></tr>
+                <tr><td>Compression</td><td>Raw DEFLATE</td><td>zstd, brotli, LZ4</td><td>Wire compatibility, and universal availability.</td></tr>
+                <tr><td>Audio</td><td>AAC-LC</td><td>Opus</td><td>Opus is technically better. AAC is what bitchat uses and what every phone accelerates in hardware.</td></tr>
+                <tr><td>Blind signatures</td><td>BDHKE on secp256k1</td><td>RSA blind signatures</td><td>Cashu specifies it, and it reuses Bitcoin's curve.</td></tr>
+                <tr><td>Mnemonic</td><td>BIP-39</td><td>n/a</td><td>NUT-13 specifies it. Universal wallet compatibility.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The pattern is worth noticing: <strong>every choice is either the
+            modern consensus or forced by interoperability</strong>. Nothing is
+            novel, nothing is bespoke, and nothing is chosen for cleverness. In
+            cryptography that is exactly the right instinct.
+          </p>
+
+          <h2 id="lessons">The patterns behind every failure</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pattern</th><th>Victims</th><th>How Airhop avoids it</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Key or output too small</strong></td><td>DES (56-bit key), MD5 and SHA-1 (short digests)</td><td>256-bit keys, 256-bit hashes throughout.</td></tr>
+                <tr><td><strong>Requires perfect randomness</strong></td><td>DSA, ECDSA, and every wallet they drained</td><td><strong>Ed25519's deterministic nonce.</strong> Elsewhere, the OS CSPRNG only.</td></tr>
+                <tr><td><strong>Nonce reuse is catastrophic</strong></td><td>WEP, AES-GCM misuse, any stream cipher</td><td>A counter with an explicit exhaustion error in Noise, single-use keys in the ratchet, and a 24-byte random nonce where no counter exists.</td></tr>
+                <tr><td><strong>Encryption without authentication</strong></td><td>CBC padding oracles, WEP, a decade of TLS</td><td>AEAD everywhere. A failed tag returns nothing.</td></tr>
+                <tr><td><strong>Composition left to the implementer</strong></td><td>MAC-then-encrypt, PKCS#1 v1.5 padding</td><td>Noise is a framework that generates the composition and has been formally analysed.</td></tr>
+                <tr><td><strong>Timing side channels</strong></td><td>Software AES, non-constant-time comparisons</td><td>ChaCha20 has no tables. <em>Honestly: JavaScript cannot guarantee constant time, and the project says so.</em></td></tr>
+                <tr><td><strong>Unexplained constants</strong></td><td>NIST P-curves, Dual_EC_DRBG</td><td>Curve25519's constants are all derivable from stated design criteria.</td></tr>
+                <tr><td><strong>Too many knobs</strong></td><td>TLS cipher negotiation, downgrade attacks</td><td><strong>Noise has no negotiation at all.</strong> One protocol name, mixed into the initial state, so a mismatch fails immediately rather than downgrading.</td></tr>
+                <tr><td><strong>Nobody could implement it correctly</strong></td><td>PGP, the web of trust</td><td>Deliberate simplicity: one service, one characteristic, one cipher suite, no configuration.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why ChaCha20 rather than AES?</span>
+              <span class="a">Not security, both are unbroken. Software AES uses lookup tables indexed by key-dependent data, so cache timing can leak the key, and that is only mitigated by hardware AES instructions which cheap Android phones do not guarantee. ChaCha20 is add, rotate and XOR with no tables, so it is naturally constant time and fast in software. This app runs its cryptography in JavaScript on the widest possible range of devices, which makes the argument decisive. And the Noise suite name is mixed into the handshake state, so the cipher is part of the protocol identity rather than a setting.</span>
+            </li>
+            <li>
+              <span class="q">Why Ed25519 rather than ECDSA?</span>
+              <span class="a">The nonce. ECDSA needs a fresh unpredictable random value per signature, and reusing or biasing it reveals the private key algebraically. That destroyed the PlayStation 3's code signing and drained Android Bitcoin wallets. Ed25519 derives its nonce deterministically by hashing the private key with the message, so it is safe even on a device with broken randomness. It also has no parameter choices to get wrong, complete addition formulas that need no branches, and it gives identical bytes for the same input, which keeps content-derived packet IDs stable.</span>
+            </li>
+            <li>
+              <span class="q">Why is SHA-1 broken and SHA-256 not, given the same structure?</span>
+              <span class="a">Both are Merkle-Damgard, but SHA-1's compression function has exploitable differential characteristics and its output is only 160 bits. Practical collisions arrived in 2017 with SHAttered and chosen-prefix collisions in 2020. SHA-256's compression function has resisted 24 years of analysis and its 256-bit output puts collisions at 2<sup>128</sup>. They share the length-extension weakness, which is why HMAC exists and why hashing a secret with a message directly is never acceptable.</span>
+            </li>
+            <li>
+              <span class="q">What is a padding oracle, and what killed that whole family?</span>
+              <span class="a">With CBC mode and no authentication, an attacker submits modified ciphertexts and observes whether the server reports a padding error differently from any other error. Each answer leaks one byte, and repeated queries recover the plaintext without ever knowing the key. It broke TLS repeatedly. What killed the family is AEAD: encryption and authentication as one operation where a failed tag returns nothing at all, so there is no distinguishable error to observe.</span>
+            </li>
+            <li>
+              <span class="q">How exposed is Airhop to a future quantum computer?</span>
+              <span class="a">Less than most systems, because forward secrecy already deletes the keys. Shor's algorithm would break every asymmetric primitive here, but a recorded Noise session cannot be decrypted later because the ephemeral private halves were destroyed at split and each ratchet message key is deleted after one use. Grover's algorithm halves symmetric strength, leaving ChaCha20 and SHA-256 at about 128 bits, which is fine. The genuine exposures are the two places with no forward secrecy: Nostr DMs, which use a static ECDH between long-lived identities, and courier envelopes sealed to a static key. Adopting post-quantum primitives is blocked by size: an ML-DSA signature is roughly five times a whole Bluetooth frame.</span>
+            </li>
+            <li>
+              <span class="q">Name the single strongest structural defence in the whole cipher suite choice.</span>
+              <span class="a">No negotiation. TLS spent two decades patching downgrade attacks because a client and server negotiate which algorithms to use, and an attacker in the middle can influence that. Noise fixes the entire suite in the protocol name, and that name is mixed into the handshake's initial hash state, so two parties who disagree simply fail to complete rather than falling back to something weaker. There is no weaker option to fall back to.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

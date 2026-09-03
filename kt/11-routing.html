@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 11: Flood routing. TTL, dedup, jitter, fanout, source routes, and why seven hops." />
+    <title>11 Flood routing · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 11 · The protocol</p>
+          <h1>Flood routing</h1>
+          <p class="kt-lede">
+            No node knows the shape of the network, and nobody could keep such a
+            map current if they had one. So Airhop does not route. It floods, with
+            a hop limit, a duplicate filter and a random delay. Those three
+            things are the entire algorithm, and each one is load bearing.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#why-flood">Why flooding and not routing</a></li>
+              <li><a href="#algorithm">The algorithm</a></li>
+              <li><a href="#ttl">TTL, and why seven</a></li>
+              <li><a href="#dedup">Deduplication</a></li>
+              <li><a href="#jitter">Jitter, and why it scales with degree</a></li>
+              <li><a href="#time-critical">Time critical traffic</a></li>
+              <li><a href="#directed">Directed packets are still flooded</a></li>
+              <li><a href="#source-routes">Source routes</a></li>
+              <li><a href="#fanout">Fanout subsetting, and where Airhop stands</a></li>
+              <li><a href="#freshness">The freshness window</a></li>
+              <li><a href="#alternatives">Alternatives from the literature</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine a room of people passing on a rumour. You do not know where
+              your friend is standing, so you tell everyone next to you, and they
+              tell everyone next to them. Two rules stop it going forever. First,
+              each retelling ticks down a counter, and when it reaches zero
+              nobody passes it on. Second, if you have already heard this exact
+              rumour, you stay quiet. And everyone waits a random moment before
+              repeating, so that people do not all shout at the same time.
+            </p>
+          </div>
+
+          <h2 id="why-flood">Why flooding and not routing</h2>
+          <p>
+            Classic mobile ad hoc network research spent two decades on routing
+            protocols: AODV, DSR, OLSR, batman-adv. All of them build and
+            maintain some model of the topology. All of them assume that the
+            model can be kept roughly current. In Airhop's environment that
+            assumption fails hard.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Assumption a routing protocol makes</th><th>Reality in a crowd</th></tr></thead>
+              <tbody>
+                <tr><td>Links are stable for seconds to minutes.</td><td>A person turns around and a link drops. Someone walks past and a new one appears. Link lifetime is often under ten seconds.</td></tr>
+                <tr><td>Neighbours can be enumerated reliably.</td><td>RSSI fluctuates by 20 dB from body position alone; a peer is discoverable, then not, then is again.</td></tr>
+                <tr><td>Control traffic is cheap relative to data.</td><td>Airtime is the scarce resource. Topology updates in a room of 50 phones cost more than the messages.</td></tr>
+                <tr><td>Nodes cooperate honestly.</td><td>Anyone in radio range can transmit anything, including fabricated topology. A route table is an attack surface.</td></tr>
+                <tr><td>Publishing adjacency is acceptable.</td><td>A neighbour list broadcast in the clear tells one passive listener who is standing next to whom. That is exactly the inference the product exists to prevent.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Controlled flooding gives up optimality and buys robustness. It never
+            needs to know the topology, it heals around a break automatically, it
+            has no state to poison, and it publishes nothing about who is near
+            whom. The cost is redundant transmissions, and the whole design of
+            the next few sections is about bounding that cost.
+          </p>
+
+          <h2 id="algorithm">The algorithm</h2>
+          <pre class="ascii">
+  A PACKET ARRIVES ON LINK L
+
+    1. decode. malformed -> drop (never throw)
+    2. freshness: |now - timestamp| <= 2 minutes?
+           no, and not a solicited sync response -> DROP, do not relay
+    3. LEAVE only: verify the signature FIRST. unverifiable -> drop, do not relay
+    4. packetID = SHA-256(type|sender|timestamp|payload)[0:16]
+       seen in the last 5 minutes?  -> DROP silently
+    5. record it in the seen set
+    6. ttl' = min(packet.ttl, 7), then clamp if time critical
+       ttl' > 1 ?
+           schedule a relay of {packet with ttl = ttl'-1}
+           after a random delay drawn from the degree-scaled window
+    7. track it for gossip if it is a gossiped type
+    8. dispatch to the type handler
+</pre>
+          <p>
+            Note the ordering. <strong>Relay happens before verification</strong>
+            for every type except <code>LEAVE</code>. That is the right default:
+            a relay carries traffic for peers whose signing keys it has never
+            seen, and demanding a key before forwarding would break multi-hop
+            delivery for exactly the strangers the mesh exists to reach. A node
+            forwards opaque bytes it may not be able to check.
+          </p>
+          <p>
+            <code>LEAVE</code> is the exception because it is an
+            <em>instruction</em> rather than content. It costs nothing to forge
+            for any peer ID in earshot, it evicts that peer from everyone's
+            view, and forwarding one that has already been refused spends the
+            room's airtime and carries the attack to any node that checks less
+            strictly.
+          </p>
+          <p>
+            The relay itself writes to every link except the one it arrived on
+            (split horizon). Not writing back to the ingress link is what stops a
+            two node mesh spinning forever, and it is the cheapest possible
+            optimisation.
+          </p>
+
+          <h2 id="ttl">TTL, and why seven</h2>
+          <p>
+            Time to live is a hop counter, decremented at each relay and dropped
+            at zero. It is the only thing that guarantees termination.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>TTL</th><th>Effective reach at 30 to 50 m per hop</th><th>Redundant transmissions in a dense room</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>One hop. Neighbours only.</td><td>Minimal</td></tr>
+                <tr><td>3</td><td>90 to 150 m</td><td>Modest</td></tr>
+                <tr><td><strong>7</strong></td><td><strong>210 to 350 m</strong></td><td>Bounded, but grows fast with density</td></tr>
+                <tr><td>15</td><td>450 to 750 m in theory</td><td>Impractical. Every extra hop multiplies the transmission count in a dense graph.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Seven is inherited from bitchat and it is a good number for three
+            independent reasons:
+          </p>
+          <ol>
+            <li>
+              <strong>It matches the useful scale.</strong> 210 to 350 metres is
+              a venue, a city block, a march, a campus. Beyond that the sparse
+              case dominates: there is simply nobody standing at hop eight.
+            </li>
+            <li>
+              <strong>Cost grows superlinearly.</strong> In a graph with average
+              degree <em>d</em>, a naive flood at TTL <em>n</em> can cost on the
+              order of <em>d<sup>n</sup></em> transmissions before dedup bites.
+              Dedup collapses that dramatically, but the airtime spent before
+              duplicates are suppressed still grows with depth.
+            </li>
+            <li>
+              <strong>It is a fixed, interoperable constant.</strong> Changing it
+              unilaterally would make Airhop packets travel further or less far
+              than bitchat's on the same mesh, which is a behaviour difference
+              that is hard to reason about and impossible to debug in the field.
+            </li>
+          </ol>
+          <p>
+            Some types deliberately use less. <code>LEAVE</code> rides TTL 3.
+            <code>REQUEST_SYNC</code> and every packet answering one ride TTL 0
+            and are strictly link-local. Public message origin TTL is drawn from 5
+            to 7 rather than fixed at the maximum, for the authorship-privacy
+            reason in chapter <a href="03-user-flows.html">03</a>.
+          </p>
+
+          <h2 id="dedup">Deduplication</h2>
+          <p>
+            Without a duplicate filter, a flood in a graph with any cycle runs
+            forever. TTL bounds it but does not stop the exponential blowup
+            inside those seven hops. Dedup is what makes the flood affordable.
+          </p>
+          <pre class="code">
+  class Deduplicator
+    Map&lt;hex(packetID), timestampMs&gt;
+    MAX_SIZE  = 1000 entries
+    EXPIRY_MS = 5 minutes
+
+    has(id):  present AND within 5 minutes  -> true
+              present but older              -> delete, return false
+    add(id):  re-insert to refresh LRU order,
+              evicting the oldest when full
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Choice</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td>Content-derived ID, no nonce field</td><td>The same logical packet has one ID regardless of how many hops it took, because TTL, flags and signature are excluded from the hash. A nonce field would need to be signed and would waste bytes.</td></tr>
+                <tr><td>1000 entries</td><td>Enough for several minutes of traffic in a busy room. bitchat iOS uses the same; bitchat Android's gossip cache is only 100, which is one of the divergences Airhop resolves toward iOS.</td></tr>
+                <tr><td>5 minute window</td><td>Long enough that a slow multi-hop copy is still caught. Short enough that a legitimate resend after five minutes is not silently swallowed.</td></tr>
+                <tr><td>JavaScript <code>Map</code> insertion order for LRU</td><td>Maps preserve insertion order, so the oldest key is <code>keys().next().value</code>. No separate data structure needed.</td></tr>
+                <tr><td><code>purgeExpired</code> stops at the first fresh entry</td><td>Insertion order means once a fresh entry is seen, everything after it is fresher. Turns a full scan into an early exit.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">What dedup does not do</p>
+            <p>
+              It is <strong>per device</strong>. It says nothing about a phone
+              that never heard the original. That is why it cannot serve as the
+              replay bound on its own, and why there is a separate freshness
+              window on the timestamp. Freshness is the part that travels; dedup
+              is the part that is local.
+            </p>
+            <p>
+              It also does not cover fragments, which skip the router's dedup
+              entirely and are deduplicated per index inside their assembly
+              instead.
+            </p>
+          </div>
+
+          <h2 id="jitter">Jitter, and why it scales with degree</h2>
+          <p>
+            If every node relays the instant it receives, all of them transmit at
+            the same moment, collide on a shared radio, and the flood destroys
+            itself. This is the <strong>broadcast storm problem</strong>, and it
+            is one of the oldest results in ad hoc networking.
+          </p>
+          <p>
+            Jitter fixes it by staggering the retransmissions, which lets the
+            first copy propagate and lets dedup silence everyone else.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Degree (Bluetooth peers)</th><th>Jitter window</th><th>Reasoning</th></tr></thead>
+              <tbody>
+                <tr><td>0 to 2</td><td>10 to 40 ms</td><td>Sparse. Relay almost immediately, because there is nobody else to do it and a slow relay risks the chain breaking before it propagates.</td></tr>
+                <tr><td>3 to 5</td><td>60 to 150 ms</td><td>Moderate. Some redundancy exists, so wait a little and let it work.</td></tr>
+                <tr><td>6 to 9</td><td>80 to 180 ms</td><td>Dense. Somebody else's relay very likely wins first.</td></tr>
+                <tr><td>10+</td><td>100 to 220 ms</td><td>Very dense. Duplicate suppression should do most of the work; the more neighbours, the more likely one of them already relayed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            This is bitchat's <code>RelayController</code> policy, matched.
+            Degree here is <code>LinkRegistry.degree()</code>, read through a callback
+            so the window adapts continuously as people arrive and leave. It is
+            the live count of <strong>Bluetooth peers</strong>, and both halves of
+            that were bugs once.
+          </p>
+          <div class="box bad">
+            <p class="box-title">It used to count links, across every transport, and both were wrong</p>
+            <p>
+              <strong>Peers, not links.</strong> Bluetooth is dual-role: two
+              phones that meet each dial the other, so one neighbour contributed
+              two links and every room read as twice as crowded as it was. The
+              dense threshold was crossed at three real peers where bitchat
+              crosses at six, clamping voice and fragment range to five hops
+              earlier than it should.
+            </p>
+            <p>
+              <strong>Bluetooth only.</strong> The delay exists for radio
+              contention: every phone in earshot hears a packet at the same
+              instant, and rebroadcasting together drowns the room out. A socket
+              on LAN or WiFi Aware does not compete for that airtime, so counting
+              it slowed the radio down for no reason.
+            </p>
+            <p>
+              Both halves now match bitchat's
+              <code>peerRegistry.connectedCount</code>. The fix is invisible to
+              the simulator, which models one link per pair; on hardware the
+              degree roughly halves. Chapter
+              <a href="14-peers-queues.html">14</a> has the registry.
+            </p>
+          </div>
+          <p>
+            One thing bitchat does that Airhop does not:
+            <strong>cancelling a scheduled relay when a duplicate arrives
+            first</strong>. Airhop's <code>FloodRouter</code> keeps pending relay
+            timers in a map keyed by packet ID, so the mechanism is there, but
+            the receive path drops a duplicate before reaching any cancellation
+            logic. In practice the effect is small (the relay still fires and its
+            copy is deduplicated by everyone who already has it) but it is real
+            airtime, and it is the cheapest available optimisation for a dense
+            room. Noted in chapter <a href="49-review.html">49</a>.
+          </p>
+
+          <h2 id="time-critical">Time critical traffic</h2>
+          <p>
+            Two types cannot afford the ordinary window: fragments and live voice.
+          </p>
+          <pre class="ascii">
+  A TALKER EMITS ~15 PACKETS PER SECOND.
+  THE LISTENER PLAYS FROM A 350 ms JITTER BUFFER.
+
+  ORDINARY WINDOW              TIME CRITICAL WINDOW
+  up to 220 ms per hop         8 to 25 ms per hop
+
+  3 hops = up to 660 ms        3 hops = up to 75 ms
+  ─────────────────────        ────────────────────
+  MORE THAN THE ENTIRE         COMFORTABLY INSIDE
+  BUFFER. Audio arrives        the buffer. The sentence
+  as gaps.                     is heard as a sentence.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rule</th><th>Value</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Jitter</td><td>8 to 25 ms</td><td>Fits inside the 350 ms playback buffer across several hops.</td></tr>
+                <tr><td>TTL cap, sparse mesh (degree &lt; 6)</td><td>7</td><td>Voice should reach as far as text does when there is room for it.</td></tr>
+                <tr><td>TTL cap, dense mesh (degree ≥ 6)</td><td>5</td><td>A sustained stream flooded to full depth in a busy graph would crowd out everything else.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="directed">Directed packets are still flooded</h2>
+          <p>
+            This is the point people find most surprising. A DM addressed to one
+            peer is <strong>broadcast</strong>, not routed.
+          </p>
+          <pre class="ascii">
+  A wants to send to F. A has no idea where F is.
+
+     A ──▶ B ──▶ C ──▶ D
+     │     │     │
+     └──▶ E ──▶ F ◀────┘
+
+  A floods the packet with recipientID = F, ttl 7.
+  B, C, D and E all relay it. None of them can read it.
+  F receives it, decrypts it, and renders it.
+  D and C also receive it, see it is not for them, and relay onward
+  until the TTL runs out.
+
+  Everyone in a 7 hop radius sees that A sent SOMETHING to F.
+  Nobody but F sees WHAT.
+</pre>
+          <p>
+            The optimisation on top is the <strong>direct link shortcut</strong>:
+            if a peer has been mapped to a specific link, a packet addressed to it
+            goes down that link alone. That turns the common case into one write
+            instead of a flood. But it is an optimisation, not the delivery
+            guarantee, and it disappears the moment the peer is more than one hop
+            away.
+          </p>
+          <p>
+            The privacy consequence is stated plainly in the threat model: packet
+            headers carry sender and recipient IDs in the clear, exactly as
+            bitchat's do. Who is talking to whom is <strong>not</strong> hidden
+            on the mesh. Only the content is.
+          </p>
+          <p>
+            There is one rendering rule that keeps this from being a
+            confidentiality bug: a directed packet is relayed by everyone but
+            <strong>rendered only by the addressee</strong>. That was a real
+            finding once, where attachments were rendered by every relay rather
+            than only the recipient.
+          </p>
+
+          <h2 id="source-routes">Source routes</h2>
+          <p>
+            The v2 header can carry an explicit hop list. Airhop
+            <strong>follows</strong> them and never <strong>originates</strong>
+            them.
+          </p>
+          <pre class="code">
+  nextHopFor(packet, myPeerID):
+    if the route list contains my peer ID at position i,
+    return the peer ID at position i+1 (or the recipientID if I am last)
+    else return null
+
+  relayPacket(packet, ingressLink):
+    nextHop = nextHopFor(...)
+    if nextHop is reachable over WiFi and not the ingress link  -> one write
+    if nextHop is reachable over BLE  and not the ingress link  -> one write
+    otherwise FALL THROUGH TO FLOODING
+</pre>
+          <p>
+            Following costs almost nothing and keeps Airhop from being a node
+            that other implementations must route around: a bitchat peer that has
+            computed a path through us is owed the hop it asked for.
+          </p>
+          <p>
+            Originating would require emitting the <code>directNeighbors</code>
+            TLV, publishing our adjacency in cleartext to every nearby radio. One
+            passive listener could then reconstruct the social graph of a room.
+            bitchat's own peer-ID rotation analysis rejects it and bitchat stopped
+            emitting the list. Flooding is the documented fallback for a route
+            that cannot be built, and it is what Airhop already does.
+          </p>
+
+          <h2 id="fanout">Fanout subsetting, and where Airhop stands</h2>
+          <p>
+            bitchat has one further optimisation Airhop does not implement, and it
+            is worth being explicit about because
+            <code>PROTOCOLS.md</code> section 4 lists it as a routing constant.
+          </p>
+          <div class="box warn">
+            <p class="box-title">Documented but not implemented</p>
+            <p>
+              <code>PROTOCOLS.md</code> lists "Fanout subset size:
+              <code>~ceil(sqrt(n))</code>, deterministic fanout, excludes ingress
+              peer". There is no such code in <code>src/</code>.
+              <code>MeshService.relayPacket</code> writes to
+              <strong>every</strong> link except the ingress one. This is a
+              documentation-versus-code gap, and it is also the most significant
+              scaling item on the list in chapter
+              <a href="49-review.html">49</a>.
+            </p>
+          </div>
+          <p>What bitchat actually does, and why it matters:</p>
+          <pre class="ascii">
+  FULL FANOUT (what Airhop does)
+    a node with 6 links relays to all 5 non-ingress links
+    room of 25 phones, one message -> hundreds of writes
+
+  DETERMINISTIC SUBSET (what bitchat does)
+    a node with 6 links relays to a subset seeded by the MESSAGE ID
+    so different messages take different subsets, and coverage is
+    statistical across many messages rather than guaranteed per message
+
+    announces, fragments and sync packets keep FULL fanout, because
+    those are the ones that must reach everybody
+    directed traffic keeps FULL targeted fanout
+</pre>
+          <p>
+            The trade is coverage against airtime. Full fanout guarantees that if
+            a path exists within the TTL, the packet takes it. Subsetting accepts
+            a small probability that a particular message misses a particular
+            node, in exchange for a large reduction in redundant writes, and
+            leans on gossip sync (chapter <a href="12-gossip-sync.html">12</a>)
+            to repair the gaps.
+          </p>
+          <p>
+            Airhop's full fanout is defensible for the crowd sizes it has been
+            tested at (scenario B06 converges 25 phones on one channel, B07
+            checks that a forming crowd does not drown itself in control
+            traffic). It is not obviously defensible at 200. The honest position
+            is: this is untested above the low tens, and the mitigation bitchat
+            uses is available and not taken.
+          </p>
+
+          <h2 id="freshness">The freshness window</h2>
+          <p>
+            Every packet is held to a <strong>plus or minus 2 minute</strong>
+            window on its timestamp at ingress, and outside it the packet is
+            neither relayed nor acted on.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr><td>Why not rely on dedup?</td><td>Dedup is per device with a 5 minute window. It says nothing about a phone that never heard the original. Freshness is the part that travels.</td></tr>
+                <tr><td>Why 2 minutes?</td><td>Phones are NTP synced and an offline real-time clock drifts by seconds a day, not minutes. So the failure mode is rare and visible (a peer whose clock is wrong cannot talk to anyone) rather than silent.</td></tr>
+                <tr><td>What about gossip sync, which replays old packets by design?</td><td>A response carries <code>IS_RSR</code> and <code>ttl = 0</code>, and the receiver skips the window <strong>only</strong> when the packet claims RSR <em>and</em> arrives from a peer it has an outstanding request to, inside a 30 second response window. The flag alone is a sender's claim; the pending request is the receiver's own record. This is why sync requests are unicast.</td></tr>
+                <tr><td>Are there tighter windows?</td><td>Yes. Announces get 15 minutes (symmetric, the union of what both bitchat clients accept). Live voice gets 30 seconds, because stale audio is worthless and replaying a recorded burst at someone later is an attack scenario (M07).</td></tr>
+                <tr><td>What if our own clock is wrong?</td><td>The app infers it. If two or more <em>different</em> peers send packets outside the window, it blames its own clock and shows a banner. One peer sending stale packets is that peer replaying; several peers disagreeing at once points at what they have in common. Any accepted packet clears the flag.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="alternatives">Alternatives from the literature</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Protocol</th><th>How it works</th><th>Why not here</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>AODV</strong> (reactive)</td>
+                  <td>Flood a route request, the destination replies, both ends cache the path. Used by Zigbee and by the old 802.11s mesh.</td>
+                  <td>The route discovery flood costs as much as just flooding the data. Cached routes go stale in seconds when the nodes are people. And the reply path is a spoofing target.</td>
+                </tr>
+                <tr>
+                  <td><strong>OLSR</strong> (proactive, link state)</td>
+                  <td>Every node floods its neighbour set continuously; everyone computes shortest paths. Multipoint relays reduce the flooding cost.</td>
+                  <td>Continuous topology broadcast is exactly the privacy leak Airhop refuses, and the control overhead in a room of 50 phones exceeds the data.</td>
+                </tr>
+                <tr>
+                  <td><strong>batman-adv</strong></td>
+                  <td>Nodes do not know full paths, only the best next hop, learned from originator message counts. Very robust in real deployments.</td>
+                  <td>Still requires continuous originator broadcasts and per-neighbour state, and still publishes adjacency implicitly. Better suited to fixed WiFi mesh nodes than to moving phones.</td>
+                </tr>
+                <tr>
+                  <td><strong>Bluetooth Mesh</strong> (the SIG profile)</td>
+                  <td>Managed flooding with a TTL, exactly like Airhop, plus provisioning, network keys, and relay/friend/low-power node roles.</td>
+                  <td>The architecture is right, the trust model is wrong: provisioning requires a coordinator and a network key shared across the whole mesh, which suits building automation and not strangers in a crowd. And no phone platform exposes it.</td>
+                </tr>
+                <tr>
+                  <td><strong>Gossip / epidemic protocols</strong></td>
+                  <td>Each node forwards to a random subset with some probability, giving high delivery with far fewer transmissions than full flooding.</td>
+                  <td>This is essentially what bitchat's fanout subsetting is. It is the most credible upgrade path for Airhop's scaling, and it is the recommendation in chapter <a href="49-review.html">49</a>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Geographic routing</strong> (GPSR and relatives)</td>
+                  <td>Forward toward the destination's coordinates.</td>
+                  <td>Requires knowing where the destination is, which means publishing everybody's location. A non-starter for this product.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is a packet relayed before its signature is checked?</span>
+              <span class="a">Because a relay routinely carries traffic for peers whose signing keys it has never seen, and it may never see them: the sender might be six hops away and its announce might not have reached us. Demanding a key before forwarding would break multi-hop delivery for exactly the strangers the mesh exists to reach. Forwarding is separate from delivery, and a relay never renders what it forwards. <code>LEAVE</code> is the one exception, because it is an eviction instruction rather than content.</span>
+            </li>
+            <li>
+              <span class="q">Explain the broadcast storm problem and Airhop's answer.</span>
+              <span class="a">If every node relays immediately on receipt, all neighbours transmit simultaneously on a shared medium, collide, and the flood destroys itself. The answer is jitter: a random delay before relaying, drawn from a window that widens with how many neighbours you have. In a sparse graph you relay almost immediately, because nobody else will. In a dense one you wait, because somebody else's copy will very likely arrive first and silence you through the duplicate filter.</span>
+            </li>
+            <li>
+              <span class="q">Why is TTL not in the signed preimage, and what does that allow?</span>
+              <span class="a">Because it changes at every hop by design. If it were signed, a signature would be valid for exactly one hop and multi-hop delivery would be impossible. What it allows is that TTL is unauthenticated: an attacker can set it freely. So no trust decision may rest on TTL alone, which is why the direct-peer rule pairs a maximum TTL with a link binding rather than trusting the field.</span>
+            </li>
+            <li>
+              <span class="q">A room has 200 phones. What worries you?</span>
+              <span class="a">Full fanout. Every node relaying to every non-ingress link means the number of writes per message grows with the number of edges, and airtime is the scarce resource in a band already shared with everyone's WiFi. Dedup bounds it, and jitter widens with degree, but neither reduces the number of transmissions the way subsetting would. This is untested above the low tens, and bitchat's message-ID-seeded subset is the available mitigation that is not implemented.</span>
+            </li>
+            <li>
+              <span class="q">Why does a sync response get an exemption from the freshness window, and why is that not a hole?</span>
+              <span class="a">Because gossip sync exists to replay old packets, so without an exemption it could not work at all. It is not a hole because the exemption needs two independent things: the sender's <code>IS_RSR</code> claim <em>and</em> the receiver's own record of an outstanding request to that specific peer within the last 30 seconds. The flag alone grants nothing. That is precisely why requests are unicast rather than broadcast: a broadcast request has no peer to register against, so nothing it draws back can be attributed.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

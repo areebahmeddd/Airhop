@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 13: Courier and DTN. Store and forward, spray and wait, recipient tags, prekeys." />
+    <title>13 Courier and DTN · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 13 · The protocol</p>
+          <h1>Courier and delay-tolerant networking</h1>
+          <p class="kt-lede">
+            When no path exists now, and none will exist for hours, the only
+            remaining transport is a person walking. This is the part of the
+            system where the network is made of legs.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#dtn">Delay-tolerant networking</a></li>
+              <li><a href="#envelope">The envelope</a></li>
+              <li><a href="#tag">The recipient tag, and its flaw</a></li>
+              <li><a href="#spray">Spray and wait</a></li>
+              <li><a href="#quotas">Quotas and the pool</a></li>
+              <li><a href="#prekeys">One-time prekeys and forward secrecy</a></li>
+              <li><a href="#plaintext">What is inside, and the 255 byte cap</a></li>
+              <li><a href="#relay-drop">The relay drop</a></li>
+              <li><a href="#dormant">Dormant, woken, delivered</a></li>
+              <li><a href="#lifecycle">The whole lifecycle</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#alternatives">Alternatives from the DTN literature</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Your friend is not here and there is no phone signal. So you write
+              the message, lock it in a box only your friend's key can open, and
+              hand the box to four people who are walking off in different
+              directions. None of them can open it. None of them knows who it is
+              for. If one of them bumps into your friend, they hand it over. If
+              they meet someone else carrying boxes, they share some of theirs.
+              After a day, everyone throws away any box they are still carrying.
+            </p>
+          </div>
+
+          <h2 id="dtn">Delay-tolerant networking</h2>
+          <p>
+            The internet assumes an end-to-end path exists at the moment you
+            send. DTN is the field that drops that assumption. It grew out of
+            interplanetary networking, where the round trip to Mars is between 6
+            and 44 minutes and the link is blocked whenever a planet is in the
+            way, and it turns out to describe a protest with no signal just as
+            well.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Internet</th><th>DTN</th></tr></thead>
+              <tbody>
+                <tr><td>Path</td><td>End to end, now</td><td>Store, carry, forward. A path exists over time, not at an instant.</td></tr>
+                <tr><td>Unit</td><td>Packet, milliseconds</td><td>Bundle, minutes to days</td></tr>
+                <tr><td>Custody</td><td>Routers do not store</td><td>Intermediate nodes take custody and hold</td></tr>
+                <tr><td>Latency</td><td>Bounded, predictable</td><td>Unbounded, unpredictable</td></tr>
+                <tr><td>Failure</td><td>Timeout and error</td><td>Wait longer. Non-delivery is expiry, not error.</td></tr>
+                <tr><td>Example</td><td>TCP</td><td>Bundle Protocol (RFC 9171), Airhop's courier</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The academic name for Airhop's setting is a
+            <strong>pocket switched network</strong>: nodes are carried by people,
+            movement is social rather than random, and encounters are the
+            resource. The two things that decide performance are how often nodes
+            meet, and how many copies of a message you are willing to make.
+          </p>
+
+          <h2 id="envelope">The envelope</h2>
+          <pre class="code">
+  COURIER_ENV (0x04) payload, TLV with u16 BE lengths
+
+    0x01  recipientTag   16 bytes   HMAC over the recipient's public key + day
+    0x02  expiry          8 bytes   Unix ms, u64 BE
+    0x03  ciphertext     variable   Noise X sealed, max 16 KiB
+    0x04  copies          1 byte    spray budget. OMITTED when copies == 1
+    0x05  prekeyID        4 bytes   v2 only: which one-time prekey this seals to
+
+  The packet itself:
+    ttl 7, SIGNED, HAS_RECIPIENT set to the COURIER, not the recipient
+</pre>
+          <p>
+            That last line is the one people get wrong. The packet's
+            <code>recipientID</code> names the <strong>courier being asked to
+            carry it</strong>, not the person the message is for. The person it
+            is for is identified only by the opaque 16 byte tag inside.
+          </p>
+          <p>Directed rather than broadcast, for three reasons:</p>
+          <ul>
+            <li>bitchat refuses any envelope not addressed to it.</li>
+            <li>The deposit quota is per depositor, so a broadcast would charge one deposit against every peer in range.</li>
+            <li>A broadcast tells everyone in earshot that this device is couriering, which is metadata worth not emitting.</li>
+          </ul>
+          <p>
+            It is still <em>flood-originated</em> as well as written down the
+            direct link, because a courier may be several hops away. The
+            recipient field stops relays from depositing it. But only a write
+            accepted onto that exact peer's own link counts as a handover: a
+            speculative flood toward a peer several hops away resolves false,
+            which is not a failure but the signal to keep carrying, since a
+            multi-hop send has nothing to acknowledge it.
+          </p>
+
+          <h2 id="tag">The recipient tag, and its flaw</h2>
+          <pre class="code">
+  epochDay = floor(unixSeconds / 86400)          as u32 BE
+
+  recipientTag = HMAC-SHA256(
+                    key = recipient's PUBLIC Noise static key,
+                    msg = "bitchat-courier-tag-v1" || epochDay_BE4
+                 )[0:16]
+</pre>
+          <p>
+            The intent is that a carrier can match a delivery without learning
+            who the envelope is for. When a peer announces, you compute their tag
+            for today, yesterday and tomorrow, and check whether anything in your
+            bag matches.
+          </p>
+          <p>
+            Three days rather than two, and this matters: the tag rotates on a UTC
+            epoch day while an envelope lives 24 hours, so anything carried across
+            midnight bears yesterday's tag, and a sender whose clock runs ahead
+            seals with tomorrow's. Checking only backwards silently loses mail
+            once a day. bitchat's <code>candidateTags</code> spans the same three
+            days for the same reason.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The tag is NOT unlinkable, and this must be said plainly</p>
+            <p>
+              The HMAC key is the recipient's <strong>public</strong> Noise
+              static key, which every announce broadcasts in the clear. So anyone
+              who has heard one announce can compute that peer's tags for any day,
+              past or future, and follow their mail across days.
+            </p>
+            <p>
+              This is inherited from bitchat rather than chosen. bitchat
+              documents the same flaw in its own implementation and notes that
+              its whitepaper's claim that couriers cannot link mail across days
+              does not hold. Airhop keeps the derivation byte for byte because
+              changing it unilaterally breaks courier interop with bitchat for no
+              gain: every carrier on both sides would have to change together.
+            </p>
+            <p>
+              Fixing it needs a v2 tag keyed on a <em>shared secret</em> rather
+              than a public key, agreed across implementations. Until then,
+              <strong>do not describe courier mail as unlinkable</strong>. What
+              it does provide is confidentiality (the carrier cannot read the
+              content) and non-attribution of the sender to the carrier.
+            </p>
+          </div>
+
+          <h2 id="spray">Spray and wait</h2>
+          <p>
+            The classic DTN question is how many copies to make. Two extremes
+            bound it:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Strategy</th><th>Copies</th><th>Delivery</th><th>Cost</th></tr></thead>
+              <tbody>
+                <tr><td>Direct delivery</td><td>1</td><td>Only if you personally meet the recipient</td><td>Minimal</td></tr>
+                <tr><td>Epidemic routing</td><td>Unbounded</td><td>Optimal, provably fastest</td><td>Every node ends up holding every message. Storage and airtime explode.</td></tr>
+                <tr><td><strong>Spray and wait</strong></td><td><strong>Bounded, L</strong></td><td>Close to epidemic for small L</td><td>Bounded by construction</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Spray and wait was published by Spyropoulos, Psounis and Raghavendra
+            in 2005 and is the standard bounded-copy scheme. It has two phases:
+            spray L copies into the crowd, then each holder waits for direct
+            contact with the destination. <strong>Binary spray</strong>, the
+            variant used here and proven optimal in the family, hands over half
+            the remaining budget on each courier-to-courier encounter.
+          </p>
+          <pre class="ascii">
+  SENDER seals ONCE and hands the SAME BYTES to up to 4 couriers,
+  each stamped with the FULL budget of 4.
+
+     A(4)          A(4)          A(4)          A(4)
+      │             │             │             │
+      ▼             ▼             ▼             ▼
+     B(4)          C(4)          D(4)          E(4)
+
+  B meets F, another eligible carrier. Binary spray:
+
+     B(4)  ──▶  gives F floor(4/2) = 2,  keeps 4-2 = 2
+     B(2)       F(2)
+
+  F meets G:
+
+     F(2)  ──▶  gives G floor(2/2) = 1,  keeps 1
+     F(1)       G(1)
+
+  A copy at 1 cannot spray. It is the end of its branch, and can only
+  be delivered directly to the recipient.
+</pre>
+          <div class="box">
+            <p class="box-title">Why the full budget goes to every courier</p>
+            <p>
+              Splitting the budget across couriers looks conservative and is not:
+              three couriers would get one copy each, a budget below two cannot
+              be sprayed at all, and the busier the room the less the mail
+              travels. The full budget to each is safe only because
+              <code>CourierStore.deposit</code> collapses identical ciphertext
+              and raises a budget only before the first spray, so copies merge
+              downward wherever carriers meet rather than multiplying. The two
+              rules belong together; neither is correct alone.
+            </p>
+          </div>
+          <h3>Three exclusions in the spray pass, each load bearing</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Exclusion</th><th>Without it</th></tr></thead>
+              <tbody>
+                <tr><td><code>copies &lt; 2</code></td><td>Nothing to halve. A carry-only copy is the end of its branch.</td></tr>
+                <tr><td><code>sprayedTo</code> set, once per peer</td><td>Announces arrive continuously, so a budget would decay 4 to 2 to 1 against one neighbour without ever reaching a new carrier.</td></tr>
+                <tr><td>The depositor</td><td>They handed us this envelope, so they demonstrably hold it. Spraying back spends half a budget on a hop that delivers nothing, and leaves a <em>sender</em> carrying their own outgoing mail as third-party mail.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            bitchat also excludes envelopes addressed <em>to</em> the peer being
+            sprayed. Here that is structural instead: the caller runs the
+            handover pass first, so anything for them has already been offered as
+            a delivery rather than as a spray.
+          </p>
+
+          <h3>Handover versus spray</h3>
+          <p>
+            Two distinct operations, in this order, never merged:
+          </p>
+          <ol>
+            <li>
+              <strong>Handover.</strong> Mail addressed to this peer. They are the
+              destination, so the copy carries no spray budget (<code>copies:
+              1</code>) and the envelope is retired once it lands.
+              Budget-independent: an envelope down to its last copy is exactly
+              the one a carrier standing next to the recipient must still hand
+              over.
+            </li>
+            <li>
+              <strong>Spray.</strong> Mail for somebody else, offered to them as
+              another carrier. Half the remaining budget, once per peer.
+            </li>
+          </ol>
+          <p>
+            Both are <strong>non-destructive</strong> until the transport
+            confirms. The store offers copies, the caller writes them, and only a
+            write accepted onto that peer's own link calls
+            <code>commitHandover</code> or <code>commitSpray</code>. Retiring
+            before then loses mail to a refused write, and refusals are ordinary
+            here: this runs from <code>onAnnounce</code>, when the link is
+            busiest with the announce, the prekey bundle and a gossip round, and a
+            full GATT queue answers with a refusal.
+          </p>
+          <p>
+            <code>commitSpray</code> re-checks every precondition rather than
+            trusting the offer, since the write is async and a concurrent spray or
+            expiry sweep may have moved the entry. <code>copies &gt; given</code>
+            is what stops a stale commit driving the budget to zero.
+          </p>
+
+          <h2 id="quotas">Quotas and the pool</h2>
+          <p>
+            Your phone is being asked to spend storage and battery on somebody
+            else's mail. The quotas decide how much of that you agree to.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Limit</th><th>Value</th><th>What it prevents</th></tr></thead>
+              <tbody>
+                <tr><td>Pool size</td><td>40 envelopes</td><td>Unbounded storage growth.</td></tr>
+                <tr><td>Verified-tier sub-cap</td><td>20 envelopes</td><td>Enough distinct verified strangers filling the pool between them and leaving no room for people you actually know.</td></tr>
+                <tr><td>Per-depositor quota, contact</td><td>5</td><td>One friend monopolising the bag.</td></tr>
+                <tr><td>Per-depositor quota, stranger</td><td>2</td><td>An unknown peer filling your storage.</td></tr>
+                <tr><td>Envelope size</td><td>16 KiB ciphertext</td><td>A single envelope eating the whole pool's worth of memory.</td></tr>
+                <tr><td>Envelope TTL</td><td>24 hours</td><td>Indefinite carriage.</td></tr>
+                <tr><td>Expiry slack</td><td>1 hour</td><td>Clock skew between two phones, and nothing more. An expiry past TTL plus slack is <strong>refused outright rather than clamped</strong>, so a sender that stamps longer does not get longer carriage, it gets none.</td></tr>
+                <tr><td>Spray budget ceiling</td><td>8</td><td><code>copies</code> is unauthenticated input deciding how often a carrier re-emits. An unclamped byte makes every carrier an amplifier for whoever claims 255.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Trust tiers</h3>
+          <p>
+            A depositor is a <strong>contact</strong> (larger quota) or
+            <strong>verified</strong> (smaller). Verified means the announce was
+            signature-checked and the peer ID matched its key, which is the
+            minimum bar for being charged a quota at all. An unknown depositor
+            gets nothing, because there is no key to charge against.
+          </p>
+          <p>
+            The depositor's identity is checked before the store is touched. The
+            quota is charged to <code>packet.senderID</code>, which is an
+            unauthenticated header field, so without a signature check any peer in
+            range could put a known peer's ID on an envelope and spend that peer's
+            allowance, or at the contact tier a friend's larger one.
+          </p>
+          <h3>Eviction</h3>
+          <pre class="code">
+  findEvictionCandidate(incoming tier):
+    1. the OLDEST VERIFIED envelope, whatever the arrival is
+    2. if none: only another CONTACT envelope may take a contact's slot
+    3. otherwise refuse the deposit
+</pre>
+          <p>
+            A verified arrival may never displace a contact's mail, because that
+            would let anyone who has merely announced push a friend's mail out of
+            a full pool. bitchat states the same rule.
+          </p>
+          <h3>Persistence</h3>
+          <p>
+            The bag is persisted to MMKV, because carriage spans hours and a
+            React Native process does not: backgrounding, an OEM battery manager
+            and a swipe away all end it, and an in-memory bag loses every
+            envelope this device promised to carry while the depositor's outbox
+            still believes a courier holds it.
+          </p>
+          <p>
+            MMKV rather than the keychain, because an envelope is
+            <em>somebody else's</em> ciphertext, sealed to a key this device does
+            not hold. It is wiped on panic all the same, since a bag of a
+            neighbour's mail is evidence this phone stood next to whoever
+            deposited it, and a recipient tag names who it is for to anyone who
+            heard that person announce.
+          </p>
+          <p>
+            On load, every row is re-validated field by field and the pool cap is
+            re-applied. This is read after an upgrade, a crash mid-write or a
+            restored partition, and a malformed row must cost one envelope rather
+            than the whole bag. A ceiling lowered in a later build must bind the
+            mail already on disk.
+          </p>
+
+          <h2 id="prekeys">One-time prekeys and forward secrecy</h2>
+          <p>
+            Sealing to a static key is the courier's main cryptographic weakness,
+            and prekeys are the fix.
+          </p>
+          <div class="grid two">
+            <div class="box bad">
+              <p class="box-title">v1: sealed to the static key</p>
+              <p>
+                Noise X to the recipient's long-lived X25519 key.
+                <strong>No forward secrecy.</strong> If that key is ever
+                compromised, every undelivered envelope ever sealed to it becomes
+                readable, including ones an adversary recorded off the air months
+                earlier.
+              </p>
+            </div>
+            <div class="box ok">
+              <p class="box-title">v2: sealed to a one-time prekey</p>
+              <p>
+                Noise X to a single-use X25519 key the recipient published in a
+                signed bundle. Once used and consumed, the private half is
+                deleted after a grace window, so compromising the long-lived key
+                later reveals nothing about that envelope.
+              </p>
+            </div>
+          </div>
+          <pre class="ascii">
+  PREKEY LIFECYCLE
+
+  LocalPrekeyStore (mine)                PeerPrekeyStore (theirs)
+  ─────────────────────                  ────────────────────────
+  generate a pool of X25519 keypairs      ingest a VERIFIED bundle
+  sign a bundle over the public halves      keyed on their Noise pub key
+  flood it as PREKEY_BUNDLE (0x24)          newer generatedAt replaces older
+  on every new link                         cap: 200 peers, oldest evicted
+
+  someone seals to prekey #7               assign() picks an UNUSED prekey
+  I open it with priv #7                     marks it used so the next
+  consume(7):                                 message picks a different one
+    move to a 48 HOUR GRACE window
+    (a second in-flight envelope sealed
+     to the same key must still open)
+    replenish the pool
+    emit a FRESH bundle, so senders
+    stop using the spent key
+
+  after 48 hours: the private key is DELETED. Forward secrecy achieved.
+</pre>
+          <p>
+            The bundle is signed over the Noise static public key plus the
+            prekeys plus a <code>generatedAt</code> counter, so a receiver can
+            confirm it belongs to the peer it claims and can order two bundles.
+            The prekey store is capped at 200 peers, matching the peer registry,
+            because bundles arrive by gossip and are therefore attacker-supplied
+            volume.
+          </p>
+          <div class="box warn">
+            <p class="box-title">The gap</p>
+            <p>
+              Prekey bundles are <strong>flooded on link-up but not reconciled
+              through gossip sync</strong> (bit 9 is unimplemented, chapter
+              <a href="12-gossip-sync.html">12</a>). So a device that arrives
+              after a bundle has already flooded cannot pull one from a peer that
+              still holds it, and a courier message sealed to that owner falls
+              back to their long-lived static key. The message is still delivered
+              and still encrypted. What is lost is forward secrecy for that
+              envelope, silently, with nothing in the UI to say so.
+            </p>
+          </div>
+
+          <h2 id="plaintext">What is inside, and the 255 byte cap</h2>
+          <p>
+            The sealed plaintext is a <strong>typed Noise payload</strong>, not
+            raw text. This is a compatibility requirement rather than a
+            preference: bitchat refuses any courier envelope whose plaintext is
+            not a private message, so a raw-text envelope is carried by the mesh
+            and then dropped by its recipient.
+          </p>
+          <pre class="code">
+  plaintext = 0x01 || PrivateMessagePacket
+
+  PrivateMessagePacket = 0x00 || len(messageID) || messageID
+                         0x01 || len(content)   || content
+
+  Both TLV lengths are ONE BYTE.
+  => messageID and content are each capped at 255 UTF-8 BYTES,
+     on all three implementations, and all three return nothing
+     rather than truncating.
+</pre>
+          <p>
+            A message too long to encode has no courier representation anywhere
+            and stays in the sender's outbox instead. Refusing is honest;
+            truncating or sealing something no recipient can read is not.
+          </p>
+          <p>
+            The message ID is what makes the rest work. Spray and wait
+            deliberately puts several copies on the mesh, each resealed by its
+            carrier with a fresh timestamp, so no envelope-derived identity can
+            collapse them. The recipient dedupes on the <em>sender's</em> ID, and
+            can acknowledge the message because it has one to name. Building the
+            id from the relaying carrier's clock instead gives four carriers four
+            identical bubbles for one message, and never collapses a courier copy
+            against a direct copy.
+          </p>
+          <p>
+            An earlier version of Airhop sealed bare UTF-8. Every envelope Airhop
+            sent was dropped by every bitchat recipient, and every bitchat
+            envelope Airhop received rendered a binary TLV as the message body,
+            while the store's own header claimed compatibility. These bytes are
+            now pinned by <code>courier-plaintext.test.ts</code>, and every
+            constant in this chapter is pinned in machine-readable form in
+            <code>docs/spec/courier-test-vectors.json</code>, which
+            <code>courier-vectors.test.ts</code> reads its expected values out of,
+            so drift between the spec and the code fails CI rather than shipping.
+          </p>
+
+          <h2 id="relay-drop">The relay drop</h2>
+          <p>
+            When the internet is available, the same sealed envelope is also
+            parked on Nostr relays as a <strong>kind 1401</strong> event, tagged
+            with the same recipient tag under <code>#x</code>, with a NIP-40
+            expiry.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Mesh copy</th><th>Relay drop</th></tr></thead>
+              <tbody>
+                <tr><td>Carried by</td><td>Up to 4 peers, sprayed onward</td><td>Relays</td></tr>
+                <tr><td>Spray budget</td><td>4</td><td><strong>1</strong>, always</td></tr>
+                <tr><td>Delivery condition</td><td>A carrier physically meets the recipient</td><td>The recipient subscribes to their own tag</td></tr>
+                <tr><td>Reported as</td><td>"Carried by a friend"</td><td><strong>Queued.</strong> Nobody carried it and it never touched the mesh.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The relay copy carries a budget of 1 because it is carry-only: it goes
+            to the recipient, not to another carrier, so it must never arrive with
+            a spray budget and start a second branch. The recipient collapses both
+            copies on the sender's message ID.
+          </p>
+          <p>
+            The subscription is rebuilt when the UTC day changes, because the tag
+            set it was built for has rotated.
+          </p>
+
+          <h2 id="dormant">Dormant, woken, delivered</h2>
+          <p>
+            A carried envelope does nothing at all until something wakes it.
+            There is exactly one trigger, and it is worth stating plainly
+            because it explains every question about when a courier moves.
+          </p>
+          <div class="box ok">
+            <p class="box-title">The one trigger</p>
+            <p>
+              <strong>An ANNOUNCE from any peer, over any transport.</strong>
+              <code>onAnnounce</code> calls <code>flushOutbox(peerID)</code> for
+              our own mail, then <code>sprayCourierTo(peerID)</code> for other
+              people's. There is no courier timer, no polling loop, and no
+              background scan of the bag. A phone carrying forty envelopes and
+              meeting nobody burns no cycles on them.
+            </p>
+          </div>
+          <pre class="ascii">
+  DORMANT                                    persisted in MMKV
+  ───────                                    survives app kill
+  nothing runs. no timer, no poll.           survives reboot
+        │
+        │  someone announces. anyone, over anything.
+        ▼
+  onAnnounce(peerID)
+        │
+        ├─ registry.get(peerID).noisePubKey ?      no  -> stop
+        │     we cannot compute their tag without it
+        │
+        ├─ compute THREE candidate tags
+        │     computeRecipientTag(peerPub, now)
+        │     computeRecipientTag(peerPub, now - 24h)
+        │     computeRecipientTag(peerPub, now + 24h)
+        │
+        ├─ 1. HANDOVER   offerHandover(tags)
+        │      envelopes whose tag matches: this peer is the
+        │      DESTINATION. no spray budget spent, envelope
+        │      retired once it lands. budget-independent, because
+        │      an envelope on its last copy is exactly the one a
+        │      carrier standing next to the recipient must hand over.
+        │
+        └─ 2. SPRAY      offerSpray(peerPub)
+               everything else, offered to them as another CARRIER.
+               half the remaining budget, once per peer.
+
+  Handover first, always. That is also why the spray pass needs no
+  "addressed to this peer" exclusion of its own: by then there are
+  none left.
+</pre>
+          <h3>How it knows the destination without knowing the destination</h3>
+          <p>
+            The carrier never learns who an envelope is for. It holds a
+            <em>recipient tag</em>, and it can only ever ask one question:
+            <em>does this tag match the tag I would compute for the peer
+            standing in front of me</em>. It computes that from the peer's
+            public Noise key, which it already has from their announce.
+          </p>
+          <div class="box warn">
+            <p class="box-title">Three days of tags, not one</p>
+            <p>
+              The tag is stamped by the <strong>sender</strong> at seal time and
+              rotates on the UTC epoch day, while an envelope lives 24 hours. So
+              an envelope carried across midnight bears
+              <strong>yesterday's</strong> tag, and a sender whose clock runs
+              ahead seals with <strong>tomorrow's</strong>. Checking only today
+              missed most of what a carrier actually held, including a device
+              carrying its own mail around instead of opening it.
+            </p>
+            <p>
+              Both the receive gate and the handover pass check all three, which
+              matches bitchat's <code>candidateTags</code> spanning the same
+              window.
+            </p>
+          </div>
+          <h3>How it picks a transport: it does not</h3>
+          <p>
+            This is the part that surprises people, and it is the whole payoff of
+            the link registry in chapter
+            <a href="14-peers-queues.html">14</a>.
+          </p>
+          <pre class="ascii">
+  sendCourierPayloadTo(payload, peerID)
+
+     build a COURIER_ENV packet, ttl 7, SIGNED,
+     recipientID = peerID          directed, never broadcast
+        │
+        ├─ floodRouter.originate(packet)
+        │     so a courier several hops away can still be reached
+        │
+        ├─ const link = this.links.linkFor(peerID)
+        │      ▲
+        │      └── THE ENTIRE TRANSPORT DECISION.
+        │          returns the best link this peer has, in
+        │          SEND_PREFERENCE order: wifi, lan, ble.
+        │          the courier code does not branch on kind,
+        │          does not know which one it got, and has no
+        │          transport-specific path anywhere in it.
+        │
+        ├─ link  -> links.send(link.id, bytes)   ->  TRUE if accepted
+        └─ none  -> links.broadcast(bytes)       ->  always FALSE
+
+  TRUE means the bytes went out over a link held to THAT EXACT PEER
+  and the transport accepted them. Only then is the envelope retired,
+  or the spray budget spent.
+
+  A speculative flood toward a peer several hops away resolves FALSE.
+  That is not a failure: it is the signal to keep carrying, because a
+  multi-hop send has nothing to acknowledge it. bitchat draws the same
+  line between handoverEnvelopes and envelopesForRemoteHandover.
+</pre>
+          <div class="box ok">
+            <p class="box-title">The consequence worth stating outright</p>
+            <p>
+              An envelope picked up over LAN on a hotspot, carried in a pocket
+              through a reboot, and delivered over Bluetooth in a different
+              building the next morning is an <strong>ordinary</strong> path, not
+              a special case. Nothing in the courier knows or cares which
+              transport an envelope arrived on or leaves on. Chapter
+              <a href="29-lan.html">29</a> traces exactly that scenario.
+            </p>
+            <p>
+              Nostr is the one exception, and it is a different mechanism rather
+              than a fourth link: a copy is also parked on relays as a kind 1401
+              drop, so delivery stops requiring a carrier to physically meet the
+              recipient. That copy carries <code>copies: 1</code>, because a
+              parked drop goes to the recipient rather than to another carrier
+              and must never arrive with a spray budget and start a second
+              branch.
+            </p>
+          </div>
+          <h3>Why a carrier only offers to peers it holds a link to</h3>
+          <p>
+            <code>courierCandidates()</code> is
+            <code>links.directPeers()</code> filtered to those with a known Noise
+            key. Not peers heard through the mesh, not contacts, not everyone in
+            the registry. Three reasons, all of them costs somebody else pays:
+          </p>
+          <ul>
+            <li>
+              bitchat refuses any envelope not addressed to it, so a broadcast is
+              wasted air on every interoperating client.
+            </li>
+            <li>
+              The deposit quota is per depositor, so a broadcast charges one
+              deposit against every peer in range at once.
+            </li>
+            <li>
+              A broadcast reveals to everyone in earshot that this device is
+              couriering, which is metadata the directed form does not leak.
+            </li>
+          </ul>
+
+          <h2 id="lifecycle">The whole lifecycle</h2>
+          <pre class="ascii">
+  SENDER                CARRIER B            CARRIER F        RECIPIENT
+  ──────                ─────────            ─────────        ─────────
+  no route to R
+     │
+  seal ONCE with Noise X
+    to R's prekey (or static)
+     │
+  build envelope: tag(R,today), expiry+24h, copies=4
+     │
+  directed COURIER_ENV to up to 4 connected peers
+     ├──────────────────▶ verify sender signature
+     │                    charge quota by tier
+     │                    dedupe identical ciphertext
+     │                    persist to MMKV
+     │
+     └── also publish kind 1401 to relays, copies=1
+                          │
+                          │  ... hours pass, B walks ...
+                          │
+                          │  B hears F announce
+                          ├─ handover pass: anything tagged for F?  no
+                          ├─ spray pass: give F floor(4/2)=2, keep 2
+                          │     commit ONLY after the write is accepted
+                          │
+                          │                     ... F walks ...
+                          │                     F hears R announce
+                          │                     ├─ tags for R: today,
+                          │                     │   yesterday, tomorrow
+                          │                     ├─ MATCH
+                          │                     └─ handover, copies=1
+                          │                          │
+                          │                          ▼
+                          │                    open with prekey priv
+                          │                    dedupe on sender's msgID
+                          │                    render in dm:<sender>
+                          │                    send DELIVERED receipt
+                          │                      over mesh AND Nostr
+                          │                    consume the prekey,
+                          │                      emit a fresh bundle
+                          │
+                          │  F retires the envelope on confirmation
+                          │  B still holds a copy; it expires at 24h
+</pre>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constant</th><th>Value</th><th>Source and reason</th></tr></thead>
+              <tbody>
+                <tr><td>Pool size</td><td>40</td><td>bitchat <code>CourierStore.Limits</code>. A carrier applies its own limits to envelopes it did not write, so anything Airhop exceeds is dropped by the other side and anything it fails to enforce is a slot someone else can take.</td></tr>
+                <tr><td>Verified sub-cap</td><td>20</td><td>Half the pool reserved so contacts cannot be crowded out.</td></tr>
+                <tr><td>Envelope TTL</td><td>24 h</td><td>bitchat <code>maxLifetimeSeconds</code>. Airhop once stamped 7 days and <strong>every envelope was silently dropped by every bitchat carrier</strong>.</td></tr>
+                <tr><td>Expiry slack</td><td>1 h</td><td>Clock skew only.</td></tr>
+                <tr><td>Ciphertext cap</td><td>16 KiB</td><td>The plaintext's 255 byte TLV caps content far lower, so this is a defensive bound rather than the operative one.</td></tr>
+                <tr><td>Initial copies</td><td>4</td><td>bitchat <code>courierInitialCopies</code>.</td></tr>
+                <tr><td>Max copies</td><td>8</td><td>bitchat <code>CourierEnvelope.maxCopies</code>. Clamped on decode.</td></tr>
+                <tr><td>Couriers per message</td><td>4</td><td>Distinct from the spray budget despite both being four: this bounds how many neighbours are asked to carry, that bounds how far each copy travels.</td></tr>
+                <tr><td>Prekey grace window</td><td>48 h</td><td>Twice the envelope TTL, so a second in-flight envelope sealed to the same key still opens.</td></tr>
+                <tr><td>Outbox TTL</td><td><strong>7 days</strong></td><td><strong>Airhop's one deliberate divergence.</strong> Third-party envelopes expire at 24 h to match the wire rule, so the sender's own queue is the only thing that can still deliver on a later encounter. A week covers people who do not meet daily. It costs nothing in airtime because retries are bounded by the 8-attempt cap rather than by the clock.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="alternatives">Alternatives from the DTN literature</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Scheme</th><th>How it decides</th><th>Verdict for Airhop</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Epidemic routing</strong> (Vahdat and Becker, 2000)</td>
+                  <td>Copy to every node you meet. Provably the fastest possible delivery.</td>
+                  <td>Unbounded storage and airtime. Every phone ends up holding every message in the crowd. Rejected everywhere for the same reason.</td>
+                </tr>
+                <tr>
+                  <td><strong>Spray and wait</strong> (2005)</td>
+                  <td>Bounded L copies, binary halving on encounter.</td>
+                  <td><strong>What Airhop uses.</strong> Bounded by construction, close to epidemic performance at small L, and needs no knowledge of the network.</td>
+                </tr>
+                <tr>
+                  <td><strong>PRoPHET</strong></td>
+                  <td>Track how often you meet each node and forward to peers with a higher delivery predictability for the destination.</td>
+                  <td>Better delivery in stable social networks. Requires maintaining an encounter history per peer, which is a privacy disaster: it is a record of everyone you have met and how often. bitchat lists encounter-history-informed routing as future work; Airhop should not take it without solving that.</td>
+                </tr>
+                <tr>
+                  <td><strong>MaxProp</strong></td>
+                  <td>Priority ordering by path likelihood and hop count.</td>
+                  <td>Same objection, plus complexity that is hard to make interoperable across implementations.</td>
+                </tr>
+                <tr>
+                  <td><strong>Bundle Protocol</strong> (RFC 9171)</td>
+                  <td>The IETF standard: custody transfer, endpoint IDs, convergence layers.</td>
+                  <td>Designed for named endpoints and administrative routing. Airhop's whole point is that there are no names to route on, only opaque tags.</td>
+                </tr>
+                <tr>
+                  <td><strong>Data mules / sneakernet</strong></td>
+                  <td>A dedicated carrier that physically moves between partitions.</td>
+                  <td>Not a protocol change, an operational one. A volunteer walking between two ends of a march <em>is</em> a data mule, and it works with no code at all.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="box">
+            <p class="box-title">If you removed the courier entirely</p>
+            <p>
+              DMs to anyone not currently reachable would sit in the sender's
+              outbox until either the recipient came back into radio range or the
+              internet returned. In a total blackout with a moving crowd, that is
+              a large fraction of all messages. The courier is what makes
+              "message someone across a march with no signal" work when they are
+              not within seven hops right now. It is also the single feature
+              furthest from anything a normal messenger does, and the hardest for
+              a user to reason about, which is why the UI says "carried by a
+              friend" rather than showing a tick.
+            </p>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Is courier mail unlinkable?</span>
+              <span class="a">No, and it is important to say so. The tag is an HMAC keyed on the recipient's <em>public</em> Noise key, which every announce broadcasts. Anyone who has heard one announce can compute that peer's tags for any day and follow their mail across days. What the courier does provide is confidentiality (the carrier cannot read the content), sender non-attribution to the carrier, and no visible link between sender and recipient inside the envelope. Fixing linkability needs a v2 tag keyed on a shared secret, agreed across implementations.</span>
+            </li>
+            <li>
+              <span class="q">Why does the sender seal once rather than per courier?</span>
+              <span class="a">So that identical ciphertext identifies the same envelope. That is what lets <code>deposit</code> collapse duplicates when two carriers meet, which is what keeps spray and wait a splitting scheme rather than a minting one. If each courier got its own encryption, every copy would be a distinct entry with its own budget and its own sprayed-to set, so one message could fill the bag and the mesh-wide copy count would grow on every encounter instead of shrinking.</span>
+            </li>
+            <li>
+              <span class="q">Why do handover and spray commit only after the write is accepted?</span>
+              <span class="a">Because this runs from <code>onAnnounce</code>, when the link is busiest with the announce, the prekey bundle and a gossip round, and a full GATT queue answers with a refusal. Retiring an envelope on intent rather than acceptance loses mail to an ordinary transient refusal. And a speculative flood at a peer several hops away resolves false, which is not a failure but the signal to keep carrying, since a multi-hop send has nothing to acknowledge it.</span>
+            </li>
+            <li>
+              <span class="q">Why three days of tags rather than one?</span>
+              <span class="a">The tag rotates on a UTC epoch day and an envelope lives 24 hours, so anything carried across midnight bears yesterday's tag. And a sender whose clock runs ahead across the boundary seals with tomorrow's, which is why the forward day is checked too. Checking only today silently loses mail once a day, and checking only backwards silently loses the clock-ahead case. bitchat spans the same three days.</span>
+            </li>
+            <li>
+              <span class="q">A device holds 40 envelopes. A contact deposits one more. What happens?</span>
+              <span class="a">The pool is full, so eviction runs. The oldest verified-tier envelope goes first, whatever the arrival is. If the pool is all contact-tier mail, then because the incoming envelope is also contact-tier it may displace the oldest one. Had the incoming envelope been from a stranger, it would have been refused instead, because letting a verified arrival displace a contact's mail would let anyone who has merely announced push a friend's mail out.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

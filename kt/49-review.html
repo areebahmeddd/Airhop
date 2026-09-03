@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 49: Engineering review. Is it doable, does it make sense, is it worth it. Findings and risks." />
+    <title>49 Engineering review · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 49 · Verdict</p>
+          <h1>Engineering review</h1>
+          <p class="kt-lede">
+            Written as if I were the CTO being asked three questions: is this
+            doable, does it make sense to do, and is it worth it. Then the findings
+            that would go in front of an auditor, in severity order.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#verdict">The verdict, up front</a></li>
+              <li><a href="#doable">Is it doable</a></li>
+              <li><a href="#sense">Does it make sense</a></li>
+              <li><a href="#worth">Is it worth it</a></li>
+              <li><a href="#excellent">What is genuinely excellent</a></li>
+              <li><a href="#drift">Finding class 1: documentation against code</a></li>
+              <li><a href="#gaps">Finding class 2: engineering gaps</a></li>
+              <li><a href="#risks">Risk register</a></li>
+              <li><a href="#blockers">Real blockers, and imagined ones</a></li>
+              <li><a href="#sequence">The sequence I would run</a></li>
+              <li><a href="#dayone">What I would tell a new maintainer on day one</a></li>
+            </ol>
+          </div>
+
+          <h2 id="verdict">The verdict, up front</h2>
+          <div class="grid two">
+            <div class="box ok">
+              <p class="box-title">Doable</p>
+              <p>
+                <strong>Yes, and largely done.</strong> The protocol work is real,
+                correct against a vendored reference, and tested to an unusually
+                high standard for a project of this size. The parts that are not
+                done are known and mostly not hard.
+              </p>
+            </div>
+            <div class="box ok">
+              <p class="box-title">Makes sense</p>
+              <p>
+                <strong>Yes.</strong> The mission is coherent, the architecture
+                follows from it, and the wire-compatibility decision is the single
+                smartest strategic choice in the project.
+              </p>
+            </div>
+            <div class="box warn">
+              <p class="box-title">Worth it</p>
+              <p>
+                <strong>Yes, with one condition.</strong> The engineering deserves
+                the credibility it is building. Right now the documentation
+                overstates what ships in several places, and that is the fastest
+                way to lose that credibility with exactly the audience that
+                matters.
+              </p>
+            </div>
+            <div class="box bad">
+              <p class="box-title">The one thing to fix first</p>
+              <p>
+                <strong>Close the gap between the README and the code.</strong>
+                Four features are presented as shipped and are not. A reviewer
+                who finds one assumes the rest of the claims are equally soft,
+                including the security ones, which are in fact sound.
+              </p>
+            </div>
+          </div>
+
+          <h2 id="doable">Is it doable</h2>
+          <p>
+            Mostly the question is already answered by the code existing. So the
+            useful version is: what is the residual technical risk.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Area</th><th>Assessment</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>The protocol core</strong></td>
+                  <td><span class="pill ok">solid</span> 200k lines of TypeScript with no native dependencies in <code>src/core/</code>, which means the wire format, both Noise patterns, the ratchet, gossip sync, the courier and the routing all run under jest with no device. The comments are unusually good: most non-obvious lines carry the reason, and several carry the bug that motivated them.</td>
+                </tr>
+                <tr>
+                  <td><strong>Cryptographic composition</strong></td>
+                  <td><span class="pill ok">sound, unaudited</span> Correct primitives (<code>@noble</code>, Cure53 audited), correct constructions, and the two most dangerous mistakes already found and fixed: seeding the ratchet from the public handshake hash, and accepting unsigned announces. Nothing in the composition looks wrong to me. That is not the same as an audit, and the project says so.</td>
+                </tr>
+                <tr>
+                  <td><strong>The single-codebase bet</strong></td>
+                  <td><span class="pill ok">paying off</span> bitchat's two native codebases drifted until an Android fragment size mismatch broke cross-platform messaging for months. Airhop has one implementation, so a protocol bug exists on both platforms or neither. The cost, a JavaScript bridge in the hot path, is not the bottleneck: the radio is.</td>
+                </tr>
+                <tr>
+                  <td><strong>Native layer</strong></td>
+                  <td><span class="pill ok">minimal and correct</span> Five modules, none of which knows what a packet is. The reconciler pattern in both radio controllers is the right shape and eliminates a whole class of one-shot-start bugs.</td>
+                </tr>
+                <tr>
+                  <td><strong>Testing</strong></td>
+                  <td><span class="pill ok">exceptional</span> See below. This is the strongest part of the project.</td>
+                </tr>
+                <tr>
+                  <td><strong>Scale above the low tens</strong></td>
+                  <td><span class="pill warn">unknown</span> 25 phones converge. 200 is untested, and the mitigation is documented and absent.</td>
+                </tr>
+                <tr>
+                  <td><strong>Hardware behaviour</strong></td>
+                  <td><span class="pill warn">unproven</span> BLE timing, MTU on real silicon, OEM battery managers, relay hardware, real Tor circuits. All modelled from documentation.</td>
+                </tr>
+                <tr>
+                  <td><strong>iOS release pipeline</strong></td>
+                  <td><span class="pill warn">manual</span> CI compiles an unsigned Release build, but distribution credentials do not exist, so the shipped <code>.ipa</code> is produced by hand from Xcode. Android is automated end to end.</td>
+                </tr>
+                <tr>
+                  <td><strong>Maintainer bus factor</strong></td>
+                  <td><span class="pill bad">one</span> Independently built and maintained by one person. This is the largest non-technical risk by some distance.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="sense">Does it make sense</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Is the problem real?</td>
+                  <td><strong>Yes.</strong> National internet shutdowns, disaster infrastructure failure and congested cells during mass gatherings are all routine. Every mainstream messenger has an invisible dependency on a company's servers, an ISP's network and DNS, and all three are removed regularly.</td>
+                </tr>
+                <tr>
+                  <td>Is the architecture the right shape for it?</td>
+                  <td><strong>Yes.</strong> Offline first with the internet as an extension is the correct direction of dependency, and it is enforced by design rather than intended. The one rule, that layer 3 enhances layer 2 and never enables it, resolves most design arguments.</td>
+                </tr>
+                <tr>
+                  <td>Is flooding the right routing?</td>
+                  <td><strong>Yes.</strong> Every routing protocol assumes the topology can be modelled and kept current. When the nodes are people turning around and putting phones in pockets, that assumption fails, and a route table is also an attack surface and a privacy leak. Controlled flooding gives up optimality for robustness, which is the right trade here.</td>
+                </tr>
+                <tr>
+                  <td>Is bitchat compatibility worth its constraints?</td>
+                  <td><strong>Emphatically yes, and it is the smartest decision in the project.</strong> The honest weakness of any phone mesh is user density, and sharing a wire protocol doubles the effective user base at zero cost. It constrains the file caps, the courier expiry, the Nostr cipher, the packet registry and the padding rules, and every one of those constraints is worth accepting for that.</td>
+                </tr>
+                <tr>
+                  <td>Does the payment feature belong?</td>
+                  <td><strong>Yes, though it is the most debatable.</strong> Settling a bill in a dead zone is a real need and Cashu is the only mechanism that works offline. It also brings a third-party library, a trusted party, bearer secrets on disk, and an entire class of "did the money move" states. It is correctly marked optional.</td>
+                </tr>
+                <tr>
+                  <td>Does live voice belong?</td>
+                  <td><strong>Yes.</strong> At 2 KiB/s it is 11 percent of one link, so it is nearly free, and in the target scenarios (a march, a disaster site) push-to-talk is more useful than typing.</td>
+                </tr>
+                <tr>
+                  <td>Do the social bridges belong?</td>
+                  <td><span class="pill warn">not yet</span> Airhop already has an internet layer that is strictly better on every privacy axis. The bridge buys distribution rather than capability. Chapter <a href="48-fediverse.html">48</a>.</td>
+                </tr>
+                <tr>
+                  <td>Does the AI assistant belong?</td>
+                  <td><span class="pill warn">questionable</span> On-device inference with nothing leaving the phone is philosophically consistent, and a 1 to 3 billion parameter model on a phone in a disaster is of genuinely marginal use. It is a large amount of work and bundle for a feature nobody in the target scenario is asking for.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="worth">Is it worth it</h2>
+          <p>
+            Worth it to whom, and against what. Three framings, because they give
+            different answers.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Framing</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>As a product</strong></td>
+                  <td><span class="pill warn">conditional</span> The addressable moment is narrow: it is used when everything else fails. Retention in normal conditions will be poor, because in normal conditions Signal is better. That is fine if the goal is to be installed <em>before</em> it is needed, and it makes distribution the hardest problem, not engineering.</td>
+                </tr>
+                <tr>
+                  <td><strong>As infrastructure</strong></td>
+                  <td><span class="pill ok">clearly yes</span> Every additional compatible node makes the whole mesh better, including bitchat's. Two implementations of one protocol is healthier than one, and the conformance harness is a contribution to both.</td>
+                </tr>
+                <tr>
+                  <td><strong>As an engineering artefact</strong></td>
+                  <td><span class="pill ok">yes</span> The multi-device simulation, the reasoning density in the comments, and the willingness to document a project's own flaws are all above the norm for this class of project. It is a credible portfolio of judgement, not just of code.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">The one condition</p>
+            <p>
+              This project's currency is credibility. It is asking people to trust
+              it in situations where being wrong has real consequences, without an
+              external audit, on the strength of its own documentation. That
+              documentation is unusually honest in the places that are hard (the
+              courier tag is not unlinkable, Tor use is visible, peer IDs do not
+              rotate) and overstates in places that are easy to check (four features
+              presented as shipped that are not).
+            </p>
+            <p>
+              A reviewer who finds one overstatement discounts everything else,
+              including the security claims, which are sound. Fixing this costs an
+              afternoon and is the highest return work available.
+            </p>
+          </div>
+
+          <h2 id="excellent">What is genuinely excellent</h2>
+          <ol>
+            <li>
+              <strong>The multi-device simulation.</strong> Twenty isolated copies
+              of the app in one process via <code>jest.isolateModules</code>, on a
+              single fake clock, with a radio fabric that models discovery latency
+              and the backgrounded-iPhone asymmetry, asserting properties rather
+              than outcomes. Nothing in production code had to change to allow it.
+              I have seen commercial teams with far more resources ship a mesh
+              product with nothing comparable.
+            </li>
+            <li>
+              <strong>The bitchat actor.</strong> A node written to the other
+              project's rules, whose job is to disagree when Airhop is wrong. This
+              is the difference between claiming compatibility and testing it, and
+              it caught at least four silent interop failures.
+            </li>
+            <li>
+              <strong>Conformance tests that parse the vendored source.</strong>
+              Reading <code>maxPayloadBytes</code> out of bitchat's Swift and
+              failing if Airhop's caps stop fitting, and failing if their packet
+              type allocation comes within 16 of Airhop's range. That turns
+              "remember to check" into a red build.
+            </li>
+            <li>
+              <strong>The reasoning density in comments.</strong> Most non-obvious
+              lines carry the reason, and many carry the specific bug that motivated
+              them. The panic wipe, the courier store, the fragment manager and the
+              packet codec read like design documents. This is the single biggest
+              factor in how quickly a new maintainer becomes productive.
+            </li>
+            <li>
+              <strong>Honesty as an engineering practice.</strong>
+              <code>ChannelSendResult</code> represents "reached nobody".
+              <code>PanicWipeResult</code> reports whether the keys actually went.
+              Offline ecash is stored as unverified. DLEQ reports "unchecked"
+              rather than "valid". The Tor banner never over-claims. These are type
+              signatures, not copy, and that is what makes them hold.
+            </li>
+            <li>
+              <strong>Ordering as a security property.</strong> Several defences
+              are correct only because of the order they run in: the group creator
+              pin checked before the removal branch, LEAVE verified before the relay
+              decision, the fragment size check before the assembly table is
+              touched, the Tor gate closed before the claim is lowered. Someone
+              thought carefully about each.
+            </li>
+            <li>
+              <strong>The i18n work.</strong> Bidi isolation done once in
+              <code>interpolate</code>, Unicode word boundaries for mentions, NFC
+              normalisation at the wire boundary, nine hand-written plural rules
+              verified against Node's ICU, and the rule that nothing on the wire
+              carries a language. Most products treat localisation as a
+              presentation concern; this treats it as correctness, correctly.
+            </li>
+          </ol>
+
+          <h2 id="drift">Finding class 1: documentation against code</h2>
+          <div class="box bad">
+            <p class="box-title">The most important findings in this chapter, because they are the cheapest to fix</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Claim</th><th>Reality</th><th>Where the claim appears</th><th>Severity</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>D1</td>
+                  <td><strong>"LAN mesh: run the whole mesh over a shared WiFi network, discovered by mDNS"</strong>, listed under <strong>Built-in Features</strong></td>
+                  <td><strong>Resolved.</strong> Shipped as <code>_airhop-lan-v1._tcp</code> with native modules on both platforms, a reconciler, a pure dial policy and a simulation fabric. Chapter <a href="29-lan.html">29</a>.</td>
+                  <td>README Built-in Features; ARCHITECTURE section 3; the comparison table lists mDNS among Airhop's transports</td>
+                  <td><span class="pill ok">closed</span></td>
+                </tr>
+                <tr>
+                  <td>D2</td>
+                  <td><strong>iOS MultipeerConnectivity as a shipped same-platform fast path</strong>, including an <code>AirhopMCModule</code> row in the native modules table</td>
+                  <td>Written, never worked on a device, <strong>removed</strong>. <code>PROGRESS.md</code> line 115 says so accurately. The source comment in <code>NativeAirhopWiFi.ts</code> documents the two fatal defects.</td>
+                  <td>README stack table and transport notes; ARCHITECTURE sections 3 and 12; VISION; GLOSSARY; landing FAQ; landing architecture page</td>
+                  <td><span class="pill bad">high</span></td>
+                </tr>
+                <tr>
+                  <td>D3</td>
+                  <td><strong>"Local assistant: on-device inference answers questions with zero network calls"</strong>, under Optional Features. Also "offline AI" in the opening paragraph.</td>
+                  <td>Not implemented. No <code>src/features/ai/</code>, no <code>src/core/ai/</code>, no inference dependency in <code>package.json</code>. It is a v1.1.0 roadmap item with every box unchecked.</td>
+                  <td>README lines 43 and 92</td>
+                  <td><span class="pill bad">high</span></td>
+                </tr>
+                <tr>
+                  <td>D4</td>
+                  <td><strong>AT Protocol and ActivityPub bridges</strong>, under Optional Features</td>
+                  <td>Not implemented. v1.2.0 roadmap, every box unchecked.</td>
+                  <td>README lines 93 and 94</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+                <tr>
+                  <td>D5</td>
+                  <td><strong>Platforms: "iOS, Android, Desktop, Web, CLI"</strong> in the comparison table, against bitchat's "iOS, Android"</td>
+                  <td>Desktop, web and CLI are roadmap v1.4 to v1.7. The table compares shipped competitors against Airhop's roadmap in the same column.</td>
+                  <td>README comparison table</td>
+                  <td><span class="pill bad">high</span> This is the one a hostile reader finds first.</td>
+                </tr>
+                <tr>
+                  <td>D6</td>
+                  <td><strong>Fanout subset of <code>ceil(sqrt(n))</code></strong>, listed as a routing constant</td>
+                  <td>Not implemented. <code>relayPacket</code> writes to every non-ingress link.</td>
+                  <td>PROTOCOLS section 4</td>
+                  <td><span class="pill warn">medium</span> Also a real engineering gap, see G1.</td>
+                </tr>
+                <tr>
+                  <td>D7</td>
+                  <td>Version reported as <strong>v1.0.0</strong> in PROGRESS and <code>package.json</code></td>
+                  <td>The changelog shows v1.0.2.</td>
+                  <td>PROGRESS, package.json</td>
+                  <td><span class="pill">low</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The fix</p>
+            <p>
+              Not deletion. Add a <strong>Status</strong> column to the README
+              feature tables, with <em>shipped</em>, <em>planned (vX.Y)</em> and
+              <em>removed</em>. Split the comparison table's platform column into
+              "shipping" and "planned", or list only what ships. Correct the
+              MultipeerConnectivity references in the four documents and two landing
+              pages. Say "offline AI is planned for v1.1.0" in the opening
+              paragraph.
+            </p>
+            <p>
+              A roadmap is not dishonest. Presenting a roadmap in a table headed
+              "Built-in Features" is.
+            </p>
+          </div>
+
+          <h2 id="gaps">Finding class 2: engineering gaps</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Gap</th><th>Impact</th><th>Effort</th><th>Severity</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>G1</strong></td>
+                  <td><strong>Full fanout instead of subsetting.</strong> Every node relays to every non-ingress link.</td>
+                  <td>Transmissions per message grow with the number of edges. Fine at 25 phones, unknown at 200, and the failure is silent: writes get refused, fragments drop, delivery probability falls with nothing logging. Gossip sync already provides the repair mechanism that makes subsetting safe.</td>
+                  <td>Medium. bitchat's algorithm is known and the sync safety net exists.</td>
+                  <td><span class="pill bad">high</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G2</strong></td>
+                  <td><strong>Prekey bundles not reconciled through gossip sync</strong> (bit 9).</td>
+                  <td>A device arriving after a bundle has flooded cannot pull one, so courier envelopes silently fall back to sealing against the long-lived static key. <strong>Forward secrecy is lost with nothing in the UI to say so.</strong> The README specifically advertises courier mail as "sealed to a one-time prekey for forward secrecy".</td>
+                  <td>Low. The bit exists in bitchat, the store exists here, the sync framework exists here.</td>
+                  <td><span class="pill bad">high</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G3</strong></td>
+                  <td><strong>No Tor bridges or pluggable transports.</strong></td>
+                  <td>In a country that blocks Tor the feature does not work at all; in one that monitors, enabling it is itself a signal. This is the largest privacy gap against the stated threat model. bitchat has it too.</td>
+                  <td>High. Needs pluggable transport support in the vendored Arti build plus a bridge acquisition path.</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G4</strong></td>
+                  <td><strong>Android depends on Orbot rather than embedding Arti.</strong> <span class="pill ok">closed</span></td>
+                  <td><strong>Resolved.</strong> Arti is now embedded on both platforms from one Rust crate, with one lifecycle, one status word and one set of return codes. The Orbot detection path is gone. Chapter <a href="25-tor.html">25</a>.</td>
+                  <td>Medium to high. A native integration, but there is a working reference.</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G5</strong></td>
+                  <td><strong>Nostr DMs have no forward secrecy.</strong></td>
+                  <td>Static ECDH between two long-lived identities: compromise either key and every archived gift wrap between them is readable. Inherited from NIP-17 and bitchat's cipher and not fixable unilaterally, but "end to end encrypted" reads stronger than it is.</td>
+                  <td>Not fixable alone. Documentable today.</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G6</strong></td>
+                  <td><strong>Private channel keys never rotate</strong> and cannot be revoked.</td>
+                  <td>One symmetric key travels in the invite link with no roster and no member cap. Anyone who ever obtains it reads everything they can get hold of, and there is no way to remove someone. This is a deliberate trade for unbounded membership, and it is not stated as plainly as the courier tag flaw is.</td>
+                  <td>Medium. Epoch rotation exists for groups and could be adapted.</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G7</strong></td>
+                  <td><strong>No key rotation or revocation anywhere.</strong></td>
+                  <td>A compromised identity can only be abandoned. There is no "this key is retired" message, so contacts keep a dead pin with no signal.</td>
+                  <td>High. It interacts with TOFU pinning, courier tags, the outbox and contact storage.</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G8</strong></td>
+                  <td><strong>Scheduled relays are not cancelled when a duplicate arrives.</strong></td>
+                  <td>The timer map exists but the receive path drops duplicates before reaching cancellation, so the relay fires anyway. Wasted airtime in exactly the dense case where jitter is deliberately long. bitchat cancels.</td>
+                  <td><strong>Low.</strong> The machinery is already there.</td>
+                  <td><span class="pill warn">medium</span> Best effort-to-value ratio on this list.</td>
+                </tr>
+                <tr>
+                  <td><strong>G9</strong></td>
+                  <td><strong>WiFi Aware shares the Bluetooth paced queue.</strong></td>
+                  <td>A 250 Mbps path runs at 18 KiB/s. The 25 ms pacing is a Bluetooth requirement, not a protocol one, so the fast path currently buys link diversity rather than speed.</td>
+                  <td>Low to medium.</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G10</strong></td>
+                  <td><strong>The mesh bridge covers one geohash-6 cell only.</strong></td>
+                  <td>Two islands a few hundred metres apart on opposite sides of a cell boundary never meet, and boundaries do not follow streets. Documented as a follow-up.</td>
+                  <td>Low. Subscribe to the eight neighbouring cells.</td>
+                  <td><span class="pill">low</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G11</strong></td>
+                  <td><strong>Relay hardware never run against hardware.</strong></td>
+                  <td>Simulated against a bare repeater only. A v1.3.0 roadmap item.</td>
+                  <td>Low, once a node exists.</td>
+                  <td><span class="pill">low</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G12</strong></td>
+                  <td><strong>Compression parity unverified against Apple's encoder.</strong></td>
+                  <td>Verified against zlib 1.3.1, which matches Android. If Apple's differs, signature verification of Airhop packets on iOS bitchat could fail. The mitigation (reusing the received wire form) means it would only affect locally originated packets.</td>
+                  <td>Low, and needs Apple hardware.</td>
+                  <td><span class="pill">low</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G13</strong></td>
+                  <td><strong>Gateway recovery time is unbounded and unasserted.</strong></td>
+                  <td>N04 records the recovery leg but does not bound it, so how long a gateway takes to become useful again after losing signal is unmeasured.</td>
+                  <td>Low.</td>
+                  <td><span class="pill">low</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G14</strong></td>
+                  <td><strong><code>mesh-service.ts</code> is 6,349 lines.</strong></td>
+                  <td>Defensible as a composition root, and it is the file most in need of a second pass. Twenty packet handlers, two radios and six subsystems in one class is a lot of surface for one person to hold, and it is the biggest onboarding cost for a second maintainer.</td>
+                  <td>Medium, and risky. I would not do it without a reason.</td>
+                  <td><span class="pill">low</span></td>
+                </tr>
+                <tr>
+                  <td><strong>G15</strong></td>
+                  <td><strong>No 100+ node scenario.</strong></td>
+                  <td>The honest answer to "does it work in a crowd of 200" is currently "we do not know". Adding the scenario turns that into a number and gives G1 a before-and-after measurement.</td>
+                  <td>Low. The harness supports it.</td>
+                  <td><span class="pill warn">medium</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="risks">Risk register</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Risk</th><th>Likelihood</th><th>Impact</th><th>Mitigation</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Bus factor of one</strong></td><td>Certain</td><td><strong>Severe</strong></td><td>The comment quality is the real mitigation and it is a good one. Beyond that: a second maintainer, or at minimum a documented handover. This manual is part of that.</td></tr>
+                <tr><td><strong>No external audit</strong></td><td>Current state</td><td>High</td><td>Planned for v1.9.0. Until then the warning in the README is the correct posture and should not be softened.</td></tr>
+                <tr><td><strong>Nobody else has it installed</strong></td><td>High</td><td>High</td><td>bitchat wire compatibility, which is the strongest available answer. Relay hardware for the sparse case.</td></tr>
+                <tr><td><strong>Crowd-scale failure</strong></td><td>Medium</td><td>High</td><td>G1 and G15.</td></tr>
+                <tr><td><strong>iOS background BLE restrictions tighten</strong></td><td>Medium</td><td>High</td><td>Nothing in app code. A platform risk shared with bitchat and every competitor.</td></tr>
+                <tr><td><strong>OEM battery managers</strong></td><td>High</td><td>Medium</td><td>Not fixable. The battery optimization screen offers a per-manufacturer route to the exemption setting.</td></tr>
+                <tr><td><strong>bitchat changes the wire format</strong></td><td>Low</td><td>High</td><td>The conformance tests parse their source, so drift fails CI rather than shipping. This is the right control.</td></tr>
+                <tr><td><strong>A mint disappears with user funds</strong></td><td>Medium</td><td>Medium</td><td>Per-mint balances, no default mint, and the trust boundary stated. Real, and correctly framed as the user's choice.</td></tr>
+                <tr><td><strong>App store removal</strong></td><td>Low to medium</td><td>High</td><td>The Android APK and AAB are built and signed by CI, so direct distribution is possible. iOS has no equivalent path.</td></tr>
+                <tr><td><strong>A crypto library regression</strong></td><td>Low</td><td>Severe</td><td>Pinned versions, lockfiles, and audited upstreams. Test vectors would catch a behaviour change.</td></tr>
+                <tr><td><strong>Reputational damage from overstated claims</strong></td><td><strong>High</strong></td><td>High</td><td>D1 to D7. The cheapest risk on this table to eliminate.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="blockers">Real blockers, and imagined ones</h2>
+          <div class="grid two">
+            <div class="box bad">
+              <p class="box-title">Genuinely impossible</p>
+              <ul>
+                <li><strong>Cross-platform high bandwidth.</strong> Android WiFi Aware and Apple's AWDL are different protocols with no bridge. Apple's iOS 26 Wi-Fi Aware framework could change this, at the cost of an iOS 26 floor.</li>
+                <li><strong>Live video.</strong> An order of magnitude over the BLE link budget, and no cross-platform fast path to fall back on. Packet type <code>0x30</code> was specified and retired.</li>
+                <li><strong>Offline double-spend prevention.</strong> Only the mint knows whether a proof is spent, and only over the network.</li>
+                <li><strong>Discovering a backgrounded iPhone from Android.</strong> CoreBluetooth moves the UUID into the overflow area. No application-side fix exists.</li>
+                <li><strong>Push notifications without a push server.</strong> And a push server is a party that knows who is messaged and when.</li>
+                <li><strong>Raising the file cap.</strong> bitchat-iOS refuses silently past ~1.13 MiB, and Android allows 10 MiB, so there is no cross-platform number.</li>
+                <li><strong>Hiding that Tor is in use, without bridges.</strong></li>
+                <li><strong>Making a mesh work with nobody in it.</strong> Hardware is the only answer.</li>
+              </ul>
+            </div>
+            <div class="box ok">
+              <p class="box-title">Hard but not blocked</p>
+              <ul>
+                <li><strong>Peer ID rotation.</strong> Breaks the direct-link rule, courier tags, contact pinning and the outbox at once. bitchat has a design document and has not shipped it. Solvable with coordination.</li>
+                <li><strong>An unlinkable courier tag.</strong> Needs a v2 tag keyed on a shared secret, agreed across implementations. Purely a coordination problem.</li>
+                <li><strong>Forward secrecy for Nostr DMs.</strong> Needs a NIP or a bitchat-side change.</li>
+                <li><strong>The LAN transport.</strong> Genuinely straightforward, and the highest-value unshipped transport work: cross-platform, needs no radio the phone might lack, carries the whole protocol.</li>
+                <li><strong>Arti on Android.</strong> There is now a working reference.</li>
+                <li><strong>Fanout subsetting.</strong> A known algorithm with the safety net already running.</li>
+              </ul>
+            </div>
+          </div>
+
+          <h2 id="sequence">The sequence I would run</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Phase</th><th>Work</th><th>Rationale</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Now, one afternoon</strong></td>
+                  <td>D1 to D7. Add a Status column, correct the MultipeerConnectivity references, fix the comparison table, fix the fanout constant in PROTOCOLS or implement it.</td>
+                  <td>Highest return on this list. It costs almost nothing and it protects every other claim the project makes.</td>
+                </tr>
+                <tr>
+                  <td><strong>Next, one week</strong></td>
+                  <td>G8 (relay cancellation), G2 (prekey sync bit 9), G15 (a 100 and 200 node scenario).</td>
+                  <td>All three are small, all three are measurable, and G2 closes a gap between an advertised security property and the delivered one.</td>
+                </tr>
+                <tr>
+                  <td><strong>Then, the release after</strong></td>
+                  <td>G1 (fanout subsetting), measured against the scenario from G15.</td>
+                  <td>The most significant scaling item, now with a before-and-after number.</td>
+                </tr>
+                <tr>
+                  <td><strong>Then</strong></td>
+                  <td>G9 (lift the pacing on WiFi links), G10 (neighbouring cells for the bridge), G13 (bound gateway recovery).</td>
+                  <td>Direct user-visible improvements with contained risk.</td>
+                </tr>
+                <tr>
+                  <td><strong>v1.3.0, as planned</strong></td>
+                  <td>Relay hardware against real Bitle nodes. G11.</td>
+                  <td>The only way to find the hundred practical details a simulation cannot.</td>
+                </tr>
+                <tr>
+                  <td><strong>Before v1.9.0</strong></td>
+                  <td>G4 (Arti on Android), then G3 (bridges).</td>
+                  <td>The largest privacy gaps against the stated threat model. Do them before the audit so the audit covers the intended design.</td>
+                </tr>
+                <tr>
+                  <td><strong>v1.9.0</strong></td>
+                  <td>The external audit, as planned.</td>
+                  <td>The single thing that would most change this project's standing.</td>
+                </tr>
+                <tr>
+                  <td><strong>Deprioritise</strong></td>
+                  <td>v1.1.0 AI, v1.2.0 social bridges, v1.4 to v1.7 new platforms.</td>
+                  <td>None serves the mission the way the items above do. Web and CLI in particular add surface without adding mesh nodes, since a browser cannot join a BLE mesh at all.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="dayone">What I would tell a new maintainer on day one</h2>
+          <ol>
+            <li>
+              <strong>Read the comments.</strong> They are not decoration. Most
+              non-obvious lines carry the reason, and many carry the bug that
+              motivated them. Changing a line whose comment explains why it is that
+              way is how a fixed bug returns.
+            </li>
+            <li>
+              <strong>The wire format is not yours.</strong> Every shared constant
+              is a contract with two other implementations. Every silent
+              interoperability failure in this project's history came from changing
+              one in good faith for a defensible local reason.
+            </li>
+            <li>
+              <strong>Never run <code>npx expo prebuild</code>.</strong> It deletes
+              every native module.
+            </li>
+            <li>
+              <strong>Never rename a keychain item, an HKDF separator, or an MMKV
+              partition id.</strong> They are addresses, not labels. Renaming
+              orphans user data and, for a keychain item, leaves a secret the panic
+              wipe can no longer reach.
+            </li>
+            <li>
+              <strong>Assume every packet is hostile.</strong> Anything reachable
+              from the receive path is attacker-controlled. Every collection needs
+              a cap, every length needs a bounds check, and a malformed frame must
+              return null rather than throw.
+            </li>
+            <li>
+              <strong>Never claim more than you know.</strong> If a new state can
+              be uncertain, make the type say so. That principle is why the delivery
+              states, the wipe result and the DLEQ result are shaped the way they
+              are.
+            </li>
+            <li>
+              <strong>Run the simulation before and after any protocol change.</strong>
+              And if a scenario cannot be written against the device control
+              surface, that is a finding about the app rather than a gap in the
+              harness.
+            </li>
+            <li>
+              <strong>When in doubt, do what bitchat does.</strong> Principle 7
+              exists because it has been right every time so far.
+            </li>
+          </ol>
+          <div class="box ok">
+            <p class="box-title">Closing</p>
+            <p>
+              This is a serious piece of engineering built by one person in their
+              spare time, on top of a well-chosen foundation, with a level of
+              testing and self-documentation that most funded teams do not reach.
+              The protocol work is correct, the security reasoning is sound, and
+              the places where it is weak are almost all places where it says so
+              first.
+            </p>
+            <p>
+              The gap between what the code does and what the README says it does
+              is the only thing in this review that is both easy to fix and
+              actively costing the project something. Fix that, ship the four small
+              gaps, get the audit, and this stands on its own.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

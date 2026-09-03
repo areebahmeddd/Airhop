@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 08: Bluetooth Low Energy. GAP, GATT, ATT, advertising, MTU, dual role, platform quirks." />
+    <title>08 Bluetooth Low Energy · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 08 · The physical layer</p>
+          <h1>Bluetooth Low Energy</h1>
+          <p class="kt-lede">
+            BLE was designed for a heart rate strap to send a number to a phone
+            once a second on a coin cell. Airhop uses it to run a
+            multi-hop encrypted network. Most of the surprising constants in the
+            protocol come from that mismatch.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#not-classic">BLE is not Bluetooth Classic</a></li>
+              <li><a href="#stack">The stack: GAP, GATT, ATT</a></li>
+              <li><a href="#roles">The dual role trick</a></li>
+              <li><a href="#advertising">Advertising and scanning</a></li>
+              <li><a href="#connection">Connecting</a></li>
+              <li><a href="#mtu">MTU, and the 512 byte ceiling</a></li>
+              <li><a href="#throughput">Where 18 KiB/s comes from</a></li>
+              <li><a href="#airhop-use">How Airhop uses all of this</a></li>
+              <li><a href="#platform">Platform differences that hurt</a></li>
+              <li><a href="#power">Power and the duty cycle</a></li>
+              <li><a href="#failures">Failure modes seen in the field</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Bluetooth Low Energy is a way for two devices to talk that uses
+              very little battery. It works in two steps. First, a device shouts
+              its name into the air every so often, and other devices listen for
+              shouts. That is how they find each other. Second, once two devices
+              have found each other, they agree to whisper directly, taking
+              turns, on a schedule. Airhop makes every phone shout and listen at
+              the same time, so all the phones in a room end up connected to
+              each other, and a message can be passed along the chain.
+            </p>
+          </div>
+
+          <h2 id="not-classic">BLE is not Bluetooth Classic</h2>
+          <p>
+            They share a name and a band and nothing else. Confusing them is the
+            most common source of wrong assumptions.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Bluetooth Classic (BR/EDR)</th><th>Bluetooth Low Energy</th></tr></thead>
+              <tbody>
+                <tr><td>Introduced</td><td>1999</td><td>2010, in Bluetooth 4.0</td></tr>
+                <tr><td>Designed for</td><td>Continuous streams: audio, file transfer, serial links</td><td>Tiny, infrequent messages from battery devices</td></tr>
+                <tr><td>Throughput</td><td>1 to 3 Mbps</td><td>0.125 to 2 Mbps on paper, far less in practice</td></tr>
+                <tr><td>Power while connected</td><td>Tens of milliwatts, continuous</td><td>Microwatts average, because the radio is off between connection events</td></tr>
+                <tr><td>Pairing</td><td>Usually required, with a PIN or numeric comparison</td><td>Optional. GATT can be read and written with no pairing at all</td></tr>
+                <tr><td>Channels</td><td>79 channels, 1 MHz apart</td><td>40 channels, 2 MHz apart: 3 advertising, 37 data</td></tr>
+                <tr><td>Discovery</td><td>Inquiry, slow and heavyweight</td><td>Advertising packets, lightweight and continuous</td></tr>
+                <tr><td>Used by Airhop</td><td>No</td><td><strong>Yes, exclusively</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The "optional pairing" row is the one that makes Airhop possible.
+            Because a GATT characteristic can be written without pairing, two
+            phones that have never met can exchange bytes with no user prompt on
+            either side. If pairing were required, a mesh of strangers would need
+            a PIN confirmation per pair, which is not a product.
+          </p>
+          <p>
+            The consequence is that BLE gives Airhop <strong>no security at
+            all</strong>. There is no link-layer encryption, no authentication,
+            no pairing. Every security property in this app comes from the
+            application layer: Ed25519 signatures on packets, Noise XX for
+            sessions. That is a deliberate design, not an omission, and it is why
+            chapter <a href="43-threat-model.html">43</a> assumes an attacker can
+            transmit anything.
+          </p>
+
+          <h2 id="stack">The stack: GAP, GATT, ATT</h2>
+          <pre class="ascii">
+  ┌──────────────────────────────────────────────────────────┐
+  │  APPLICATION            Airhop packets                    │
+  ├──────────────────────────────────────────────────────────┤
+  │  GATT   Generic Attribute Profile                         │
+  │         services, characteristics, read/write/notify      │
+  ├──────────────────────────────────────────────────────────┤
+  │  ATT    Attribute Protocol                                │
+  │         the wire format for attributes. MTU lives here.   │
+  ├──────────────────────────────────────────────────────────┤
+  │  GAP    Generic Access Profile                            │
+  │         roles, advertising, scanning, connecting          │
+  ├──────────────────────────────────────────────────────────┤
+  │  L2CAP  multiplexing and segmentation                     │
+  ├──────────────────────────────────────────────────────────┤
+  │  LINK LAYER   state machine, channel hopping, CRC, retry  │
+  ├──────────────────────────────────────────────────────────┤
+  │  PHYSICAL     GFSK on 40 channels in the 2.4 GHz band     │
+  └──────────────────────────────────────────────────────────┘
+</pre>
+          <div>
+            <p>
+              <strong>GAP</strong> answers "who is out there and how do I connect
+              to them". It defines four roles: broadcaster, observer, peripheral
+              and central. Airhop uses peripheral and central, simultaneously.
+            </p>
+            <p>
+              <strong>ATT</strong> is a very simple client-server protocol over
+              a table of numbered attributes. Its unit is the attribute value,
+              and the maximum size of one attribute value transfer is the ATT
+              MTU. This is where the 512 byte ceiling comes from.
+            </p>
+            <p>
+              <strong>GATT</strong> is a convention layered on ATT: attributes
+              are grouped into <em>services</em>, identified by a UUID, and each
+              service contains <em>characteristics</em>, also identified by
+              UUIDs, each with properties (read, write, write without response,
+              notify, indicate).
+            </p>
+          </div>
+          <p>Airhop's GATT profile is deliberately minimal:</p>
+          <pre class="code">
+  Service      F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C   (primary)
+    └─ Characteristic
+                 A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D
+                 properties: read, write, write-without-response, notify
+                 permissions: readable, writeable, no encryption required
+</pre>
+          <p>
+            One service, one characteristic. Every packet in the protocol,
+            regardless of type, is written to that one characteristic. The
+            characteristic is a pipe, not a data model. This is why the wire
+            format has to carry its own type byte: GATT gives no framing beyond
+            "here are some bytes".
+          </p>
+          <p>
+            Those two UUIDs are <strong>the same as bitchat's</strong>, which is
+            the entire mechanism of interoperability. A bitchat phone scanning
+            for its service UUID finds an Airhop phone, because Airhop advertises
+            that exact UUID. There is no negotiation, no version exchange, no
+            handshake at this level. The UUID is the handshake.
+          </p>
+
+          <h2 id="roles">The dual role trick</h2>
+          <p>
+            In a normal BLE product the roles are fixed: a heart rate strap is a
+            peripheral, a phone is a central. Airhop makes every device
+            <strong>both at once</strong>, and that single decision is what turns
+            a point-to-point radio into a mesh.
+          </p>
+          <pre class="ascii">
+  A CONVENTIONAL BLE TOPOLOGY (a star)
+
+        peripheral        peripheral        peripheral
+             │                 │                 │
+             └────────────┬────┴─────────────────┘
+                          │
+                       CENTRAL
+                  (the phone, only)
+
+  everything must pass through the centre. If the centre leaves,
+  the network is gone.
+
+
+  AIRHOP'S TOPOLOGY (every node is both)
+
+     A ═══════ B ═══════ C
+     ║         ║         ║
+     ║         ║         ║
+     D ═══════ E ═══════ F
+
+  A is a peripheral to B and a central to D at the same time.
+  Any node can leave and the graph usually stays connected.
+  Nobody knows the shape of the graph, and nobody needs to.
+</pre>
+          <p>
+            Concretely, on each device:
+          </p>
+          <ul>
+            <li>
+              <strong>The peripheral half</strong> runs a GATT server, publishes
+              the service and characteristic above, and advertises. Other
+              devices' centrals can connect to it and write packets into the
+              characteristic. Incoming writes arrive as
+              <code>onCharacteristicWriteRequest</code> on Android and
+              <code>didReceiveWrite</code> on iOS.
+            </li>
+            <li>
+              <strong>The central half</strong> scans for the service UUID,
+              opens GATT connections to advertisers it finds, discovers the
+              characteristic, subscribes to notifications, and writes packets
+              out.
+            </li>
+          </ul>
+          <p>
+            Both halves feed the same <code>packetReceived</code> event up to
+            JavaScript, and both are reachable by <code>writeToLink</code>. Above
+            the native boundary a "link" is just an opaque string id with a peer
+            on the other end; whether this device is the central or the
+            peripheral on that link never reaches the protocol layer.
+          </p>
+          <p>
+            The cap is 6 concurrent central links on both platforms
+            (<code>MAX_CENTRAL_LINKS</code> in the Kotlin,
+            <code>maxCentralLinks</code> in the Swift). Android controllers
+            support roughly seven GATT client connections and refuse the rest
+            with status 133, which is an opaque failure that looks like a
+            crashed stack. Capping at 6 turns a mystery into a policy. There is
+            no equivalent cap on the peripheral side: a device accepts inbound
+            connections until the controller stops accepting them.
+          </p>
+
+          <h2 id="advertising">Advertising and scanning</h2>
+          <p>
+            An advertising packet is at most 31 bytes of payload in the legacy
+            format (Bluetooth 4.x), broadcast on channels 37, 38 and 39 in turn.
+            31 bytes is very little once a 16 byte service UUID is in it.
+          </p>
+          <pre class="ascii">
+  LEGACY ADVERTISING PDU, 31 bytes of payload
+
+  ┌──┬──┬──────────────────────────────────┐
+  │02│01│06                                 │  flags (3 bytes)
+  ├──┼──┼──────────────────────────────────┤
+  │11│07│F47B5E2D-...-4B5C                  │  128-bit service UUID
+  ├──┴──┴──────────────────────────────────┤  (17 bytes)
+  │  10 bytes left                          │
+  └─────────────────────────────────────────┘
+
+  A 128-bit UUID eats more than half the budget. This is why most
+  commercial BLE products use 16-bit UUIDs from the assigned list.
+  Airhop cannot: it needs a private UUID that matches bitchat's.
+</pre>
+          <p>
+            Android has a second frame, the <strong>scan response</strong>,
+            which a scanner can request and which carries another 31 bytes.
+            Airhop puts the first 8 bytes of the peer ID there as service data
+            under the service UUID. iOS has no API for service data at all, and
+            historically Airhop advertised the peer ID in the iOS local name
+            instead. That was removed: nothing read the field on either platform,
+            so it was a stable identifier broadcast to every passive scanner for
+            no benefit, which is a tracking vector. iOS now advertises the
+            service UUID alone, matching bitchat-iOS.
+          </p>
+          <p>
+            The consequence is that a scanner often learns nothing but "an
+            Airhop device is here". It connects anyway and learns who the peer is
+            from the first ANNOUNCE inside the connection. That is what happens
+            on every iOS-to-Android link.
+          </p>
+
+          <h3>Scan modes and what they cost</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Android scan mode</th><th>Duty</th><th>Typical discovery latency</th><th>Relative power</th></tr></thead>
+              <tbody>
+                <tr><td><code>SCAN_MODE_LOW_LATENCY</code></td><td>Continuous</td><td>Under a second</td><td>Highest, roughly 10x low power</td></tr>
+                <tr><td><code>SCAN_MODE_BALANCED</code></td><td>About 10 percent</td><td>A few seconds</td><td>Moderate</td></tr>
+                <tr><td><code>SCAN_MODE_LOW_POWER</code></td><td>About 2 percent</td><td>Tens of seconds</td><td>Lowest</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            BLE scanning is the single largest battery cost in the app. A
+            continuous low-latency scan costs roughly an order of magnitude more
+            than low power. iOS exposes no equivalent control at all: CoreBluetooth
+            decides, and it throttles background scanning aggressively. This
+            asymmetry is why the power policy is declared a no-op on iOS and why
+            <code>getRadioState</code> reports
+            <code>batteryPercent: -1</code> there, which the policy reads as
+            unknown and leaves the mode alone.
+          </p>
+
+          <h2 id="connection">Connecting</h2>
+          <p>
+            Discovery is not connection, and neither is instant. The simulation's
+            radio fabric models this explicitly because code that assumes a peer
+            is reachable the moment it is visible is wrong on hardware.
+          </p>
+          <pre class="ascii">
+  t=0     peripheral starts advertising (every 100 to 1000 ms)
+  t=?     central's scan window happens to overlap an advert
+              -> scan result, with RSSI
+  t=+ms   RSSI gate: is this signal strong enough to be worth a slot?
+          link cap: are we already at 6 central links?
+  t=+50   GATT connect requested
+  t=+100  connection established (LL_CONNECT_IND, then connection events)
+  t=+150  service discovery: find F47B5E2D...
+  t=+200  characteristic discovery: find A1B2C3D4...
+  t=+250  subscribe to notifications (write the CCCD descriptor)
+  t=+300  MTU exchange requested (Android: gatt.requestMtu(517))
+  t=+400  onMtuChanged fires with what the peer actually granted
+  t=+400  LINK IS USABLE. Now send an ANNOUNCE.
+</pre>
+          <p>
+            Several hundred milliseconds is normal, and a second or more is
+            common on a busy radio. Two consequences show up in the protocol:
+          </p>
+          <ul>
+            <li>
+              The announce cadence is <strong>4 seconds while isolated</strong>,
+              backing off to a jittered 15 to 30 seconds once connected. Fast
+              while alone so two lone phones find each other quickly, slow once
+              in a mesh so steady-state traffic and battery stay low.
+            </li>
+            <li>
+              A link-up triggers an immediate announce and a prekey bundle. But
+              both are <strong>reused within a window</strong> rather than
+              freshly timestamped, because a freshly minted packet cannot be
+              deduplicated by relays. Without that, twelve phones connecting at
+              once put roughly 6,600 prekey packets and 9,200 announce packets
+              on the air in half a second, which is a room saturating its own
+              airtime.
+            </li>
+          </ul>
+
+          <h2 id="mtu">MTU, and the 512 byte ceiling</h2>
+          <p>
+            This is the most consequential number in the entire transport, and it
+            is worth being precise about, because there are three different
+            limits that get confused.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Limit</th><th>Value</th><th>What it constrains</th></tr></thead>
+              <tbody>
+                <tr><td>Default ATT MTU</td><td>23 bytes</td><td>Every connection starts here, before negotiation. Only 20 bytes are usable by a write without response.</td></tr>
+                <tr><td>Negotiated ATT MTU</td><td>Up to 517 bytes</td><td>Airhop requests 517 on Android. The peer may grant less. iOS negotiates automatically and exposes the result through <code>maximumWriteValueLength</code>.</td></tr>
+                <tr><td>Maximum attribute value</td><td><strong>512 bytes</strong></td><td>A hard limit in the Bluetooth core specification on the size of a single attribute value, independent of MTU. This is Airhop's frame budget.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Two ways exist to move a value larger than the MTU minus 3:
+          </p>
+          <ul>
+            <li>
+              <strong>Write without response</strong> (a write command). Fast,
+              unacknowledged, and <strong>cannot exceed MTU minus 3</strong>.
+              Android silently truncates a larger write. This is the failure that
+              makes over-budget frames vanish with no error.
+            </li>
+            <li>
+              <strong>Write with response</strong>, which for a value over the
+              MTU becomes a <strong>long write</strong>: a sequence of prepare
+              writes followed by an execute. Slower, acknowledged, and it can
+              carry up to the 512 byte attribute limit.
+            </li>
+          </ul>
+          <p>
+            Both native modules implement exactly this decision. Android reads
+            the negotiated MTU it recorded from <code>onMtuChanged</code>, and
+            picks <code>WRITE_TYPE_NO_RESPONSE</code> when the frame fits in MTU
+            minus 3, otherwise <code>WRITE_TYPE_DEFAULT</code> so the stack does
+            a long write. iOS asks
+            <code>peripheral.maximumWriteValueLength(for: .withoutResponse)</code>
+            and picks <code>.withoutResponse</code> or
+            <code>.withResponse</code> the same way.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The bug this prevents, restated</p>
+            <p>
+              The fragment budget must be the <strong>whole encoded frame</strong>.
+              An implementation that budgets 469 bytes of <em>payload</em> and
+              then adds a 16 byte header, an 8 byte sender ID and a 64 byte
+              signature emits 557 bytes. Android truncates to MTU minus 3, iOS
+              refuses, and the receiver's decoder fails on a signature whose last
+              bytes never arrived. Nothing is logged at either end. Every
+              attachment silently failed in both directions while live voice kept
+              working, because a voice burst is capped at 210 bytes and never
+              fragments. Airhop's real budget is 467 data bytes: 512 minus a 16
+              byte header, 8 byte sender, 8 byte recipient and 13 byte fragment
+              header.
+            </p>
+          </div>
+
+          <h2 id="throughput">Where 18 KiB/s comes from</h2>
+          <p>
+            BLE's advertised PHY rate is 1 Mbps (or 2 Mbps on the 2M PHY). Real
+            application throughput is a small fraction of that, and the reason is
+            the connection event structure.
+          </p>
+          <pre class="ascii">
+  A BLE CONNECTION IS A SERIES OF SCHEDULED APPOINTMENTS
+
+  connection interval (7.5 ms to 4 s, negotiated)
+  │◀──────────────────────────────────────────▶│
+  ┌────┐                                       ┌────┐
+  │ ▮▮ │      radio completely off             │ ▮▮ │
+  └────┘                                       └────┘
+   event                                        event
+
+  In one event, a limited number of packets can be exchanged.
+  Between events, nothing moves, at all, regardless of how much
+  data is queued. This is the whole basis of BLE's low power.
+
+  Effective throughput ≈ (bytes per event) / (connection interval)
+</pre>
+          <p>
+            An iOS connection interval is typically 30 ms and cannot be forced
+            lower by an app. Android varies by OEM. So the achievable rate is
+            capped long before the PHY rate matters. Airhop's measured figure,
+            <strong>467 bytes every 25 ms, or about 18 KiB per second</strong>,
+            is empirical: it is the fastest pacing at which fragments stop being
+            dropped. The delay is not politeness, it is required.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Transfer</th><th>Fragments</th><th>Time at 25 ms</th></tr></thead>
+              <tbody>
+                <tr><td>A text message</td><td>1</td><td>Instant</td></tr>
+                <tr><td>A 40 KiB compressed photo</td><td>~88</td><td>~2 seconds</td></tr>
+                <tr><td>A 512 KiB photo (the cap)</td><td>~1,120</td><td>~28 seconds</td></tr>
+                <tr><td>A 1 MiB file (the cap)</td><td>~2,240</td><td>~56 seconds</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A channel attachment paces at 30 ms rather than 25, because each
+            broadcast fragment is one radio write <em>per connected peer</em>.
+            In a room of six peers, one broadcast fragment is six writes. Airtime
+            cost grows with room size while the sender's own clock does not, so
+            the pacing has to absorb the difference.
+          </p>
+
+          <h2 id="airhop-use">How Airhop uses all of this</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>BLE concept</th><th>Airhop's use</th><th>Where</th></tr></thead>
+              <tbody>
+                <tr><td>Service UUID</td><td>The rendezvous. Identical to bitchat's, which is the whole interop mechanism.</td><td><code>AirhopBLEModule.kt/.swift</code></td></tr>
+                <tr><td>One characteristic</td><td>An untyped byte pipe. Every packet type goes through it.</td><td>Same</td></tr>
+                <tr><td>Write without response</td><td>The normal path for frames under MTU minus 3.</td><td>Same</td></tr>
+                <tr><td>Long write</td><td>The fallback for full 512 byte frames on a link with a small MTU.</td><td>Same</td></tr>
+                <tr><td>Notify</td><td>How a peripheral pushes to a connected central.</td><td>Same</td></tr>
+                <tr><td>Advertising</td><td>Presence. Android adds 8 bytes of peer ID in scan response service data.</td><td>Same</td></tr>
+                <tr><td>Scanning</td><td>Discovery. Rate is controlled by the power policy on Android.</td><td><code>power-policy.ts</code>, <code>radio-controller.ts</code></td></tr>
+                <tr><td>RSSI</td><td>Connection gating and the radar rings. Polled every 5 to 60 s by power mode.</td><td><code>peer-store.ts</code></td></tr>
+                <tr><td>Link connect / disconnect events</td><td>Direct-peer standing, session lifecycle, courier handover triggers.</td><td><code>mesh-service.ts</code></td></tr>
+                <tr><td>MTU</td><td>Choosing the write type. Never exposed above the bridge.</td><td>Native only</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="platform">Platform differences that hurt</h2>
+          <h3>A backgrounded iPhone is invisible to Android</h3>
+          <p>
+            This is the single most surprising behaviour of the real network,
+            and it is not fixable in application code.
+          </p>
+          <p>
+            When an iOS app leaves the foreground, CoreBluetooth moves the
+            service UUID out of the main advertising payload into the
+            <strong>overflow area</strong>, a proprietary Apple extension, and
+            drops the local name entirely. Only another iOS device scanning for
+            that exact UUID can see it. An Android scanner sees an advertisement
+            with no recognisable service.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Scenario</th><th>Works?</th></tr></thead>
+              <tbody>
+                <tr><td>iPhone foreground to Android</td><td>Yes</td></tr>
+                <tr><td>iPhone background to iPhone</td><td>Yes</td></tr>
+                <tr><td>iPhone background to Android, new discovery</td><td><strong>No</strong></td></tr>
+                <tr><td>iPhone background to Android, link already established</td><td>Yes. The existing link keeps carrying traffic.</td></tr>
+                <tr><td>Android background to anything</td><td>Yes. The foreground service keeps it advertising normally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The simulation's radio fabric enforces this asymmetry explicitly
+            (<code>discoverableToAndroid</code>), so it cannot be forgotten in
+            a scenario.
+          </p>
+
+          <h3>Android BLE scanning counts as a location access</h3>
+          <p>
+            Android treats a BLE scan as location access unless the manifest says
+            otherwise, because scan results can be used for positioning. And an
+            app counts as foreground for location purposes only with a visible
+            activity or a <code>location</code>-typed foreground service. A
+            <code>connectedDevice</code> service does not qualify.
+          </p>
+          <p>
+            The result was that a backgrounded Airhop held its process up, kept a
+            visible notification reading "Discovering and relaying nearby
+            messages", and was handed no scan results at all.
+          </p>
+          <p>
+            bitchat solves this with <code>ACCESS_BACKGROUND_LOCATION</code> and
+            a <code>location</code> service type. Airhop asserts
+            <code>neverForLocation</code> on <code>BLUETOOTH_SCAN</code> instead,
+            which is accurate here: a scan result is read for its service UUID,
+            its 8 byte peer ID and its RSSI, none of which is a position. From
+            API 31 that removes the coupling entirely. API 26 to 30 keeps it,
+            since the flag does not exist there, and
+            <code>getRadioState</code> reports which regime applies through
+            <code>locationRequiredForScan</code>.
+          </p>
+          <p>
+            Location is still requested, but only for geohash channels, and only
+            when the user opens one.
+          </p>
+
+          <h3>Some Android devices cannot advertise at all</h3>
+          <p>
+            At the API 26 floor, some chipsets have no BLE peripheral role, so
+            <code>bluetoothLeAdvertiser</code> is null. Those devices scan,
+            relay and receive, but are never discoverable. The native module
+            answers <code>UNSUPPORTED</code>, and the reconciler latches that
+            refusal once rather than retrying on a 5 second ladder forever. The
+            Mesh tab carries a dismissible note. Stating it is the fix; the
+            platform fact cannot be changed.
+          </p>
+
+          <h3>Background execution</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Platform</th><th>Mechanism</th><th>Result</th></tr></thead>
+              <tbody>
+                <tr><td>iOS</td><td><code>UIBackgroundModes: bluetooth-central</code></td><td>Receives BLE data while backgrounded.</td></tr>
+                <tr><td>iOS</td><td><code>UIBackgroundModes: bluetooth-peripheral</code></td><td>Keeps advertising, though not visibly to Android.</td></tr>
+                <tr><td>iOS</td><td><code>CBCentralManagerOptionRestoreIdentifierKey</code></td><td>Relaunches the app on a BLE event after suspension. This is why the keychain item must be <code>AFTER_FIRST_UNLOCK</code>.</td></tr>
+                <tr><td>Android</td><td><code>AirhopForegroundService</code> with a persistent notification</td><td>Survives Doze and battery optimization.</td></tr>
+                <tr><td>Android 14+</td><td><code>FOREGROUND_SERVICE_CONNECTED_DEVICE</code></td><td>Required to declare that service type at all.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="power">Power and the duty cycle</h2>
+          <p>
+            Policy lives in TypeScript, mechanism in Kotlin.
+            <code>src/services/power-policy.ts</code> is a pure function of four
+            facts (foreground, charging, battery band, current mode) and the
+            native module applies whatever mode it is given, deciding nothing
+            itself. That keeps the decision testable without a device.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mode</th><th>Scan</th><th>Advertise</th><th>TX power</th><th>RSSI poll</th><th>Duty cycle</th></tr></thead>
+              <tbody>
+                <tr><td><code>performance</code></td><td>LOW_LATENCY</td><td>LOW_LATENCY</td><td>HIGH</td><td>5 s</td><td>continuous</td></tr>
+                <tr><td><code>balanced</code></td><td>BALANCED</td><td>BALANCED</td><td>MEDIUM</td><td>10 s</td><td>continuous</td></tr>
+                <tr><td><code>power-saver</code></td><td>LOW_POWER</td><td>LOW_POWER</td><td>LOW</td><td>30 s</td><td>2 s on / 28 s off</td></tr>
+                <tr><td><code>ultra-low-power</code></td><td>LOW_POWER</td><td>LOW_POWER</td><td>ULTRA_LOW</td><td>60 s</td><td>1 s on / 29 s off</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Selection order, and the order carries the policy:</p>
+          <ol>
+            <li>Backgrounded gives <code>power-saver</code>, or <code>ultra-low-power</code> on a critical battery. Nobody is waiting on discovery latency off screen, and this is where a phone spends nearly all of its day.</li>
+            <li>Charging in the foreground gives <code>performance</code>, since the cost is someone else's.</li>
+            <li>Otherwise the battery band decides: critical (10 percent or less) gives ultra low, low (20 percent or less) gives power saver, anything else gives balanced.</li>
+          </ol>
+          <p>
+            Foreground on battery is <code>balanced</code> rather than
+            <code>performance</code> because a balanced scan still finds peers
+            within seconds, and reserving the most expensive setting for
+            "plugged in" is what stops the app being the reason a phone dies.
+          </p>
+          <p>
+            <strong>Hysteresis is Airhop's addition.</strong> bitchat re-resolves
+            on every <code>ACTION_BATTERY_CHANGED</code>, which fires per 1
+            percent, so a phone hovering at a threshold flips modes repeatedly
+            and every flip restarts the scanner. Dropping into a lower band is
+            immediate, since running hard on a nearly flat phone is the failure
+            that matters. Climbing back out needs +3 percent.
+          </p>
+          <p>
+            The duty cycle is invisible above the native boundary. JavaScript
+            asks for scanning and keeps getting it while native decides the rate.
+            A burst ending is never reported as an adapter or link change, or the
+            reconciler would try to repair a state that is working correctly.
+          </p>
+
+          <h2 id="failures">Failure modes seen in the field</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Symptom</th><th>Cause</th><th>Handling</th></tr></thead>
+              <tbody>
+                <tr><td>GATT status 133</td><td>Android controller out of connection slots, or a transient stack failure. Notoriously opaque.</td><td>Cap central links at 6; treat a refused connect as transient and back off.</td></tr>
+                <tr><td>Writes suddenly fail on a healthy link</td><td>The GATT queue is full. A refusal here is ordinary, not a dead link.</td><td>A refused write must never tear the link down. Teardown belongs to the disconnect event. Courier handover and spray commit only after a write is accepted.</td></tr>
+                <tr><td>Truncated frames</td><td>Frame over MTU minus 3 sent as a write without response.</td><td>Choose the write type from the negotiated MTU; keep the frame under 512.</td></tr>
+                <tr><td>Peer visible but never connects</td><td>RSSI too low, or the connection scheduler is at its cap.</td><td>RSSI gate plus link cap, both deliberate.</td></tr>
+                <tr><td>Peer connected but never announces</td><td>The link came up before the peer's app was ready, or the announce write was refused.</td><td>Announce on link-up plus the 4 to 30 second cadence. The peer ages out of the registry after 45 to 60 seconds if it truly went away.</td></tr>
+                <tr><td>OEM battery manager kills the process</td><td>Xiaomi, Huawei, Oppo and others aggressively kill background apps regardless of the foreground service.</td><td>Not fixable in app code. The battery optimization screen offers a one-tap route to the OEM exemption setting.</td></tr>
+                <tr><td>Duplicate link to the same iPhone</td><td>iOS rotates its Bluetooth address, so the same device appears as a new advertiser.</td><td>A 15 second reaper reclaims duplicate links once the peer ID is learned from an ANNOUNCE.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="alternatives">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Option</th><th>Why not</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Bluetooth Mesh</strong> (the official SIG profile)</td><td>It exists and does managed flooding with provisioning and a network key. But provisioning requires a coordinator, the network key is a shared secret across the whole mesh, and phone platforms expose no API for it. It is designed for building automation, where a single owner provisions every node. Airhop's model is strangers with no shared secret.</td></tr>
+                <tr><td><strong>Bluetooth Classic RFCOMM</strong></td><td>Requires pairing, which means a prompt per pair. Higher power. No dual-role mesh story. iOS restricts it to MFi-certified accessories.</td></tr>
+                <tr><td><strong>WiFi Direct / WiFi Aware</strong></td><td>Far higher bandwidth, and Airhop uses it where possible. But it does not exist across platforms (Android WiFi Aware and Apple's AWDL cannot interoperate), it is not available on all Android devices or API levels, and it costs much more power. It is an accelerator, never the foundation. Chapter <a href="28-transports.html">28</a>.</td></tr>
+                <tr><td><strong>Ultrasonic (audio) data</strong></td><td>Works with no radio permission at all, and passes through no walls. Bit rates in the tens of bps, needs the speaker and microphone, and is audible to some people and to dogs. A novelty at this scale.</td></tr>
+                <tr><td><strong>NFC</strong></td><td>Range of a few centimetres, which is a security property rather than a limitation, and it is genuinely attractive for key exchange. Not used: contact exchange is camera QR only, which gives the same in-person guarantee with no extra dependency and works on every device, including ones with NFC locked to payments.</td></tr>
+                <tr><td><strong>LoRa</strong></td><td>Kilometres of range, but no phone has the radio. It is the right answer for fixed relay hardware, which is exactly where Airhop uses it. Chapter <a href="47-lora-hardware.html">47</a>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does every Airhop device run both GATT roles?</span>
+              <span class="a">Because a mesh needs every node to be both server and client. In the conventional star topology, peripherals cannot talk to each other and everything passes through the central. Running both roles on every device makes the graph arbitrary: A can be a peripheral to B and a central to D at the same time, so any node can leave without partitioning the network.</span>
+            </li>
+            <li>
+              <span class="q">Where does 467 come from, exactly?</span>
+              <span class="a">512 (the ATT maximum attribute value, and therefore the frame budget) minus 16 (v2 packet header) minus 8 (senderID) minus 8 (recipientID, present on a DM fragment) minus 13 (fragment header: streamID 8, index 2, total 2, inner type 1). bitchat derives 469 from the same budget with a smaller header. Being two bytes under is harmless, because the chunk size is a sender-side choice and the receiver reassembles by index.</span>
+            </li>
+            <li>
+              <span class="q">Why is there no pairing, and what does that cost?</span>
+              <span class="a">Pairing would require a user prompt per pair, which makes a mesh of strangers impossible as a product. The cost is that BLE contributes zero security: no link encryption, no authentication. Every security property comes from the application layer instead, which is why the threat model assumes an attacker in radio range can transmit anything, and why every packet type that carries a claimed sender is Ed25519 signed.</span>
+            </li>
+            <li>
+              <span class="q">An iPhone user says their friend on Android cannot see them. What do you check first?</span>
+              <span class="a">Whether the iPhone app is in the foreground. Backgrounded, CoreBluetooth moves the service UUID into the advertisement overflow area and drops the local name, so only another iOS device can discover it. An already-established link keeps working, so the symptom is specifically "cannot find" rather than "cannot message". This is a platform behaviour with no application-side fix.</span>
+            </li>
+            <li>
+              <span class="q">Why does a refused GATT write not tear down the link?</span>
+              <span class="a">Because the stack says the same thing when its queue is simply full as when the link is gone. The announce and gossip send path used to delete a link from the link registry on any rejected write, an action nothing could undo, so one transient refusal left the phone believing it had no neighbours for the rest of the session. Teardown belongs to the disconnect event. The same reasoning is why courier handover only retires an envelope after a write is accepted.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

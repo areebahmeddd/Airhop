@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 21: Contacts, cards and codes. Three QR formats, five ways a contact arrives, the merge policy, and the safety number." />
+    <title>21 Contacts, cards and codes · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 21 · Cryptography and identity</p>
+          <h1>Contacts, cards and codes</h1>
+          <p class="kt-lede">
+            Chapter 20 was identity in the abstract: what a peer ID is, what
+            trust on first use means. This is the machinery a user actually
+            touches. Three code formats, five ways a contact can arrive, one
+            merge policy that decides which of them may overwrite what, and a
+            six word code two people read to each other.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#two-fields">Two questions, two fields</a></li>
+              <li><a href="#formats">The three code formats</a></li>
+              <li><a href="#card">The contact card, byte by byte</a></li>
+              <li><a href="#bitchat">Reading a bitchat verification QR</a></li>
+              <li><a href="#binding">The binding check</a></li>
+              <li><a href="#routes">Five ways a contact arrives</a></li>
+              <li><a href="#merge">The merge policy</a></li>
+              <li><a href="#record">What a contact record holds</a></li>
+              <li><a href="#safety">The safety number</a></li>
+              <li><a href="#share">Sharing your own code</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              A contact card is like a business card with a secret lock printed
+              on it. Anyone who has your card can lock a box that only you can
+              open. Your phone can show that card as a square pattern on the
+              screen, and a friend's phone can read it with the camera. If they
+              read it off your actual screen, standing next to you, their phone
+              knows it really came from you. If somebody forwarded them the card
+              in a message instead, the lock still works, but nobody can be sure
+              who sent it. Airhop keeps those two facts separate, forever,
+              because they are not the same fact.
+            </p>
+          </div>
+
+          <h2 id="two-fields">Two questions, two fields</h2>
+          <div class="box ok">
+            <p class="box-title">The distinction the whole chapter rests on</p>
+            <p>
+              <strong>"How did these keys get onto my phone?"</strong> and
+              <strong>"Has a human confirmed they are the right keys?"</strong>
+              are different questions. They are stored in different fields and
+              they change under opposite rules.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Field</th><th>Answers</th><th>Values</th><th>May it be lowered?</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>source</code></td>
+                  <td>How the keys arrived</td>
+                  <td><code>qr</code>, <code>link</code>, <code>manual</code></td>
+                  <td>Never lowered, but may be raised by a later write</td>
+                </tr>
+                <tr>
+                  <td><code>verification</code></td>
+                  <td>Whether a human checked them</td>
+                  <td><code>in-person</code>, <code>fingerprint</code>, or absent</td>
+                  <td>Never removed once earned; only a write carrying one may set it</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            They are independent. A contact whose keys arrived through a link
+            can be verified later on a phone call, and that verification is
+            exactly as strong as a camera scan. What differs is what each one is
+            <em>allowed to do</em>, which the merge policy below spells out.
+          </p>
+          <div class="box warn">
+            <p class="box-title">Why <code>source</code> alone was not enough</p>
+            <p>
+              Older records predate the <code>verification</code> field. The
+              reader <code>isVerified()</code> falls back to
+              <code>source === "qr"</code> for those, because at the time a
+              <code>qr</code> source could only have come from the camera. That
+              fallback is why no migration was needed, and it is also why
+              <code>source</code> could not simply be reused: today a card can
+              reach the app through a link and still be verified, and a card can
+              reach it through the camera as the first step of two.
+            </p>
+          </div>
+
+          <h2 id="formats">The three code formats</h2>
+          <p>
+            The add-contact screen accepts three things. They are unambiguous,
+            so the parse order is about cost rather than precedence.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Format</th><th>Carries</th><th>Signed?</th><th>Expires?</th><th>Who emits it</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>airhop:v1/&lt;base64url&gt;</code></td>
+                  <td>Peer ID, Noise key, signing key, nickname, Nostr key</td>
+                  <td>No</td>
+                  <td>No</td>
+                  <td>Airhop, from the Profile screen</td>
+                </tr>
+                <tr>
+                  <td><code>bitchat://verify?...</code></td>
+                  <td>Noise key, signing key, nickname, optional npub</td>
+                  <td>Yes, Ed25519</td>
+                  <td>Yes, 5 minutes</td>
+                  <td>bitchat, from its verification sheet</td>
+                </tr>
+                <tr>
+                  <td><code>airhop://peer/&lt;16 hex&gt;</code></td>
+                  <td>A peer ID and nothing else</td>
+                  <td>No</td>
+                  <td>No</td>
+                  <td>Deep links, and typed by hand</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The weakest of the three, and why the share button avoids it</p>
+            <p>
+              <code>airhop://peer/&lt;id&gt;</code> is the one artifact that
+              cannot reach the person it names. A peer ID is a hash of the Noise
+              key and carries no keys at all, so the recipient can label the
+              contact but cannot encrypt to it, and can only message back from
+              inside Bluetooth range once an announce has been heard. "Share QR"
+              therefore shares the <em>image</em>, which carries the whole card.
+              The bare link appears only as a text fallback when the share sheet
+              itself is unavailable.
+            </p>
+          </div>
+
+          <h2 id="card">The contact card, byte by byte</h2>
+          <p>
+            <code>src/core/crypto/contact-exchange.ts</code>. Fixed header,
+            variable nickname, trailing Nostr key. There is exactly one version,
+            because Airhop had no install base when it was designed and a
+            versioned pair costs a branch on every read forever.
+          </p>
+          <pre class="ascii">
+  offset  size   field
+  ──────  ────   ─────────────────────────────────────────────────
+   [0]     1     version, always 1
+   [1]     8     peerID          first 8 bytes of SHA-256(noisePub)
+   [9]    32     Noise static    X25519 public key
+   [41]   32     signing         Ed25519 public key
+   [73]    1     nickname length 0 to 32
+   [74]    n     nickname        UTF-8, truncated at 32 BYTES
+   [74+n] 32     Nostr pubkey    secp256k1 x-only
+
+  total = 106 + n bytes,  106 to 138
+
+  then:  "airhop:v1/" + base64url(bytes)
+         141 to 184 characters, comfortably inside a QR code
+</pre>
+          <p>
+            Three keys travel together, and each earns its place:
+          </p>
+          <ul>
+            <li>
+              <strong>The Noise key</strong> is what a session opens against. A
+              contact without one is a peer ID and nothing more, which is why
+              <code>hasKeys()</code> tests this key and not the signing key.
+            </li>
+            <li>
+              <strong>The signing key</strong> is not decoration. When a
+              <code>LEAVE</code> arrives after a restart the live registry holds
+              no pin, and <code>leaveIsAuthentic</code> falls back to this stored
+              copy. It is also half of the safety number.
+            </li>
+            <li>
+              <strong>The Nostr key</strong> is what makes a contact met only by
+              QR reachable over the internet, having never been in Bluetooth
+              range. The registry forgets a peer's npub 60 seconds after their
+              radio disappears; a contact keeps it for good.
+            </li>
+          </ul>
+          <p>
+            The nickname is truncated at 32 <em>bytes</em>, not characters,
+            matching the announce path exactly. Encoding never throws for an
+            over-long name, because the wire format already silently truncates
+            and two different behaviours for one field is how formats drift.
+          </p>
+
+          <h2 id="bitchat">Reading a bitchat verification QR</h2>
+          <p>
+            <code>src/core/crypto/bitchat-verify-qr.ts</code>. This is the only
+            way an Airhop user can pick up a bitchat user's identity in person:
+            our format is unreadable to them, and theirs was unreadable to us.
+          </p>
+          <pre class="ascii">
+  bitchat://verify?v=1
+                  &amp;noise=&lt;64 hex&gt;
+                  &amp;sign=&lt;64 hex&gt;
+                  &amp;nick=&lt;utf8&gt;
+                  &amp;ts=&lt;unix seconds&gt;
+                  &amp;nonce=&lt;base64url&gt;
+                  &amp;sig=&lt;128 hex&gt;
+                  [&amp;npub=&lt;bech32&gt;]
+
+  signature covers, each field length-prefixed:
+
+     "bitchat-verify-v1"   domain separator, byte identical to theirs
+     v, noise, sign, npub, nick, ts, nonce
+
+  checks, in this order:
+     1. is it a bitchat verify URL at all?     no  -> keep scanning
+     2. all required params present, hex OK?   no  -> "tampered"
+     3. |now - ts| &lt;= 5 minutes ?              no  -> "expired"
+     4. Ed25519 verify with the key in `sign`  no  -> "tampered"
+     5. peerID = SHA-256(noise)[0:8]           recomputed, never trusted
+</pre>
+          <div class="box ok">
+            <p class="box-title">Freshness is checked before the signature, on purpose</p>
+            <p>
+              A stale code is by far the likelier case: a screenshot, a photo of
+              a screen, a code left open on a desk. It is also the one the user
+              can act on, because "ask them to show it again" is a fix. Through
+              a viewfinder an expired code looks identical to an unreadable one,
+              so the two outcomes are reported separately rather than both
+              becoming a silent non-scan.
+            </p>
+          </div>
+          <div class="box warn">
+            <p class="box-title">This interop is one way, and the UI must not pretend otherwise</p>
+            <p>
+              On bitchat's side that QR names a peer they are <em>already</em>
+              connected to, and the real proof is a nonce challenge sent over
+              the live Noise session afterwards. Airhop does not answer their
+              challenge protocol. So the bitchat user learns nothing, sees no
+              verification on their side, and the Airhop user has read the card
+              for what it carries rather than for what it means to them.
+            </p>
+          </div>
+          <p>
+            The five minute window is the one security property bitchat's format
+            has that ours does not. It is symmetric on purpose, both past and
+            future: a future-dated stamp must not buy a QR a longer life than a
+            fresh one gets. Our own cards carry no expiry, which is the honest
+            trade for a card that is meant to be saved, shared and used later.
+          </p>
+
+          <h2 id="binding">The binding check</h2>
+          <p>
+            Every card, from every route, faces one test before anything is
+            written:
+          </p>
+          <pre class="ascii">
+  SHA-256(card.noisePubKey)[0:8]  ==  card.peerID   ?
+
+  no  -> reject the card entirely, return false
+  yes -> the peer ID and the Noise key belong together
+</pre>
+          <p>
+            This is the whole reason a peer ID means anything. A card is
+            attacker-shaped input: whoever we are talking to chose every byte of
+            it. Without this check a forged QR could claim somebody else's peer
+            ID while supplying attacker-controlled keys, and every DM the user
+            then believed they were sending to that contact would be encrypted to
+            the attacker instead. bitchat-iOS rejects announces on exactly this
+            check, under the name <code>senderMismatch</code>.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The attack the binding check does <em>not</em> catch</p>
+            <p>
+              A peer ID is SHA-256 of the Noise key, and that key is public. So
+              an attacker can build a card carrying a victim's <strong>real</strong>
+              peer ID and <strong>real</strong> Noise key, passing the binding
+              check cleanly, while substituting their own <strong>signing</strong>
+              key. Announce-level pinning refuses that. A card trusted merely
+              because it arrived would have waved it through. This is precisely
+              why <code>inPerson</code> exists, and why the safety number covers
+              both keys rather than the peer ID.
+            </p>
+          </div>
+
+          <h2 id="routes">Five ways a contact arrives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Route</th><th>What arrives</th><th><code>source</code></th><th>May re-pin?</th><th>Verified?</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Camera scan of their live screen</td>
+                  <td>Full card</td>
+                  <td><code>qr</code></td>
+                  <td class="pill ok">yes</td>
+                  <td>Yes, <code>in-person</code></td>
+                </tr>
+                <tr>
+                  <td>Card picked from the photo roll</td>
+                  <td>Full card</td>
+                  <td><code>link</code></td>
+                  <td class="pill bad">no</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Contact code pasted from a message</td>
+                  <td>Full card</td>
+                  <td><code>link</code></td>
+                  <td class="pill bad">no</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Card sent inside a geohash DM</td>
+                  <td>Full card</td>
+                  <td><code>link</code></td>
+                  <td class="pill bad">no</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Peer ID typed or deep-linked</td>
+                  <td>ID only</td>
+                  <td><code>manual</code></td>
+                  <td class="pill bad">no</td>
+                  <td>No</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Two things vary independently: <em>what</em> arrived, and
+            <em>where it came from</em>. The photo roll and the camera can carry
+            byte-identical payloads. Only the camera saw the other phone, so only
+            the camera earns <code>inPerson</code>. That flag is captured at the
+            moment of the read, because by the confirm step every route looks
+            identical.
+          </p>
+          <p>
+            All routes converge on the same confirmation step, showing the
+            avatar, the username and the peer ID before anything is saved, so
+            identity is double-checked however it arrived. There is a sixth path
+            that is not user-initiated: <code>saveIfAbsent</code>, which keeps
+            anyone you message as an unverified contact. That is Signal's
+            behaviour, and it is the single entry point for it so that every
+            conversation-starting path stays consistent.
+          </p>
+
+          <h2 id="merge">The merge policy</h2>
+          <p>
+            Four screens can write a contact. A rule that several callers have to
+            remember is not a rule, so the policy lives in one pure function,
+            <code>mergeContact()</code>, and is tested on its own.
+          </p>
+          <pre class="ascii">
+  SOURCE_RANK:   manual 0  &lt;  link 1  &lt;  qr 2
+
+  field            rule on a re-write
+  ───────────────  ────────────────────────────────────────────────
+  source           max(prior, next). Never decreases.
+  verification     kept once earned. Only a write carrying one sets it.
+  addedAtMs        min(prior, next). A re-add is not a new acquaintance.
+  verifiedAtMs     kept once set.
+  nickname         a name already on file WINS over one arriving now.
+  localNickname    kept unless the caller supplies one.
+  nostrPubkeyHex   first key wins. A new npub for a known peer is
+                   suspect, not authoritative.
+  noisePubKeyHex   filled when absent; replaced ONLY by source === "qr"
+  signingPubKeyHex filled when absent; replaced ONLY by source === "qr"
+</pre>
+          <p>
+            The property that holds across all of it: <strong>a write can never
+            lower a contact's standing</strong>. That is what makes it safe for
+            the geohash card path to state <code>source: "link"</code> flatly,
+            even for somebody already verified in person.
+          </p>
+          <div class="box ok">
+            <p class="box-title">Why "a name already on file wins"</p>
+            <p>
+              Re-adding somebody must never replace what they called themselves
+              at first contact. If it did, an attacker who could get a card in
+              front of the user could rewrite a familiar display name to
+              something misleading, and the user's own memory of the first
+              exchange would be the only thing contradicting the screen.
+            </p>
+          </div>
+          <p>
+            Three narrower writers exist beside <code>addContact</code>, each
+            deliberately unable to do what the others do:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Writer</th><th>Sets</th><th>Cannot</th><th>Why it exists</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>setProvenKeys</code></td>
+                  <td>Noise and signing keys, together</td>
+                  <td>Replace keys already held; grant verification</td>
+                  <td><code>saveIfAbsent</code> reaches only what the registry held at that instant, so a messaged contact often carries no keys. A safety number needs both, which is why they travel together. Only an authenticated peer state qualifies as proof, because that rides inside a completed Noise session and a session completes only when the remote static key hashes to the claimed peer ID.</td>
+                </tr>
+                <tr>
+                  <td><code>setNostrPubkey</code></td>
+                  <td>The Nostr key, once</td>
+                  <td>Overwrite a stored key; create a contact</td>
+                  <td>An announce claiming a new npub for a known peer is treated as suspect. It never manufactures a contact for a stranger just because we heard them.</td>
+                </tr>
+                <tr>
+                  <td><code>markVerified</code></td>
+                  <td><code>verification: "fingerprint"</code></td>
+                  <td>Touch any key at all</td>
+                  <td>Confirms what is already stored. A substituted key would have produced words that did not match, so there is nothing to import and no re-pinning power to gate. Refused for a contact with no keys, since there would have been nothing to compare.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="record">What a contact record holds</h2>
+          <p>
+            <code>src/store/contacts-store.ts</code>, persisted to MMKV. Eleven
+            fields, keyed by peer ID.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Field</th><th>Meaning</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>peerID</code></td><td>16 hex characters. The key.</td></tr>
+                <tr><td><code>noisePubKeyHex</code></td><td>X25519, the session key. Empty string when unknown.</td></tr>
+                <tr><td><code>signingPubKeyHex</code></td><td>Ed25519. Verifies announces and LEAVEs across restarts.</td></tr>
+                <tr><td><code>nickname</code></td><td>What the peer calls themselves.</td></tr>
+                <tr><td><code>localNickname</code></td><td>A name only you see. Never announced, never in a card, never leaves the device.</td></tr>
+                <tr><td><code>nostrPubkeyHex</code></td><td>Their durable internet address, kept for good.</td></tr>
+                <tr><td><code>source</code></td><td>How the keys arrived.</td></tr>
+                <tr><td><code>verification</code></td><td>Whether and how a human confirmed them.</td></tr>
+                <tr><td><code>addedAtMs</code></td><td>Earliest acquaintance.</td></tr>
+                <tr><td><code>verifiedAtMs</code></td><td>When confirmation happened, which is not when the contact was saved.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">Why the local nickname is a separate field</p>
+            <p>
+              Writing your own label over <code>nickname</code> would destroy
+              the only copy of what the peer claims to be called. The contact
+              sheet shows both, so "who they say they are" stays checkable after
+              you have renamed them to something you recognise. The label is
+              gated on holding their keys rather than on verification, matching
+              bitchat's <code>canEditLocalAlias</code>: it is typed against one
+              specific peer ID and never transmitted, so no attacker can cause
+              one, but a label on an identity the app cannot address is a label
+              on nothing.
+            </p>
+          </div>
+          <p>
+            A contact is a <em>known</em> identity; a peer is a <em>reachable</em>
+            one. This store never forgets; the peer store is rebuilt from live
+            announces and forgets on restart. Chapter 14 is the long version.
+          </p>
+
+          <h2 id="safety">The safety number</h2>
+          <p>
+            <code>src/core/crypto/fingerprint.ts</code>. Six words, identical on
+            both phones, read aloud over a channel the two people already trust:
+            a call, a radio, another app. The strength comes from that channel,
+            not from the app.
+          </p>
+          <pre class="ascii">
+  per identity:
+
+    fp = SHA-256( "airhop-fingerprint-v1" || noisePub || signingPub )
+
+  the pair, on BOTH phones:
+
+    ours, theirs  ->  sort byte-wise, lower first
+    sn = SHA-256( "airhop-safety-number-v1" || first || second )
+
+  words:
+
+    take 6 x 7 bits from sn, most significant bit first
+    index into a 128 word list
+    ->  6 words,  42 bits
+</pre>
+          <p>
+            Four decisions in that diagram are load-bearing:
+          </p>
+          <ul>
+            <li>
+              <strong>It covers both keys.</strong> A peer ID is SHA-256 of the
+              Noise key alone, so reading a peer ID aloud would not catch the
+              attack that matters: a forged card that keeps the victim's real
+              peer ID and Noise key and substitutes the attacker's signing key.
+            </li>
+            <li>
+              <strong>The inputs are sorted.</strong> Neither side has to know
+              who is who. Without sorting, each side derives a different string
+              and the exchange doubles in length.
+            </li>
+            <li>
+              <strong>Two domain separators.</strong> The pair hash takes the
+              peer hash's output as its input, so without distinct prefixes one
+              could be substituted for the other.
+            </li>
+            <li>
+              <strong>It imports nothing.</strong> A match sets a flag, a
+              mismatch tells the user to stop. Neither writes a key, so unlike
+              the scan path there is no re-pinning power to gate.
+            </li>
+          </ul>
+          <div class="box warn">
+            <p class="box-title">Why six words and not eight</p>
+            <p>
+              42 bits is sized against the attack, not to a round number.
+              Forging a match means grinding key pairs until the pair hash lands
+              on the same six words: 2<sup>42</sup> work for one targeted pair,
+              and it has to be finished before those two people speak. Every
+              extra word is another word to read over a bad line, and a code
+              nobody finishes reading protects nothing. Signal uses 60 digits
+              for a similar reason arrived at differently: theirs is designed to
+              be compared visually side by side, ours to be spoken.
+            </p>
+          </div>
+
+          <h2 id="share">Sharing your own code</h2>
+          <p>
+            The Profile screen renders <code>encodeQRContent(getContactCard())</code>
+            as a QR image, with the same string shown underneath as copyable
+            text. They are the same bytes, which is why one warning sentence
+            covers both.
+          </p>
+          <pre class="ascii">
+  Profile -> QR
+     ├─ image  : the full card, scannable
+     ├─ text   : "airhop:v1/..." , tap to copy
+     └─ Share  : writes a PNG to cache, opens the share sheet
+                 fallback if sharing is unavailable:
+                 a message containing airhop://peer/&lt;id&gt;
+                 (the weak form, and only as a last resort)
+</pre>
+          <p>
+            If the mesh service is not up yet the QR falls back to the bare peer
+            ID, which older scanners also still accept. The photo-library "add"
+            permission exists partly for this: saving your own QR to the camera
+            roll is a supported way to hand it over later.
+          </p>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>106 to 138 bytes</td><td>Contact card size</td><td>Fixed 106 plus a nickname of 0 to 32 bytes.</td></tr>
+                <tr><td>32 bytes</td><td>Nickname cap</td><td>Matches the announce path exactly, so one name cannot render two ways.</td></tr>
+                <tr><td>8 bytes</td><td>Peer ID in the card</td><td>Half of SHA-256(noisePub). 64 bits of collision resistance against a second-preimage search.</td></tr>
+                <tr><td>5 minutes</td><td>bitchat QR validity, both directions</td><td>Their <code>verificationQRMaxAgeSeconds</code>. Symmetric so a future stamp buys no extra life.</td></tr>
+                <tr><td>255 bytes</td><td>Field cap in bitchat's canonical bytes</td><td>Part of their format, not a guard. A longer nickname must truncate identically or the signature fails.</td></tr>
+                <tr><td>6 words, 7 bits, 128 entries</td><td>Safety number</td><td>42 bits. Sized against a targeted grind that must finish before two people speak.</td></tr>
+                <tr><td>3</td><td><code>SOURCE_RANK</code> levels</td><td>manual, link, qr. Only the top one may re-pin.</td></tr>
+                <tr><td>60 seconds</td><td>Registry npub memory</td><td>Why a contact stores the Nostr key durably instead.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>A forwarded card allowed to re-pin.</strong> The whole
+              reason <code>inPerson</code> defaults to false. Without it, anyone
+              who could get a link in front of the user could overwrite the
+              signing key of a contact verified face to face, and the binding
+              check would not notice because the peer ID and Noise key would be
+              genuine.
+            </li>
+            <li>
+              <strong>An expired bitchat QR reported as unreadable.</strong> Not
+              a security failure, a usability one, and it was worth code to fix:
+              the two look identical through a viewfinder and only one has an
+              obvious remedy.
+            </li>
+            <li>
+              <strong>A nickname truncated differently from the announce
+              path.</strong> Byte truncation, not character truncation, in both
+              places. Get it wrong and one person renders two ways in one app.
+            </li>
+            <li>
+              <strong>A safety number compared over the wrong channel.</strong>
+              The code's strength is entirely the channel's strength. Reading it
+              to each other inside Airhop proves nothing, because that is the
+              channel under suspicion. The interface has to make the out-of-band
+              requirement obvious, and this is the failure most likely to happen
+              in practice.
+            </li>
+            <li>
+              <strong>A card whose peer ID does not derive from its Noise
+              key.</strong> Refused outright. This is the check that makes peer
+              IDs meaningful, and it applies to every route including the geohash
+              DM path.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            The mesh would still work, and it would be strictly worse in three
+            ways. Nothing would survive a restart: peers are learned from
+            announces and forgotten, so every conversation would need the other
+            person in radio range to begin. Nobody could be reached over the
+            internet without having first met on Bluetooth, because the npub
+            would only ever live in the 60 second registry window. And there
+            would be no way to detect an impersonation at all, because detecting
+            one requires having pinned what the identity looked like before.
+            Contacts are what turn a proximity chat into an address book.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Approach</th><th>How it works</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Phone number directory</td>
+                  <td>Signal's model: a server maps numbers to keys</td>
+                  <td>Requires a server, an identifier tied to a legal identity, and a phone network. Airhop's entire premise is that none of the three is available.</td>
+                </tr>
+                <tr>
+                  <td>Web of trust</td>
+                  <td>PGP: contacts sign each other's keys, trust is transitive</td>
+                  <td>Nobody ever understood the trust calculus, and it leaks the social graph by design, which for this threat model is the exact thing being protected.</td>
+                </tr>
+                <tr>
+                  <td>Key transparency log</td>
+                  <td>An append-only log of key bindings, auditable by clients</td>
+                  <td>The right answer for a system with servers, and genuinely strong. It needs an always-online log and a gossip protocol to detect a split view, neither of which survives being offline in a field.</td>
+                </tr>
+                <tr>
+                  <td>Numeric safety number</td>
+                  <td>Signal's 60 digits, compared visually</td>
+                  <td>Fine on a screen, poor over a bad phone line. Words survive being spoken, which is the channel this design assumes.</td>
+                </tr>
+                <tr>
+                  <td>Challenge-response verification</td>
+                  <td>bitchat's model: a nonce over the live session after the scan</td>
+                  <td>Stronger against a replayed QR, and it is why their code carries an expiry. It also requires the peer to be connected at that moment, which rules out verifying a contact you have not met yet. Airhop reads their QR but does not answer the challenge.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Someone sends you an Airhop contact code in a chat app and you paste it in. Are those keys usable? Are they trustworthy?</span>
+              <span class="a">Usable, yes. The card is self-consistent and the peer ID is checked against SHA-256 of its own Noise key, so encryption to that identity works and a DM route can be opened immediately. Trustworthy, no. Nothing about the delivery proves who sent it, because a card forwards as easily as a URL. It is stored with <code>source: "link"</code>, carries no verification, and is specifically not allowed to replace keys already bound to that peer ID. The fix is a safety number comparison over a channel you trust, which upgrades the record to <code>verification: "fingerprint"</code> without touching a single key.</span>
+            </li>
+            <li>
+              <span class="q">The binding check passes. Why is that not enough?</span>
+              <span class="a">Because a peer ID is SHA-256 of the Noise key, and the Noise key is public. An attacker can take a victim's real peer ID and real Noise key, both of which they can hear off the air, and build a card that passes the binding check while carrying their own Ed25519 signing key. That gets them the ability to forge signed announces and LEAVEs for the victim's identity. Announce-level TOFU pinning refuses it; a card trusted merely because it arrived would not. This is why only an in-person scan may re-pin, and why the safety number hashes both keys rather than the peer ID.</span>
+            </li>
+            <li>
+              <span class="q">Why is a card read from the photo roll treated differently from the identical card read by the camera?</span>
+              <span class="a">The payload can be byte-identical, so the difference is not in what arrived but in what was witnessed. The camera saw the other phone, in person, at that moment. The photo roll saw a file, which could have been sent by anyone, screenshotted from anywhere, or posted publicly. Only physical presence is evidence about who is on the other end, and evidence is what earns the right to overwrite a key that was already pinned. The flag is captured at the read rather than later, because by the confirm step every route looks the same.</span>
+            </li>
+            <li>
+              <span class="q">Explain why <code>markVerified</code> is allowed to run on a contact whose keys arrived through a link, when adding that link's card was not allowed to re-pin anything.</span>
+              <span class="a">Because they do opposite things. Adding a card writes keys, so it needs authority proportional to the damage a wrong key does. <code>markVerified</code> writes no key at all: it records that a human compared a code derived from keys already stored. If those stored keys had been substituted, the six words would not have matched and the comparison would have failed. So there is nothing to gate, and gating it would make verification impossible for exactly the contacts that most need it. It is refused only when the contact has no keys, because then there was nothing to compare.</span>
+            </li>
+            <li>
+              <span class="q">Why does the safety number sort its two inputs before hashing?</span>
+              <span class="a">So both phones derive the same string without either side needing to know which of them is "first". Without sorting, A would compute H(A||B) and B would compute H(B||A), two different codes, and the only fixes are agreeing a role in advance, which there is no channel to do, or reading both codes aloud, which doubles the length of the one part of the flow users already find tedious. Sorting is free and removes the whole problem.</span>
+            </li>
+            <li>
+              <span class="q">A user asks why the app kept a contact they never explicitly added.</span>
+              <span class="a">That is <code>saveIfAbsent</code>, and it is deliberate: anyone you message is kept as an unverified contact, which is Signal's behaviour. Without it the app would forget the person the moment their radio disappeared, since the peer store is rebuilt from live announces. It is a single entry point precisely so every conversation-starting path behaves the same way. The record it writes is the weakest possible one: whatever keys the registry held at that instant, <code>source</code> at its lowest applicable rank, and no verification. It can later be upgraded by <code>setProvenKeys</code> once a Noise session completes, which is proof rather than an announce.</span>
+            </li>
+            <li>
+              <span class="q">Why does an incoming announce claiming a new Nostr key for a known peer get ignored?</span>
+              <span class="a">Because an announce establishes nothing. It is unauthenticated in the sense that matters here: anyone who can hear a peer ID can emit a packet carrying it, and the npub is the routing address for internet-delivered mail. Accepting a replacement would let an attacker redirect a contact's gift-wrapped DMs to a relay identity they control. First key wins, in both <code>setNostrPubkey</code> and the merge policy, and a genuine key change is handled by re-exchanging cards in person rather than by trusting the air.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

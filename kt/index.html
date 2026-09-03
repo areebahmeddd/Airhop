@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Airhop KT · Maintainer manual</title>
+    <meta
+      name="description"
+      content="A ground-up manual for Airhop: the mesh, the crypto, the money, the radio physics, the threat model, and the review."
+    />
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body id="top">
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body hero-index">
+          <p class="kt-kicker">Knowledge transfer · v1</p>
+          <h1>Airhop, explained from the ground up</h1>
+          <p class="kt-lede">
+            This is the manual you would want on day one as a maintainer, and the
+            one you would want on the day someone senior asks you to defend a
+            design decision. It starts at radio waves and ends at an engineering
+            review of the whole thing.
+          </p>
+
+          <div class="eli5">
+            <p class="box-title">The sixty second version</p>
+            <p>
+              Airhop is a messaging app that does not need the internet. Phones
+              near each other talk over Bluetooth. Each phone repeats what it
+              hears, so a message can hop across strangers' phones to reach
+              someone further away than any single radio can reach. Messages are
+              encrypted so the phones in the middle carry sealed envelopes they
+              cannot open. When the internet <em>is</em> available, the same app
+              reaches further using Nostr relays. It can also carry money, as
+              offline Cashu ecash tokens. There are no accounts, no servers we
+              run, and nothing to seize or shut down.
+            </p>
+          </div>
+
+          <h2 id="how-to-read">How to read this</h2>
+          <p>
+            Fifty one chapters, grouped into twelve parts. Each chapter is
+            self-contained. The teaching chapters all follow the same shape, so
+            you always know where to look:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Section</th><th>What it answers</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>In plain words</td><td>The version you would give a ten year old.</td></tr>
+                <tr><td>The problem</td><td>What breaks without this. Why it exists at all.</td></tr>
+                <tr><td>How it works</td><td>Mechanism, step by step, with a diagram.</td></tr>
+                <tr><td>The numbers</td><td>Every constant, and why that value and not another.</td></tr>
+                <tr><td>In this codebase</td><td>The exact files that implement it.</td></tr>
+                <tr><td>What breaks it</td><td>Failure modes, real scenarios, edge cases.</td></tr>
+                <tr><td>If you removed it</td><td>The honest consequence of deleting the whole thing.</td></tr>
+                <tr><td>Alternatives</td><td>What else exists, and why this one won.</td></tr>
+                <tr><td>Drills</td><td>Questions you should be able to answer without notes.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="kt-note">
+            Four chapters are reference rather than teaching, and are shaped for
+            their job instead: <a href="02-repo-map.html">02</a> walks the file
+            tree, <a href="03-user-flows.html">03</a> walks the flows,
+            <a href="49-review.html">49</a> is findings in severity order, and
+            <a href="50-drills.html">50</a> is the glossary and the drill set.
+          </p>
+
+          <h3>Reading paths</h3>
+          <div class="grid two">
+            <div class="box plain">
+              <p class="box-title">No background at all</p>
+              <p>
+                Read in order and do not skip part 1. Chapters
+                <a href="04-networking.html">04</a> to
+                <a href="06-algorithms.html">06</a> build networking and
+                cryptography from nothing, and everything after them assumes it.
+                07 and 08 then build the radio picture the protocol chapters need.
+              </p>
+            </div>
+            <div class="box plain">
+              <p class="box-title">Already a mobile or backend engineer</p>
+              <p>
+                01, 02, 09, 11, 15, 17, 43, 49. That is the protocol, how it is
+                wired, the security argument and the verdict, in about two
+                hours. Add 06 if you want the "why not AES, why not RSA"
+                answers.
+              </p>
+            </div>
+            <div class="box plain">
+              <p class="box-title">Preparing to answer questions</p>
+              <p>
+                <a href="50-drills.html">50</a> is a glossary plus a drill set,
+                grouped by who is asking: sceptic, security engineer, backend,
+                mobile, cryptographer, product, ten year old.
+              </p>
+            </div>
+            <div class="box plain">
+              <p class="box-title">Deciding whether to invest in this</p>
+              <p>
+                <a href="49-review.html">49</a> is the engineering review: what is
+                real, what is claimed but not shipped, what the hard blockers are,
+                and what to do next.
+              </p>
+            </div>
+          </div>
+
+          <div class="box plain">
+            <p class="box-title">Looking for one specific thing</p>
+            <p>
+              The sidebar has a filter box. A few that are easy to miss: mDNS
+              against DNS and NAT are in <a href="04-networking.html">04</a>; what
+              a public key physically is, in
+              <a href="05-keys.html">05</a>; why AES and RSA lost, in
+              <a href="06-algorithms.html">06</a>; the bulletin board, in
+              <a href="22-rooms-board.html">22</a>; custodial or not, in
+              <a href="34-custody.html">34</a>; knip, Metro, lockfiles and the CI
+              pipeline, in <a href="39-build-system.html">39</a>; how the mesh service
+              is wired together, in <a href="15-mesh-service.html">15</a>;
+              contact cards, QR formats and share codes, in
+              <a href="21-contacts.html">21</a>; when each OS permission is
+              asked for, in <a href="37-permissions.html">37</a>; the design tokens,
+              the UX laws behind them and what the interface borrows from other
+              apps, in <a href="42-design-system.html">42</a>; battery policy and whether
+              constant Bluetooth is a health question, in
+              <a href="38-power-radiation.html">38</a>; the LAN transport and why it
+              is the only one off by default, in <a href="29-lan.html">29</a>; how Tor is
+              embedded and why it cannot leak, in <a href="25-tor.html">25</a>;
+              obfs4, Snowflake and working where Tor is blocked, in
+              <a href="26-bridges.html">26</a>.
+            </p>
+          </div>
+
+          <h2 id="one-picture">The whole system in one picture</h2>
+          <pre class="ascii">
+                      YOUR PHONE
+  ┌───────────────────────────────────────────────────────────┐
+  │  SCREENS      chat · mesh radar · wallet · profile         │
+  ├───────────────────────────────────────────────────────────┤
+  │  STORES       zustand state, persisted into MMKV           │
+  ├───────────────────────────────────────────────────────────┤
+  │  SERVICES     MeshService owns the radios and the routing  │
+  │               WalletService owns the money                 │
+  ├───────────────────────────────────────────────────────────┤
+  │  CORE         pure TypeScript, no phone required           │
+  │   crypto · mesh (wire, routing, links, sync, courier)      │
+  │   nostr  · payments · router                               │
+  ├───────────────────────────────────────────────────────────┤
+  │  BRIDGE       eight typed native contracts                 │
+  ├───────────────────────────────────────────────────────────┤
+  │  NATIVE       BLE · WiFi Aware · LAN · voice · Tor         │
+  └───────────────────────────────────────────────────────────┘
+       │             │             │              │
+   Bluetooth     WiFi Aware       LAN         Internet
+       │        (same platform)  (mDNS)           │
+       ▼             ▼             ▼              ▼
+  ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌───────────┐
+  │ NEARBY  │   │ NEARBY  │   │ SAME    │   │ NOSTR     │
+  │ PHONES  │   │ SAME    │   │ NETWORK │   │ RELAYS    │
+  │ up to 7 │   │ PLATFORM│   │ ring of │   │ 300+, geo │
+  │ hops    │   │ fast    │   │ 8, opt  │   │ selected  │
+  └─────────┘   └─────────┘   │ in only │   └───────────┘
+       │                      └─────────┘         │
+       └────────────► COURIER ◄───────────────────┘
+            a stranger physically carries a sealed
+            envelope until they meet the recipient
+</pre>
+
+          <h2 id="contents">Contents</h2>
+          <div data-kt-cards></div>
+
+          <h2 id="ground-rules">Ground rules of this document</h2>
+          <ul>
+            <li>
+              <strong>Everything is checkable.</strong> Where a claim comes from
+              code, the file is named. Where it comes from a document in
+              <code>docs/</code>, the document is named. Where it is my own
+              judgement, it says so.
+            </li>
+            <li>
+              <strong>Claims and reality are kept apart.</strong> Several
+              features are documented in the repository but are not in the code.
+              Those are marked <span class="pill warn">not shipped</span>
+              wherever they appear, and listed together in chapter
+              <a href="49-review.html">49</a>.
+            </li>
+            <li>
+              <strong>Numbers are sourced.</strong> Every timing constant comes
+              either from a named file in this repository or from the
+              corresponding bitchat source under <code>bitchat/</code>.
+            </li>
+            <li>
+              <strong>No hand waving on security.</strong> Where a property does
+              not hold, the chapter says so plainly rather than describing the
+              intent. Courier tags are not unlinkable. Tor use is visible. Peer
+              IDs do not rotate.
+            </li>
+          </ul>
+
+          <div class="box warn">
+            <p class="box-title">Status of the software</p>
+            <p>
+              Airhop v1.0.x has not had an external security audit. The
+              cryptography is implemented against audited primitive libraries
+              (<code>@noble/*</code>, reviewed by Cure53) but the protocol
+              composition on top of them is reviewed in-house only. Treat every
+              security statement in this manual as a description of the design,
+              not as an assurance.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

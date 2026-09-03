@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 39: The build system. Expo, Metro, knip, lockfiles, scripts, CI, release, test vectors." />
+    <title>39 The build system · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 39 · The device</p>
+          <h1>The build system</h1>
+          <p class="kt-lede">
+            How source becomes an app, what every tool in the chain does, and the
+            unusual amount of machinery this project spends on proving that what
+            shipped is what was written.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#chain">The chain, end to end</a></li>
+              <li><a href="#expo">Expo, and the bare workflow</a></li>
+              <li><a href="#metro">Metro and Babel</a></li>
+              <li><a href="#hermes">Hermes</a></li>
+              <li><a href="#lockfiles">Three lockfiles, and a fourth kind</a></li>
+              <li><a href="#vendor">vendor.lock.json</a></li>
+              <li><a href="#scripts">The scripts folder</a></li>
+              <li><a href="#knip">knip and the quality gates</a></li>
+              <li><a href="#ci">The CI workflow</a></li>
+              <li><a href="#native">The native build pipeline</a></li>
+              <li><a href="#release">The release workflow</a></li>
+              <li><a href="#scheduled">The scheduled workflows</a></li>
+              <li><a href="#vectors">Test vector files</a></li>
+              <li><a href="#supply">The supply chain posture</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Turning code into an app is like baking: you gather ingredients,
+              follow steps, and something comes out of the oven. The interesting
+              part here is that this kitchen writes down the exact weight of every
+              ingredient, refuses to bake if anything has been swapped, and
+              publishes a receipt so anyone can check the cake they were given is
+              the cake the recipe describes.
+            </p>
+          </div>
+
+          <h2 id="chain">The chain, end to end</h2>
+          <pre class="ascii">
+  YOUR TYPESCRIPT
+        │
+        │  BABEL          strips types, transforms JSX,
+        │  babel-preset-expo   applies the reanimated plugin LAST
+        ▼
+  PLAIN JAVASCRIPT
+        │
+        │  METRO          resolves every import, bundles the graph
+        │                 into ONE file, reads path aliases from tsconfig
+        ▼
+  ONE BUNDLE
+        │
+        │  HERMES         compiles JS to BYTECODE ahead of time
+        ▼
+  BYTECODE, embedded as an asset
+        │
+        ├──▶ GRADLE   compiles android/ Kotlin, links the bundle,
+        │             R8 minifies, produces .aab / .apk
+        │
+        └──▶ XCODE    compiles ios/ Swift, links arti.xcframework
+                      and the bundle, produces .ipa
+
+  TypeScript's own compiler NEVER emits anything here.
+  `tsc --noEmit` runs as a CHECK only; Babel does the stripping.
+</pre>
+          <div class="box">
+            <p class="box-title">Why <code>tsc</code> does not build the app</p>
+            <p>
+              Babel removes types by <em>deleting</em> them without understanding
+              them, which is fast and requires no type checking. That means the
+              build cannot be blocked by a type error, and equally that type errors
+              are invisible to the build. So <code>npm run typecheck</code> exists
+              as a separate CI gate. Both are needed: one for speed, one for
+              correctness.
+            </p>
+          </div>
+
+          <h2 id="expo">Expo, and the bare workflow</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Term</th><th>Means</th></tr></thead>
+              <tbody>
+                <tr><td><strong>React Native</strong></td><td>The framework. JavaScript drives real native views over a bridge.</td></tr>
+                <tr><td><strong>Expo</strong></td><td>A toolkit on top: a bundler config, a module library (<code>expo-camera</code>, <code>expo-secure-store</code>), a CLI, and optional cloud build.</td></tr>
+                <tr><td><strong>Managed workflow</strong></td><td>You never see <code>ios/</code> or <code>android/</code>. Expo generates them. Convenient, and you cannot add custom native code.</td></tr>
+                <tr><td><strong>Bare workflow</strong></td><td><strong>What Airhop uses.</strong> The native directories are checked in and edited by hand, while Expo's modules and CLI still work.</td></tr>
+                <tr><td><strong>Prebuild</strong></td><td>Regenerates <code>ios/</code> and <code>android/</code> from <code>app.json</code>.</td></tr>
+                <tr><td><strong>EAS</strong></td><td>Expo's cloud build and credential service. <strong>Not used.</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">Never run <code>npx expo prebuild</code></p>
+            <p>
+              <code>ios/</code> and <code>android/</code> are checked in and
+              hand-modified: five native modules per platform, a foreground service, an embedded
+              Arti framework, manifest entries for background modes and the
+              <code>neverForLocation</code> scan flag. Prebuild regenerates all of
+              it from <code>app.json</code> and <strong>deletes every one of
+              them</strong>.
+            </p>
+            <p>
+              It is the single most destructive command in the repository, and the
+              README flags it as a caution. The <code>prebuild</code> script still
+              exists in <code>package.json</code>, which is worth being aware of.
+            </p>
+          </div>
+          <p>
+            EAS is not used and is unlikely to be: its main draws are prebuild and
+            managed credentials, and this project does not run prebuild. The cost
+            is that iOS release signing is manual.
+          </p>
+
+          <h2 id="metro">Metro and Babel</h2>
+          <p>
+            Both configs are three lines and both of those lines matter.
+          </p>
+          <pre class="code">
+  metro.config.js
+
+    const { getDefaultConfig } = require("expo/metro-config");
+    module.exports = getDefaultConfig(__dirname);
+
+  Path aliases come from tsconfig.json, which expo/metro-config reads
+  DIRECTLY, so nothing is declared twice. `@core/...` resolves in the
+  bundler because it resolves in the type checker.
+</pre>
+          <pre class="code">
+  babel.config.js
+
+    presets: ["babel-preset-expo"]
+    plugins: ["react-native-reanimated/plugin"]     MUST BE LAST
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Decision</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Plain <code>babel-preset-expo</code>, no styling transform</strong></td>
+                  <td>NativeWind's <code>wrapJSX</code> swaps every element type for an interop wrapper whether or not a <code>className</code> is used, and that wrapper owns <code>style</code>, which breaks the standard <code>style={({ pressed }) =&gt; ...}</code> callback form. Styling is <code>StyleSheet</code> plus theme tokens instead.</td>
+                </tr>
+                <tr>
+                  <td><strong>Reanimated's plugin last</strong></td>
+                  <td>Its documentation requires it. It rewrites worklet functions, and it must see the final output of every other transform.</td>
+                </tr>
+                <tr>
+                  <td><strong>CSV is not bundled</strong></td>
+                  <td>Metro does not treat <code>.csv</code> as an asset, so the relay directory would be unreachable from the app. It is generated into <code>src/data/relays.ts</code> instead. See <code>generate-relays.js</code> below.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="hermes">Hermes</h2>
+          <p>
+            React Native's JavaScript engine, and the reason for several
+            constraints elsewhere in this manual.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Consequence for Airhop</th></tr></thead>
+              <tbody>
+                <tr><td>Ahead-of-time bytecode</td><td>Faster startup, smaller memory. The bundle shipped is bytecode, not source.</td></tr>
+                <tr><td><strong>No <code>crypto.getRandomValues</code></strong></td><td>A polyfill is required, and its import must be the <strong>first line</strong> of <code>app.tsx</code>. Every private key depends on that one line.</td></tr>
+                <tr><td><strong>No <code>Intl.PluralRules</code></strong></td><td>Nine hand-written CLDR rule functions in <code>i18n/plurals.ts</code> instead of a polyfill plus a locale-data module per language. Chapter <a href="40-i18n.html">40</a>.</td></tr>
+                <tr><td>Has <code>Intl.DateTimeFormat</code>, <code>NumberFormat</code>, <code>Collator</code></td><td>Which is how the device language is read, and why <code>expo-localization</code> (a config plugin against native trees that must never see prebuild) is avoided.</td></tr>
+                <tr><td>JSI</td><td>Lets MMKV and Nitro modules call native synchronously, which is what makes a synchronous store read during a render viable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="lockfiles">Three lockfiles, and a fourth kind</h2>
+          <p>
+            A lockfile records the <em>exact</em> version and content hash of every
+            dependency, so two builds from the same source produce the same
+            binary. This project has three, plus a fourth thing that is not quite a
+            lockfile.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>File</th><th>Locks</th><th>Regenerated by</th></tr></thead>
+              <tbody>
+                <tr><td><code>package-lock.json</code></td><td>Every npm dependency, transitively, with integrity hashes. 547 KB.</td><td><code>npm install</code></td></tr>
+                <tr><td><code>android/app/gradle.lockfile</code></td><td>Every Gradle dependency for the app module.</td><td><code>./gradlew app:dependencies --write-locks</code>, <strong>in the same commit</strong> as the change</td></tr>
+                <tr><td><code>ios/Podfile.lock</code></td><td>Exact CocoaPods versions.</td><td><code>npx pod-install</code>, <strong>in the same commit</strong></td></tr>
+                <tr><td><strong><code>vendor.lock.json</code></strong></td><td><strong>Checked-in binaries.</strong> Not a dependency lock. See below.</td><td><code>node scripts/verify-vendored.js --write</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The "same commit" rule matters. A dependency change without its
+            lockfile update produces a pull request that builds differently on
+            every machine, and the divergence surfaces later as an unreproducible
+            bug. There is a <code>sync-locks</code> workflow to regenerate both
+            native lockfiles on demand and commit them.
+          </p>
+
+          <h2 id="vendor">vendor.lock.json</h2>
+          <p>
+            The most unusual file in the build system, and worth understanding
+            properly because it addresses a real supply-chain problem.
+          </p>
+          <pre class="code">
+  {
+    "files": {
+      "ios/Frameworks/arti.xcframework/Info.plist":            "cac99db4...",
+      "ios/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h": "55165590...",
+      "ios/Frameworks/arti.xcframework/ios-arm64/libarti_bitchat.a": "5461a231...",
+      ... one SHA-256 per file, seven in total ...
+    }
+  }
+</pre>
+          <div class="box bad">
+            <p class="box-title">The problem it solves</p>
+            <p>
+              <code>ios/Frameworks/arti.xcframework</code> is roughly
+              <strong>35 MB of prebuilt static library</strong> that is not compiled
+              here, committed straight into the repository, and shipped inside the
+              iOS app. It is the Tor client.
+            </p>
+            <p>
+              Nobody reviews a binary diff. Git alone will not tell you the bytes
+              changed <em>for a reason</em>: a swapped blob looks exactly like a
+              legitimate update in a pull request summary. A malicious Tor
+              implementation inside a privacy app is close to the worst possible
+              outcome, and it would be invisible in review.
+            </p>
+          </div>
+          <pre class="code">
+  node scripts/verify-vendored.js            check the tree against the lock
+  node scripts/verify-vendored.js --write    record the tree as the new lock
+
+  Run in CI as `npm run verify:vendored`, on every pull request.
+</pre>
+          <div class="box warn">
+            <p class="box-title">What it does and does not prove</p>
+            <p>
+              It <strong>does not</strong> prove the binary is trustworthy. It
+              proves the binary <strong>has not changed</strong> without somebody
+              explicitly and visibly re-recording the hash. That converts an
+              invisible substitution into a visible one-line diff in
+              <code>vendor.lock.json</code> that a reviewer will notice and have to
+              ask about.
+            </p>
+            <p>
+              The complementary document is
+              <code>bitchat/ios/docs/ARTI-BINARY-PROVENANCE.md</code>, which is
+              where the question of where the binary came from belongs.
+            </p>
+          </div>
+
+          <h2 id="scripts">The scripts folder</h2>
+          <p>
+            Ten Node scripts, none of which ship in the app. Each exists because
+            something failed silently once.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Script</th><th>Job</th><th>Why it exists</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>check-invisibles.js</code></td>
+                  <td>Rejects invisible characters in tracked text files.</td>
+                  <td><strong>The best story in the folder.</strong> <code>cashu.ts</code> once carried literal control bytes where escape sequences were meant: a character class intended as <code>[\x00-\x1f]</code> held the raw bytes themselves, and a word boundary held a backspace. The expressions silently matched nothing, so <em>a mint-safety check accepted every mint it was asked about</em>. The same bytes made git treat the file as binary, so no diff of it was ever readable in review. A money-handling file became unreviewable and unenforced at once, and nothing in the toolchain objected.</td>
+                </tr>
+                <tr>
+                  <td><code>verify-vendored.js</code></td>
+                  <td>Checks every vendored binary against <code>vendor.lock.json</code>.</td>
+                  <td>See above.</td>
+                </tr>
+                <tr>
+                  <td><code>generate-relays.js</code></td>
+                  <td>Regenerates <code>src/data/relays.ts</code> and the landing site's copy from <code>assets/data/nostr_relays.csv</code>.</td>
+                  <td>Metro does not bundle <code>.csv</code>, so the directory ships as a TypeScript module. Bundling it means <strong>no network dependency on first launch, no third party learning who is asking for relays, and no fetch to fail offline</strong>, which is exactly when this app matters most. Airhop does not fetch a relay list at runtime from any URL.</td>
+                </tr>
+                <tr>
+                  <td><code>validate-relays.js</code></td>
+                  <td>Validates a candidate relay CSV before it replaces the vendored copy. <strong>Fails closed.</strong></td>
+                  <td>The directory is compiled into the bundle, so a bad row ships to every user. It also reports which hosts <em>entered and left</em>, because counts alone cannot show a hostile row arriving in a pull request.</td>
+                </tr>
+                <tr>
+                  <td><code>relay-url.js</code></td>
+                  <td>A second copy of <code>validateRelayUrl</code>, for build-time scripts.</td>
+                  <td>The app's copy is TypeScript bundled by Metro; this runs in plain Node under CI, and nothing can share a module across that boundary. <code>relay-url-parity.test.ts</code> asserts the two agree so they cannot drift. It also collapses hosts listed twice, bare and with an explicit <code>:443</code>, because those are one relay and bitchat collapses them before choosing a cell's set.</td>
+                </tr>
+                <tr>
+                  <td><code>source-manifest.js</code></td>
+                  <td>Writes a SHA-256 manifest of every git-tracked file, in plain <code>sha256sum</code> format.</td>
+                  <td>So anyone can prove the source they hold is the source that shipped, with <code>sha256sum -c</code> and no tooling from this repository. Comment lines are ignored by <code>sha256sum</code>, which is what lets the file carry its own instructions.</td>
+                </tr>
+                <tr>
+                  <td><code>i18n-audit.js</code></td>
+                  <td>Reports hardcoded English strings, and unused catalog keys.</td>
+                  <td>Two directions of one question, and both drift silently: a string that never reached the catalog leaves a screen untranslatable, and a catalog entry nothing references leaves a translator working on text nobody reads. <code>--max</code> is a <strong>ratchet</strong>, run in CI at <code>--max 0</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>i18n-check-native.js</code></td>
+                  <td>Guards the strings the OS renders: iOS permission prompts in <code>.lproj/</code>, the Android foreground notice in <code>values-*/</code>, and the locale list Android 13's picker reads.</td>
+                  <td>Those never reach <code>t()</code>, so they are invisible to the catalog test. Without it a language ships a complete catalog and still shows an English system dialog, silently.</td>
+                </tr>
+                <tr>
+                  <td><code>i18n-build-locale.js</code></td>
+                  <td>Builds a locale from a flat <code>{ key: text }</code> map, and <strong>refuses to build a broken one</strong>.</td>
+                  <td>Key order, section markers and escaping come from <code>en.ts</code>, so the emitted file is complete and ordered by construction and the only thing left to review is the words. Fatal: a missing or extra key, an empty string, a placeholder that does not match English, a plural set that is not the language's CLDR categories, a protocol token that did not survive, or a character from a script the language does not write in.</td>
+                </tr>
+                <tr>
+                  <td><code>i18n-lib.js</code></td>
+                  <td>Reads the catalog from outside TypeScript, through the compiler API.</td>
+                  <td>The catalog is TypeScript rather than JSON so it can carry section markers and be type-checked. A script cannot <code>require()</code> it, and unlike a regex the compiler API cannot be confused by an apostrophe, a brace inside a string, or a multi-line value.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="knip">knip and the quality gates</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Command</th><th>Tool</th><th>Catches</th></tr></thead>
+              <tbody>
+                <tr><td><code>npm run typecheck</code></td><td><code>tsc --noEmit</code></td><td>Type errors. Strict mode, and the mechanism that makes a partial i18n catalog fail to compile.</td></tr>
+                <tr><td><code>npm run lint</code></td><td>ESLint</td><td>Correctness and style rules.</td></tr>
+                <tr><td><code>npm run format:check</code></td><td>Prettier</td><td>Formatting, with <code>prettier-plugin-organize-imports</code> sorting import blocks.</td></tr>
+                <tr><td><strong><code>npm run deadcode</code></strong></td><td><strong>knip</strong></td><td><strong>Unused files, exports, types and dependencies.</strong></td></tr>
+                <tr><td><code>npm run test</code>, <code>npm run coverage</code></td><td>Jest</td><td>Everything in chapter <a href="44-testing.html">44</a>.</td></tr>
+                <tr><td><code>npm run benchmark</code></td><td>Jest</td><td><code>__benchmarks__/*.bench.ts</code>, run in band.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>What knip actually is</h3>
+          <p>
+            A dead-code finder. You declare your <strong>entry points</strong>, it
+            walks the import graph from them, and anything unreachable is reported:
+            unused files, unused exports, unused types, and dependencies in
+            <code>package.json</code> that nothing imports.
+          </p>
+          <pre class="code">
+  knip.json
+
+    entry:    App.tsx
+              src/**/__tests__/**          tests are entry points too, or
+              src/**/__benchmarks__/**     every tested-but-unused export
+              scripts/*.js                 would be reported
+              press/build.mjs, press/tools/*.mjs
+
+    project:  src/**/*.{ts,tsx,js}, scripts/**/*.js, press/**/*.mjs
+
+    ignoreDependencies:  ["expo-updates"]
+    ignoreExportsUsedInFile: true
+</pre>
+          <div class="box">
+            <p class="box-title">Why dead code is a security concern, not just tidiness</p>
+            <p>
+              Unused code is unreviewed code that still ships. It enlarges the
+              attack surface, it confuses the next reader about what is live, and
+              an unused dependency is a supply-chain risk with no benefit. In a
+              project whose selling point is a small auditable protocol core,
+              running this as a <strong>hard CI gate</strong> rather than a report
+              is the right call.
+            </p>
+            <p>
+              <code>ignoreExportsUsedInFile: true</code> allows a module to export
+              something it also uses internally, which is common for testability.
+              <code>expo-updates</code> is ignored because it is referenced by
+              native configuration rather than by an import.
+            </p>
+          </div>
+
+          <h2 id="ci">The CI workflow</h2>
+          <p>
+            <code>ci.yml</code>, on every pull request to <code>main</code> and on
+            push, skipping documentation-only changes. Four jobs.
+          </p>
+          <pre class="ascii">
+  ┌──────────────────────────────────────────────────────────────┐
+  │ 1. LINT (Code Quality Check)          ubuntu, 10 min          │
+  │                                                                │
+  │    validate the Gradle wrapper against the official release    │
+  │    verify:invisibles     no invisible characters               │
+  │    verify:vendored       binaries match vendor.lock.json       │
+  │    i18n:audit --max 0    NO hardcoded strings, a hard ratchet   │
+  │    i18n:native           OS-rendered strings are localised     │
+  │    deadcode              knip                                   │
+  │    typecheck             tsc --noEmit                           │
+  │    format:check          prettier                               │
+  │    lint                  eslint                                 │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 │  everything below NEEDS lint
+        ┌────────────────────────┼────────────────────────┐
+        ▼                        ▼                        ▼
+  ┌───────────┐         ┌─────────────────┐      ┌──────────────┐
+  │ 2. TEST   │         │ 3. ANDROID BUILD │      │ 4. iOS BUILD │
+  │ 10 min    │         │ 45 min           │      │              │
+  │           │         │                  │      │              │
+  │ coverage  │         │ FULL R8-MINIFIED │      │ UNSIGNED     │
+  │ upload to │         │ RELEASE BUILD    │      │ Release on   │
+  │ codecov,  │         │ on EVERY change  │      │ a macOS      │
+  │ FAIL if   │         │                  │      │ runner       │
+  │ upload    │         │                  │      │              │
+  │ errors    │         │                  │      │              │
+  └───────────┘         └─────────────────┘      └──────────────┘
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Decision</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>A full R8-minified release build on every change</strong></td>
+                  <td>Minification is where reflection-based libraries and missing keep rules fail, and where 16 KB page alignment requirements bite. Those failures otherwise appear for the first time on a release tag, in front of users, at the worst possible moment. Building it per pull request turns a release-day emergency into a red check on a branch.</td>
+                </tr>
+                <tr>
+                  <td><strong>An unsigned iOS Release build in CI</strong></td>
+                  <td>So native and release-only breakage fails the same pull request Android does, even though distribution credentials do not exist.</td>
+                </tr>
+                <tr>
+                  <td><strong>Every action pinned to a commit SHA</strong></td>
+                  <td><code>actions/checkout@3d3c42e5...</code> rather than <code>@v7</code>. A tag can be moved; a SHA cannot. This is the standard defence against a compromised action, and it is why OpenSSF Scorecard rewards it.</td>
+                </tr>
+                <tr>
+                  <td><strong>Gradle wrapper validation</strong></td>
+                  <td>The wrapper is a checked-in JAR that runs during every build. Validating it against the official release stops a substituted wrapper executing arbitrary code in CI.</td>
+                </tr>
+                <tr>
+                  <td><strong><code>fail_ci_if_error: true</code> on coverage upload</strong></td>
+                  <td>A silently failing upload means the coverage badge quietly stops meaning anything.</td>
+                </tr>
+                <tr>
+                  <td><strong><code>permissions: contents: read</code></strong></td>
+                  <td>Least privilege by default, escalated per job only where a job genuinely writes.</td>
+                </tr>
+                <tr>
+                  <td><strong>Concurrency cancels in-progress PR runs</strong></td>
+                  <td>Pushing twice does not queue two 45 minute Android builds.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A separate <code>codeql.yml</code> runs GitHub's static analysis on
+            pull requests, pushes, and a schedule.
+          </p>
+
+          <h2 id="native">The native build pipeline</h2>
+          <p>
+            Two binaries in this app are compiled from source rather than
+            downloaded: the embedded Tor client and the pluggable transports it
+            dials. Together they are the most involved build machinery in the
+            repository, and every unusual thing about it follows from one rule:
+            <strong>a binary nobody here compiled must not ship</strong>.
+          </p>
+          <pre class="ascii">
+  native/arti          Rust      ->  libarti_airhop.so   (3 Android ABIs)
+                                 ->  arti.xcframework    (iOS)
+
+  native/iptproxy      Go        ->  IPtProxy.aar        (Android)
+                       gomobile  ->  IPtProxy.xcframework (iOS)
+
+  each has four scripts, and they mean different things:
+
+    build-in-container.sh   Android, in the pinned image.  SUPPORTED PATH,
+                            and what CI checks against
+    build-android.sh        Android, directly.  refuses a toolchain that
+                            does not match TOOLCHAIN.env exactly
+    build-apple.sh          iOS.  needs a Mac: lipo and xcodebuild are
+                            macOS only
+    fetch-sources.sh        (iptproxy) pinned checkouts on the host
+</pre>
+          <h3><code>TOOLCHAIN.env</code>, one file for both</h3>
+          <p>
+            Every pinned version lives in
+            <code>native/arti/TOOLCHAIN.env</code>, read by the scripts, by the
+            Dockerfile and by CI. One file for both native builds, because they
+            share an NDK and a container.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pin</th><th>Value</th><th>Why it is pinned here</th></tr></thead>
+              <tbody>
+                <tr><td><code>ARTI_CLIENT_VERSION</code></td><td>0.46.0</td><td>Must match <code>arti-client</code> and <code>tor-rtcompat</code> in <code>Cargo.toml</code>. The build asserts they agree.</td></tr>
+                <tr><td><code>RUST_VERSION</code></td><td>1.98.0</td><td>Must match <code>rust-toolchain.toml</code>. A compiler bump moves both together.</td></tr>
+                <tr><td><code>ANDROID_NDK_*</code></td><td>r28c, with a SHA-256</td><td>NDK r28 and later use 16 KiB load-segment alignment by default, which Google Play requires for 64-bit libraries.</td></tr>
+                <tr><td><code>GO_VERSION</code></td><td>1.26.8, with a SHA-256</td><td>The transports are Go.</td></tr>
+                <tr><td><code>IPTPROXY_VERSION</code> + <code>_COMMIT</code></td><td>5.5.1, and a commit hash</td><td>Both, so the source cannot change behind a tag.</td></tr>
+                <tr><td><code>GOMOBILE_VERSION</code></td><td>a pseudo-version</td><td>Upstream's build script resolves gomobile with <code>@latest</code>, so the same script run twice can produce different binaries. This pins it, and the build fails loudly if it drifts from their <code>go.mod</code>.</td></tr>
+                <tr><td><code>DNSTT_COMMIT</code></td><td>a commit hash</td><td>IPtProxy references dnstt through a replace directive rather than the module proxy, so it needs its own pin.</td></tr>
+                <tr><td><code>DEBIAN_SNAPSHOT</code></td><td>a timestamp</td><td>System packages resolve against a frozen archive, so an <code>apt install</code> in the image is reproducible.</td></tr>
+                <tr><td><code>NATIVE_SOURCE_DATE_EPOCH</code></td><td>a fixed timestamp</td><td>Build timestamps embedded in output would otherwise change every hash.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>What the builds verify about themselves</h3>
+          <p>
+            Neither script trusts its toolchain. Each of these checks exists
+            because the failure it catches is invisible until it reaches a
+            phone.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Check</th><th>Catches</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Exported symbols</strong>, every entry point in every slice</td><td>A partial rebuild, where a symbol is present in one architecture and missing from another. The linker only notices when somebody happens to build for that architecture.</td></tr>
+                <tr><td><strong>16 KiB page alignment</strong> (Android)</td><td>A Play Store rejection. Read back with <code>llvm-readelf</code>, never assumed from the toolchain default.</td></tr>
+                <tr><td><strong>No build-machine paths</strong></td><td>An absolute path from a developer's disk inside a shipped binary. Both a reproducibility failure and a small leak about whoever built it.</td></tr>
+                <tr><td><strong>Exactly the ABIs and slices the app packages</strong> (iptproxy)</td><td>A missing one, which only surfaces on a user's phone; and an extra one, which is upstream's default list creeping back and committing a macOS slice nothing links.</td></tr>
+                <tr><td><strong>The generated binding surface</strong> (iptproxy)</td><td>gomobile derives class and symbol names from the Go package, so an upstream rename would otherwise appear as a crash on a phone or a compile error in the app.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3><code>SHA256SUMS</code> and the reproducibility test</h3>
+          <p>
+            Each tree records the hash of every artifact it produces, per
+            platform, and those files are committed. The test is stated in both
+            READMEs in the same words:
+          </p>
+          <div class="box ok">
+            <p class="box-title">Run the container build twice from clean</p>
+            <p>
+              If <code>SHA256SUMS.android</code> moves, something unpinned leaked
+              into the build. That is the whole reason for the frozen Debian
+              snapshot, the fixed source epoch, and pinning gomobile rather than
+              letting <code>@latest</code> resolve.
+            </p>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The <code>git add</code> is not optional on a first build</p>
+            <p>
+              <code>verify-vendored.js</code> hashes <em>tracked</em> files, so a
+              binary that has never been added is invisible to it, and
+              <code>--write</code> would record a manifest that silently omits
+              it. Both READMEs say so at the point where somebody would skip it.
+            </p>
+          </div>
+          <h3>Why build rather than vendor</h3>
+          <p>
+            Upstream IPtProxy commits a prebuilt xcframework and publishes an aar
+            on Maven, and their CocoaPod installs the committed binary. Either
+            route puts a large binary nobody here compiled into the app, which is
+            exactly what <code>scripts/verify-vendored.js</code> exists to
+            prevent. <code>fetch-sources.sh</code> goes as far as
+            <strong>deleting</strong> the committed xcframework so their
+            already-built shortcut cannot ship it by accident.
+          </p>
+          <h3>The <code>build-native</code> workflow</h3>
+          <pre class="ascii">
+  .github/workflows/build-native.yml     workflow_dispatch only
+
+    android   ubuntu-24.04, 90 min
+                arti build-in-container.sh --clean
+                iptproxy build-in-container.sh --clean   (reuses the image)
+                uploads jniLibs/*.so, IPtProxy.aar, both SHA256SUMS.android
+
+    apple     macos-26, 120 min
+                reads the pinned toolchain, then both build-apple.sh
+
+  Manual, not on push: a 90 to 120 minute job that produces committed
+  binaries is not something to run on every branch, and rebuilding is
+  a deliberate act recorded in a commit.
+</pre>
+          <p>
+            Chapter <a href="25-tor.html">25</a> is the Tor client itself and
+            chapter <a href="26-bridges.html">26</a> the transports; this section
+            is only how they come to exist as binaries.
+          </p>
+
+          <h2 id="release">The release workflow</h2>
+          <p>
+            <code>release.yml</code>, triggered by a <code>v*.*.*</code> tag or a
+            manual dispatch naming an existing tag. Four jobs.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Job</th><th>Does</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>release</strong></td>
+                  <td>Resolves and <strong>validates</strong> the tag: it must exist, and must match <code>^v[0-9]+\.[0-9]+\.[0-9]+$</code> exactly, because the version written into <code>app.json</code> is the tag without its leading <code>v</code>. Generates the changelog (<code>git-cliff</code>, configured by <code>cliff.toml</code>) and creates the GitHub release.</td>
+                </tr>
+                <tr>
+                  <td><strong>android-release</strong></td>
+                  <td>Builds and <strong>signs</strong> the APK and AAB with the upload keystore, and attaches them.</td>
+                </tr>
+                <tr>
+                  <td><strong>sbom</strong></td>
+                  <td>Generates a <strong>software bill of materials</strong> in SPDX JSON via <code>anchore/sbom-action</code>, and uploads it to the release.</td>
+                </tr>
+                <tr>
+                  <td><strong>source-manifest</strong></td>
+                  <td>Publishes SHA-256 hashes of every tracked source file, with <strong>attestations</strong> (<code>id-token: write</code>, <code>attestations: write</code>), so the source can be proven to match the release.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">iOS release is manual</p>
+            <p>
+              There is an <code>ios-release</code> placeholder, and distribution
+              credentials do not exist, so the shipped <code>.ipa</code> is
+              produced by hand from Xcode. Android is automated end to end. This is
+              listed as a gap in chapter <a href="49-review.html">49</a>: a manual
+              release step is a step that can be done differently each time, and it
+              is the one part of the pipeline whose output nobody can reproduce.
+            </p>
+          </div>
+          <div class="box ok">
+            <p class="box-title">SBOM plus source manifest is a genuinely strong posture</p>
+            <p>
+              The SBOM says <em>what went in</em>. The source manifest says
+              <em>exactly which bytes</em> the release was built from, in a format
+              verifiable with <code>sha256sum -c</code> and nothing else. Together
+              with <code>vendor.lock.json</code> for the one binary that is not
+              compiled here, that is three independent answers to "is what I have
+              what you shipped". Very few projects of this size do any of the
+              three.
+            </p>
+          </div>
+
+          <h2 id="scheduled">The scheduled workflows</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Workflow</th><th>Trigger</th><th>Does</th></tr></thead>
+              <tbody>
+                <tr><td><code>sync-relays.yml</code></td><td>Daily, 07:00 UTC</td><td>Fetches a fresh relay directory, runs <code>validate-relays.js</code> which <strong>fails closed</strong>, regenerates <code>src/data/relays.ts</code>, and opens or commits the change. The entered-and-left host report is what makes a hostile row visible.</td></tr>
+                <tr><td><code>sync-bridges.yml</code></td><td>Weekly, Sunday 07:30 UTC</td><td>Fetches the built-in bridge lines from Moat, the Tor Project endpoint Tor Browser uses, regenerates <code>src/data/bridges.ts</code> and opens a pull request on <code>automation/bridges</code>. A PR rather than a push, because a bridge directory is security-relevant input. Chapter <a href="26-bridges.html">26</a>.</td></tr>
+                <tr><td><code>scorecard.yml</code></td><td>Weekly, Sunday 04:00 UTC</td><td>OpenSSF Scorecard: pinned actions, branch protection, dependency update tooling, signed releases, and so on. The badge in the README comes from here.</td></tr>
+                <tr><td><code>codeql.yml</code></td><td>PR, push, schedule</td><td>Static analysis for known vulnerability patterns.</td></tr>
+                <tr><td><code>sync-locks.yml</code></td><td>Manual only</td><td>Regenerates <code>gradle.lockfile</code> and <code>Podfile.lock</code> on their native toolchains and commits them together, since a Linux runner cannot produce a Podfile lock.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="vectors">Test vector files</h2>
+          <p>
+            Two JSON files in <code>docs/spec/</code> are part of the build's
+            correctness story rather than being documentation.
+          </p>
+          <h3><code>courier-test-vectors.json</code></h3>
+          <div class="box">
+            <p class="box-title">What it is</p>
+            <p>
+              Golden vectors for the courier wire format, published so a
+              <strong>second implementation can be written without reading the
+              TypeScript</strong>, and asserted by
+              <code>courier-vectors.test.ts</code> against the running code, so the
+              file cannot go stale while the suite is green.
+            </p>
+          </div>
+          <p>
+            The header explains why this format in particular earns vectors:
+            <strong>three ways of getting it wrong fail silently.</strong> The
+            envelope is accepted, carried, then dropped at deposit with nothing
+            logged at either end.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Silent failure</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Expiry in seconds instead of milliseconds</strong></td><td>About 1000x too small, so every envelope reads as long expired.</td></tr>
+                <tr><td><strong>Writing the <code>copies</code> TLV as 1 instead of omitting it</strong></td><td>A decoder that requires the omission rejects every carry-only envelope, which is the ordinary delivery case.</td></tr>
+                <tr><td><strong>Wrong epoch-day arithmetic in the recipient tag</strong></td><td>Produces a tag no carrier matches, so mail is never delivered.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="code">
+  WHAT IS ACTUALLY IN IT
+
+    recipientTag   the HMAC definition, plus two worked cases:
+                     nowMillis 0             -> epochDay 0     -> tag hex
+                     nowMillis 1728000000000 -> epochDay 20000 -> tag hex
+
+    envelopeTLV    the exact byte order, plus TWO encoded examples:
+                     copies 4  -> the 0x04 TLV IS present
+                     copies 1  -> the 0x04 TLV IS ABSENT
+
+    limits         ttl 86400000 ms, slack 3600000 ms,
+                   max 16384 bytes, initialCopies 4
+</pre>
+          <p>
+            It also carries, in a comment, the statement that the tag is
+            <strong>not unlinkable</strong> and that this is inherited rather than
+            chosen, which is a good example of the project documenting a weakness
+            in the machine-readable spec rather than only in prose. And it notes
+            that upstream is drafting an equivalent, with the instruction to
+            <em>diff the two rather than merge</em>, because agreement is the
+            interoperability property and a difference is a finding.
+          </p>
+          <h3>Vendored source parsing</h3>
+          <p>
+            The other half of the same idea, and more unusual:
+            <code>conformance.test.ts</code> reads bitchat's own Swift and Kotlin
+            at test time. It pulls <code>maxPayloadBytes</code> out of
+            <code>FileTransferLimits.swift</code> and fails if Airhop's caps no
+            longer fit under the ceiling it implies, and it parses their
+            <code>MessageType</code> enum and fails if their allocation comes
+            within 16 of Airhop's <code>0x50</code> range. Drift in the other
+            project becomes a red build here rather than a field failure later.
+          </p>
+
+          <h2 id="supply">The supply chain posture</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Control</th><th>Against</th></tr></thead>
+              <tbody>
+                <tr><td>Three lockfiles, updated in the same commit</td><td>Unreproducible builds, and a dependency changing under you.</td></tr>
+                <tr><td><code>vendor.lock.json</code></td><td>A swapped binary that no reviewer would see.</td></tr>
+                <tr><td>Gradle wrapper validation</td><td>A substituted wrapper JAR executing in CI.</td></tr>
+                <tr><td>Every GitHub action pinned to a SHA</td><td>A compromised action, or a moved tag.</td></tr>
+                <tr><td>knip as a hard gate</td><td>Unused dependencies and unreviewed shipped code.</td></tr>
+                <tr><td>CodeQL</td><td>Known vulnerability patterns.</td></tr>
+                <tr><td>OpenSSF Scorecard</td><td>Drift in all of the above.</td></tr>
+                <tr><td>SBOM per release</td><td>Not knowing what is inside a shipped artefact.</td></tr>
+                <tr><td>Source manifest with attestations</td><td>Not being able to prove the source matches the release.</td></tr>
+                <tr><td>Relay CSV validated, fails closed</td><td>A hostile relay row shipping to every user.</td></tr>
+                <tr><td>Invisible character check</td><td>Code that is unreviewable and silently wrong at the same time.</td></tr>
+                <tr><td>Audited crypto libraries, pinned</td><td>A cryptographic regression.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            My assessment: this is <strong>materially stronger than typical for a
+            project of this size</strong>, and several of the controls
+            (<code>check-invisibles</code>, <code>verify-vendored</code>,
+            <code>validate-relays</code>, the source manifest) exist because of a
+            specific incident or a specific reasoned risk rather than as
+            box-ticking. The weak point is the manual iOS release, which is the one
+            output nobody can reproduce.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">What does Metro do, and why is <code>tsc</code> not part of the build?</span>
+              <span class="a">Metro is the bundler: it resolves every import from an entry point, walks the graph, and produces one JavaScript file, reading path aliases from <code>tsconfig.json</code> so nothing is declared twice. Types are stripped by Babel, which deletes them without understanding them, so the build is fast and cannot be blocked by a type error. That means type errors are invisible to the build, which is why <code>tsc --noEmit</code> runs as a separate CI gate.</span>
+            </li>
+            <li>
+              <span class="q">What is <code>vendor.lock.json</code> and what does it actually prove?</span>
+              <span class="a">A SHA-256 per file of the checked-in Arti xcframework, roughly 35 MB of prebuilt Tor client that is not compiled here and ships inside the iOS app. It proves the binary has not changed without someone explicitly re-recording the hash. It does <em>not</em> prove the binary is trustworthy. Its value is turning an invisible substitution, which no reviewer would catch in a binary diff, into a one-line change in a JSON file that a reviewer will notice and question.</span>
+            </li>
+            <li>
+              <span class="q">Why does <code>check-invisibles.js</code> exist?</span>
+              <span class="a">Because <code>cashu.ts</code> once contained literal control bytes where escape sequences were intended: a character class meant as <code>[\x00-\x1f]</code> held the raw bytes, and a word boundary held a backspace. The expressions silently matched nothing, so a mint-safety check accepted every mint it was asked about. The same bytes made git treat the file as binary, so no diff of it was readable in review. A money-handling file became simultaneously unreviewable and unenforced, and nothing else in the toolchain objected.</span>
+            </li>
+            <li>
+              <span class="q">Why is knip run as a hard gate rather than a report?</span>
+              <span class="a">Because unused code is unreviewed code that still ships. It enlarges the attack surface, misleads the next reader about what is live, and an unused dependency is supply-chain risk with no compensating benefit. For a project whose entire pitch is a small auditable protocol core, letting dead code accumulate undermines the claim, so it fails the build rather than producing a warning nobody reads.</span>
+            </li>
+            <li>
+              <span class="q">Why build a fully minified Android release on every pull request?</span>
+              <span class="a">Because minification is where reflection-based libraries fail without a keep rule, and where page alignment requirements bite. Those failures otherwise appear for the first time on a release tag, in front of users, at the moment they are hardest to fix. Building it per pull request converts a release-day emergency into a red check on a branch, at the cost of a 45 minute job.</span>
+            </li>
+            <li>
+              <span class="q">Why does the courier format have published test vectors when nothing else does?</span>
+              <span class="a">Because three ways of implementing it wrong fail completely silently: the envelope is accepted, carried, and then dropped at deposit with nothing logged at either end. Expiry in seconds is 1000x too small so everything reads as expired; writing the <code>copies</code> TLV as 1 instead of omitting it makes every carry-only envelope rejected; and wrong epoch-day arithmetic produces a tag no carrier matches. The vectors are also asserted by a test against the running code, so the published spec cannot drift from the implementation while the suite is green.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

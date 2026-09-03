@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 41: Interface and UX. The tab machine, honest status, and the rules behind the screens." />
+    <title>41 Interface and UX · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 41 · The device</p>
+          <h1>Interface and UX</h1>
+          <p class="kt-lede">
+            A mesh messenger has failure modes no ordinary app has: a message can
+            leave and reach nobody, a peer can be present and unreachable, money
+            can be committed and undeliverable. The interface's hardest job is
+            telling the truth about all of that without frightening anyone.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#principle">The governing principle</a></li>
+              <li><a href="#tabs">The four tab machine</a></li>
+              <li><a href="#banner">The mesh banner</a></li>
+              <li><a href="#delivery">Delivery state</a></li>
+              <li><a href="#peers">The radar</a></li>
+              <li><a href="#onboarding">Onboarding</a></li>
+              <li><a href="#notifications">Notifications</a></li>
+              <li><a href="#design">The design system</a></li>
+              <li><a href="#accessibility">Accessibility</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              A normal messaging app can always tell you whether your message
+              arrived, because it went to a company's computer. This one often
+              cannot, because it might be sitting in a stranger's pocket waiting
+              to bump into your friend. So instead of pretending, the app says
+              exactly what it knows: sent, carried by a friend, or queued. Never a
+              tick it has not earned.
+            </p>
+          </div>
+
+          <h2 id="principle">The governing principle</h2>
+          <div class="box ok">
+            <p class="box-title">Never claim more than you know</p>
+            <p>
+              Every status in this app is a claim about the physical world, and
+              most of those claims are uncertain. The rule throughout the codebase
+              is that an honest uncertain state beats a confident wrong one, and it
+              shows up in the type signatures rather than only in the copy.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Where</th><th>The dishonest version</th><th>What is actually done</th></tr></thead>
+              <tbody>
+                <tr><td>Channel send</td><td><code>boolean</code></td><td><code>{ msgId, bleLinks, nostr, gateway }</code>, so "reached nobody" is representable and shown.</td></tr>
+                <tr><td>Group send</td><td>A tick</td><td><code>{ sealed, bleLinks }</code>. Groups have no delivery receipts on either client, so this is the only honest signal available.</td></tr>
+                <tr><td>Payment</td><td>"Sent"</td><td>The rail that carried it, whether it is final, and whether Pending will offer it back.</td></tr>
+                <tr><td>Panic wipe</td><td>"Done"</td><td><code>keysDestroyed: boolean</code>, and a banner that stays up until it stops being true.</td></tr>
+                <tr><td>Offline ecash</td><td>Counted as balance</td><td>Stored as unverified, broken out from the headline.</td></tr>
+                <tr><td>Tor</td><td>A toggle that is on</td><td>Bootstrap phases, and on Android the transport is refused rather than the claim being made falsely.</td></tr>
+                <tr><td>Peer distance</td><td>Metres</td><td>Relative rings, labelled approximate, because RSSI is not distance.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="tabs">The four tab machine</h2>
+          <p>
+            There is <strong>no navigation library</strong>.
+            <code>src/app/app.tsx</code> holds a hand-rolled state machine and
+            screens are plain components.
+          </p>
+          <pre class="ascii">
+  MainTab = "chats" | "mesh" | "wallet" | "profile"
+
+  ┌──────────┬──────────┬──────────┬──────────┐
+  │  CHATS   │   MESH   │  WALLET  │ PROFILE  │
+  └──────────┴──────────┴──────────┴──────────┘
+       │          │          │          │
+       │          │          │          └─ identity, QR card, settings,
+       │          │          │             and the PANIC BUTTON
+       │          │          │
+       │          │          └─ balance per mint, send, receive,
+       │          │             deposit, withdraw, history, backup
+       │          │
+       │          └─ THE DEFAULT TAB ON LAUNCH.
+       │             radar, peer list, banners, live voice
+       │
+       └─ Channels / Direct sub-tabs, badged with unseen activity
+             list -> thread -> search
+
+  Swipe left and right steps through tabs, in the order the bar shows
+  them, EXCEPT inside a thread or a search, where stepping would lose
+  the reader's place.
+</pre>
+          <div class="box">
+            <p class="box-title">Why Mesh is the default tab</p>
+            <p>
+              Because the first question a user has is "is this working, and is
+              anyone here". In an ordinary messenger you open to your
+              conversations, because connectivity is assumed. Here it is the
+              variable, and opening to a list of empty threads when the real
+              answer is "Bluetooth is off" would be answering the wrong question.
+            </p>
+          </div>
+          <p>
+            The back gesture is context-sensitive: it exits a thread or a search,
+            or pops the profile stack, and otherwise does nothing rather than
+            leaving the app. Tab switching resets the chat view so returning to
+            Chats does not land back inside a thread the user had left.
+          </p>
+
+          <h2 id="banner">The mesh banner</h2>
+          <p>
+            The single most carefully reasoned piece of UI in the app, because it
+            is the one screen that must stay trustworthy.
+          </p>
+          <div class="box bad">
+            <p class="box-title">One blocker, one banner, one way out</p>
+            <p>
+              Every branch names the <strong>specific</strong> thing that is
+              wrong rather than a category. The generic version, "Bluetooth
+              permission needed", was advice that could not be acted on: it was
+              shown for a revoked permission, a permanently blocked one, and a
+              location downgrade, and only one of those is fixed by granting
+              Bluetooth.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Blocker</th><th>Tone</th><th>Action</th><th>Note</th></tr></thead>
+              <tbody>
+                <tr><td><code>starting</code></td><td>neutral</td><td>none</td><td>Not a fault. The radios are coming up. Appears for a beat on a cold start. Saying so beats both a red banner and a silent lie.</td></tr>
+                <tr><td><code>unsupported</code></td><td>caution</td><td>none</td><td>No BLE hardware. Nothing to do.</td></tr>
+                <tr><td><code>adapter-off</code></td><td>danger</td><td>Turn on</td><td>One tap into the OS.</td></tr>
+                <tr><td><code>permission-denied</code></td><td>danger</td><td>Allow</td><td>Re-promptable.</td></tr>
+                <tr><td><code>permission-blocked</code></td><td>danger</td><td>Settings</td><td>The OS will not ask again, so the route is different even though the fault looks the same.</td></tr>
+                <tr><td><code>location-permission</code></td><td>danger</td><td>Settings</td><td>Android 11 and below only. Same action, different noun.</td></tr>
+                <tr><td><code>location-services-off</code></td><td>danger</td><td>Turn on</td><td>Android 11 and below. The permission is granted and the radio is on, but the OS-wide location toggle is off and Android withholds scan results. <strong>Nothing about the app looks wrong, which is why this has to be said out loud.</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Priority order, which is severity order</h3>
+          <ol>
+            <li>
+              <strong>Wipe incomplete.</strong> Outranks everything, because it is
+              not about the mesh at all. The wipe raises an alert when the keychain
+              refuses, but an alert is dismissed once and then gone, leaving an app
+              that looks like a fresh install over data still on the device. Under
+              duress, "did it work?" must not be a guess, and the natural response
+              to a guess is doing it again. So the claim stands on screen until it
+              stops being true. Nothing to tap: the retry is automatic on the next
+              launch, which is also what makes it self-clearing.
+            </li>
+            <li>
+              <strong>Away.</strong> Short-circuits everything below, because it
+              stops the whole mesh deliberately. Telling somebody their Bluetooth
+              is off while they chose to go dark is noise. <em>Invisible</em> is
+              deliberately not special-cased: it still scans and relays, so its
+              banners track real connectivity.
+            </li>
+            <li><strong>The one BLE blocker</strong>, from the table above.</li>
+            <li>
+              <strong>Clock skew.</strong> Ranked with the hard blockers rather
+              than the notes, because a drifted phone is refused by every peer and
+              refuses every peer: a silent outage that looks like an empty room,
+              and none of the notes below can be trusted while it holds. No action
+              button, because nothing in the app can set the system clock.
+            </li>
+            <li>
+              <strong>OEM background limits.</strong> The last remaining way the
+              mesh can stop relaying without anything announcing it: the foreground
+              service is reaped, no callback fires, and the app only finds out when
+              it comes back to a stopped mesh. Ranked above the location note
+              because it affects the mesh itself rather than one feature riding on
+              it.
+            </li>
+            <li>
+              <strong>Informational notes.</strong> Advertising unsupported,
+              battery saver, WiFi fast path state, location for geohash channels,
+              Tor phase, bridge status, gateway state.
+            </li>
+          </ol>
+          <p>
+            The computation is a <strong>pure function of a plain inputs
+            object</strong>, so it is trivially unit-testable without a live store.
+            Every optional field defaults to the "say nothing" case, so a caller
+            with no evidence stays silent rather than guessing.
+          </p>
+
+          <h2 id="delivery">Delivery state</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>State</th><th>Means</th><th>Earned by</th></tr></thead>
+              <tbody>
+                <tr><td>Sending</td><td>The composer accepted it.</td><td>Nothing yet.</td></tr>
+                <tr><td>Sent</td><td>It left the radio.</td><td>At least one link took the bytes.</td></tr>
+                <tr><td><strong>Reached nobody</strong></td><td>Zero links and no relay.</td><td>Explicitly represented rather than rendered as a normal sent bubble.</td></tr>
+                <tr><td>Delivered (one tick)</td><td>An <strong>authenticated</strong> DELIVERED receipt came back.</td><td>A signed receipt from the recipient's session.</td></tr>
+                <tr><td>Read (two ticks)</td><td>An authenticated READ receipt.</td><td>Same.</td></tr>
+                <tr><td>Carried by a friend</td><td>A courier accepted the envelope <strong>onto its own link</strong>.</td><td>A confirmed write to that specific peer. A speculative flood does not count, and neither does a relay drop.</td></tr>
+                <tr><td>Queued</td><td>Nothing carried it. Held in the outbox for up to 7 days.</td><td>Not a tick and not a failure.</td></tr>
+                <tr><td>Failed</td><td>The retry cap or the TTL ran out.</td><td>Surfaced visibly rather than dropped.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The bug this taxonomy exists to prevent</p>
+            <p>
+              A DM over an established session with a direct link used to return
+              "sent" and was never queued. If the peer had restarted and discarded
+              its session, they received nothing while the sender saw a tick. Now
+              <strong>every mesh send is enqueued</strong>, matching bitchat's rule
+              that nothing counts as delivered without an authenticated
+              acknowledgement. All three receipt paths clear the entry, and a
+              receipt arrives well inside the flush interval, so the cost is a
+              queue entry that lives for a few seconds.
+            </p>
+          </div>
+          <p>
+            There is also an <strong>undo send</strong> window, configurable in
+            settings, which matters more here than in an ordinary messenger: on a
+            mesh, a message may sit unqueued for a while, and being able to pull it
+            back before anything carries it is genuinely useful.
+          </p>
+
+          <h2 id="peers">The radar</h2>
+          <p>
+            The Mesh tab draws nearby peers as rings by signal strength. Two rules
+            keep it honest.
+          </p>
+          <ul>
+            <li>
+              <strong>Rings, not metres.</strong> RSSI correlates with distance
+              only when nothing is in the way and both radios are oriented the
+              same. A phone in a back pocket at ten metres routinely reads weaker
+              than one in a hand at thirty. Showing metres would be a confident
+              lie, so the rings are labelled approximate.
+            </li>
+            <li>
+              <strong>RSSI is not liveness.</strong> The peer store deliberately
+              refuses to treat a locally polled RSSI as evidence that a peer is
+              still there. Only a packet that arrived proves presence. A decrypted
+              packet is stronger evidence than an announce, because it cannot be
+              replayed or forged, which is why <code>noteHeard</code> exists
+              separately from the announce path.
+            </li>
+          </ul>
+          <p>
+            Two visual distinctions carry real meaning. A <strong>direct</strong>
+            peer is one this device holds an actual link to, which no amount of
+            announcing can fake, and direct peers are protected from eviction when
+            the radar has to trim. And an <strong>infrastructure</strong> peer, a
+            Bitle relay that set announce TLV <code>0xB1</code> bit 0, is drawn
+            with an aerial instead of an avatar and offers no Message or Send ecash
+            action. That flag decides presentation and nothing else: a node signs
+            its own announce, so any device can claim to be infrastructure, and
+            since the claim only removes actions from its own row there is nothing
+            to gain by making it falsely.
+          </p>
+
+          <h2 id="onboarding">Onboarding</h2>
+          <p>Three screens, no account, no server call.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Screen</th><th>Job</th><th>Design note</th></tr></thead>
+              <tbody>
+                <tr><td>Welcome</td><td>One sentence, one action.</td><td>"The cover of the book. Bold wordmark, one sentence, one action. Nothing else. The design communicates confidence through restraint."</td></tr>
+                <tr><td>Generating</td><td>Key generation.</td><td><strong>Held for at least 5 seconds</strong> even though keygen takes milliseconds, with staged text fading in. This is the only moment the user learns their identity is a key on this phone and nowhere else, and that understanding is what makes the panic wipe and the missing backup make sense later.</td></tr>
+                <tr><td>Reveal</td><td>Show the derived username.</td><td>Communicates that it is permanent and unique to them, and that they did not choose it.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <strong>permission primer</strong> is mounted outside the
+            onboarding flow, not inside it. A user who killed the app mid-onboarding
+            gets a next launch that skips onboarding entirely, and the primer must
+            still appear. It explains why Bluetooth is needed before the OS dialog,
+            so a refusal is not the first thing a new user does.
+          </p>
+
+          <h2 id="notifications">Notifications</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Decision</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Previews withheld by default</strong></td><td>The system renders them on the lock screen, where anyone holding the phone can read them. Listed as a countermeasure to screen surveillance in the threat model.</td></tr>
+                <tr><td><strong>The tray is emptied by the panic wipe</strong></td><td>Each notification carries a sender name and a message preview, and they outlive the process. A wipe that cleared the database and left the lock screen showing the last three conversations has not done what the user asked.</td></tr>
+                <tr><td><strong>Local only, no push server</strong></td><td>A push server is a party that knows who is being messaged and when. Airhop runs none. The consequence is that a force-stopped iOS app stays silent until reopened.</td></tr>
+                <tr><td><strong>Nearby-peer alerts</strong></td><td>Fire on a zero-to-one peer count edge.</td></tr>
+                <tr><td><strong>The badge tracks total unread</strong></td><td>Across channels and DMs, kept in step with the stores.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">A known gap in this area</p>
+            <p>
+              The nearby alert counts peers without distinguishing them, so a
+              user's own second device retriggers it on every radio flap. The
+              planned fix is a per-peer <code>notifyOnProximity</code> flag, on by
+              default, with an "Ignore in nearby alerts" toggle on that peer's info
+              sheet. Recorded in the known issues list rather than left as folklore.
+            </p>
+          </div>
+          <p>
+            One further screen-surveillance decision: a screenshot taken inside a
+            chat is <strong>announced to the other side</strong>. Airhop does not
+            cover the app-switcher snapshot, and says so.
+          </p>
+
+          <h2 id="design">The design system</h2>
+          <p class="kt-note">
+            The summary below is the shape of it. Every token, the reasoning
+            recorded beside each value, the concentric radius rule, the contrast
+            floors, Nielsen's ten scored against this app, and the conventions it
+            borrows from iMessage, WhatsApp and Signal are
+            <a href="42-design-system.html">42</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Choice</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td>Palette</td><td><strong>Monochrome.</strong> A layered slate ramp, semantic tokens, no decorative colour. Colour is reserved for meaning: danger, caution, success.</td></tr>
+                <tr><td>Themes</td><td>Light and dark, both first class, following the system by default.</td></tr>
+                <tr><td>Typography</td><td>System face for prose. JetBrains Mono <strong>only for machine data</strong>, because it covers Latin, Greek and Cyrillic and none of the other ten scripts shipped. A value from a formatter may use it; a value from a catalog key is prose.</td></tr>
+                <tr><td>Styling</td><td><code>StyleSheet</code> plus theme tokens. No Tailwind, no NativeWind.</td></tr>
+                <tr><td>Navigation</td><td>None. A hand-rolled tab machine and plain components.</td></tr>
+                <tr><td>Animation</td><td>Reanimated, honouring reduced-motion.</td></tr>
+                <tr><td>Gestures</td><td>Gesture Handler for sheets and swipe actions.</td></tr>
+                <tr><td>Copy</td><td>Terse, plain, no exclamation marks, no jargon where a plain word exists.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The build order philosophy in <code>VISION.md</code> is explicit about
+            where UI sits:
+            <strong>core, then native, then features, then UI</strong>. "A
+            beautiful app that cannot relay a BLE packet is useless. An ugly app
+            that correctly implements Noise XX and gossip sync is the working
+            prototype." The stated rule is not to open a pull request for a UI
+            component until the <code>src/core/</code> service backing it has
+            passing unit tests.
+          </p>
+
+          <h2 id="accessibility">Accessibility</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Area</th><th>State</th></tr></thead>
+              <tbody>
+                <tr><td>Reduced motion</td><td>Honoured, via <code>use-reduced-motion</code>.</td></tr>
+                <tr><td>RTL layout</td><td>Full mirroring, with logical properties throughout. Chapter <a href="40-i18n.html">40</a>.</td></tr>
+                <tr><td>Hit targets</td><td>Explicit <code>HIT_SLOP</code> constants in the theme.</td></tr>
+                <tr><td>Dynamic type</td><td>Proven against the pseudolocale, which pads strings past the longest real translation.</td></tr>
+                <tr><td>Contrast</td><td>Monochrome ramp designed for both themes.</td></tr>
+                <tr><td>Screen readers</td><td>An accessibility audit is marked complete for v1.0.0 in <code>PROGRESS.md</code>. A formal <strong>WCAG 2.1 AA audit</strong> is a v2.0.0 item, so the current position is "reviewed" rather than "certified".</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does the app open on the Mesh tab rather than on conversations?</span>
+              <span class="a">Because the first question a user of this app has is "is this working, and is anyone here". In a normal messenger connectivity is assumed, so opening to conversations answers the right question. Here connectivity is the variable, and opening to a list of empty threads when the real answer is "Bluetooth is off" or "nobody is nearby" answers the wrong one.</span>
+            </li>
+            <li>
+              <span class="q">Why does the banner name the specific blocker instead of saying "Bluetooth permission needed"?</span>
+              <span class="a">Because the generic version was advice that could not be acted on. It was shown for a revoked permission, a permanently blocked one, and an Android location-services downgrade, and only the first is fixed by granting Bluetooth. Each branch now names the actual fault and offers the button that fixes that fault: enable the adapter, allow the permission, open Settings when the OS will not ask again, or turn on location services.</span>
+            </li>
+            <li>
+              <span class="q">Why does the wipe-incomplete banner outrank even "Away"?</span>
+              <span class="a">Because it is not about the mesh. The wipe raises an alert when the keychain refuses, but an alert is dismissed once and then gone, leaving an app that looks like a fresh install sitting on data that is still there. Under duress, "did the wipe work?" must not be a guess, and the natural response to a guess is doing it again. So the claim stays on screen until it stops being true, and it self-clears because the retry happens automatically on the next launch.</span>
+            </li>
+            <li>
+              <span class="q">Why show "carried by a friend" instead of a tick?</span>
+              <span class="a">Because a tick means delivered, and courier mail is not delivered: it is in somebody's pocket waiting for them to physically meet the recipient, which may be hours or never. The state is also earned narrowly. It is shown only when a courier accepted the envelope onto its own link. A speculative flood toward a peer several hops away does not count, because there is nothing to acknowledge it, and a parked relay drop does not count either, because nobody carried it and it never touched the mesh.</span>
+            </li>
+            <li>
+              <span class="q">Someone proposes showing distance in metres on the radar. Argue against it.</span>
+              <span class="a">RSSI maps to distance only in free space with matched antennas and matched orientation, and none of those hold in a crowd. Bodies absorb strongly at 2.4 GHz, phone antennas have lumpy patterns, and multipath can produce a 20 dB null in a spot six centimetres wide. A phone in a back pocket at ten metres routinely reads weaker than one in a hand at thirty. Metres would be a confident lie in a place where the app's whole credibility rests on not making those. Rings labelled approximate are what the data supports.</span>
+            </li>
+            <li>
+              <span class="q">Why is the identity generation screen held for five seconds?</span>
+              <span class="a">Because generation takes milliseconds and a screen that flashes past communicates that nothing happened. The five second hold with staged text is the only moment in the product where the user learns that their identity is a key on this phone and nowhere else. That single understanding is what later makes the panic wipe, the absence of account recovery, and the QR contact exchange make sense rather than seem arbitrary.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

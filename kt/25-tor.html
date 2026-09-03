@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 25: Tor. One embedded Arti client on both platforms, why it cannot leak, dormancy, and the one place the platforms still differ." />
+    <title>25 Tor · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 25 · The internet layer</p>
+          <h1>Tor</h1>
+          <p class="kt-lede">
+            Chapter 24 sent messages over Nostr relays, which means telling a
+            relay operator your IP address. This is the answer to that: one Rust
+            crate embedding a real Tor client, compiled into both apps, with no
+            <code>tor</code> binary, no <code>torrc</code>, no control port and
+            no third-party app to install.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#onion">How onion routing works</a></li>
+              <li><a href="#nothide">What Tor does not hide</a></li>
+              <li><a href="#arti">One crate, two FFI faces</a></li>
+              <li><a href="#properties">Three load-bearing properties</a></li>
+              <li><a href="#lifecycle">Lifecycle and status</a></li>
+              <li><a href="#coverage">The one place the platforms differ</a></li>
+              <li><a href="#mint">The mint hole</a></li>
+              <li><a href="#dormancy">Dormancy, not stopping</a></li>
+              <li><a href="#consent">Why it is off by default</a></li>
+              <li><a href="#wipe">Tor and the panic wipe</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine posting a letter inside three nested envelopes, each
+              addressed to a different person. The first person opens theirs and
+              finds an envelope addressed to the second, so they pass it on. The
+              second does the same. Only the third opens the last envelope and
+              posts the letter. The first person knows who you are but not what
+              you sent or where it ended up. The last knows where it went but
+              not who sent it. Nobody in the chain knows both.
+            </p>
+          </div>
+
+          <h2 id="onion">How onion routing works</h2>
+          <pre class="ascii">
+  YOU ──▶ GUARD ──────▶ MIDDLE ──────▶ EXIT ──────▶ destination
+
+  knows:  your IP        guard's IP     middle's IP    exit's IP
+          middle's IP    exit's IP      destination
+          NOT the        NOT you        NOT you
+          destination    NOT the dest
+
+  each hop peels one layer of encryption. no single relay
+  ever holds both ends of the association.
+
+  the GUARD is sticky. you keep the same one for weeks, because
+  rotating it means eventually picking a hostile one, and one
+  chance of that beats a fresh chance every circuit.
+</pre>
+          <p>
+            Roughly 8,000 volunteer-run relays, a public consensus document
+            listing them, and a directory system to fetch it. That is the whole
+            network. Airhop uses it as an ordinary SOCKS5 client would, which is
+            the point: no custom protocol, no bespoke anonymity claim.
+          </p>
+
+          <h2 id="nothide">What Tor does not hide</h2>
+          <div class="box warn">
+            <p class="box-title">Four things worth being precise about</p>
+            <p>
+              <strong>That you are using Tor.</strong> Without a bridge, the
+              relay list is public, so anyone watching your network sees a
+              connection to a known Tor address. Chapter
+              <a href="26-bridges.html">26</a> is the answer to that, and it is
+              a separate problem from anonymity.
+            </p>
+            <p>
+              <strong>Application-layer identity.</strong> Tor hides your IP. It
+              does not hide a Nostr public key you sign every event with, and it
+              does not hide a message you signed. Chapter
+              <a href="24-nostr.html">24</a> covers what a relay still learns.
+            </p>
+            <p>
+              <strong>Traffic patterns from a global observer.</strong> Tor's
+              threat model explicitly excludes an adversary who can watch both
+              ends of a circuit at once and correlate timing.
+            </p>
+            <p>
+              <strong>Bluetooth.</strong> Tor is an internet-only concern. The
+              mesh keeps working whatever happens here, and every failure message
+              in the app says so.
+            </p>
+          </div>
+
+          <h2 id="arti">One crate, two FFI faces</h2>
+          <p>
+            <code>native/arti</code> is a single Rust crate compiled twice: a
+            static library linked into the iOS app, and a shared object loaded by
+            the Android app. Everything above the two FFI files is identical, so
+            "Tor is on" means the same thing on an iPhone and a Pixel, and there
+            is one implementation to fix when it does not.
+          </p>
+          <pre class="ascii">
+  native/arti/src/
+
+    lib.rs        454   client lifecycle, bootstrap events, dormancy,
+                        stream isolation
+    socks.rs      271   the SOCKS5 server
+    bridges.rs    259   bridge and pluggable transport config  (chapter 26)
+    ffi_c.rs      123   C ABI      -> ios/Airhop/AirhopTorManager.swift
+    ffi_jni.rs     98   JNI        -> android .../tor/ArtiNative.kt
+
+  nothing above ffi_c.rs and ffi_jni.rs is platform specific
+
+
+  iOS                                   Android
+  ───                                   ───────
+  static lib in arti.xcframework        libarti_airhop.so in jniLibs/
+  AirhopTorManager.swift                ArtiNative.kt
+  AirhopTorModule.swift                 AirhopTorModule.kt
+        │                                     │
+        └──────────── NativeAirhopTor.ts ─────┘
+                      one TypeScript contract
+                      nothing above it branches on platform
+                      for Tor's lifecycle
+</pre>
+          <div class="box ok">
+            <p class="box-title">What the app actually gets</p>
+            <p>
+              A SOCKS5 listener on <code>127.0.0.1:39050</code> and a status
+              snapshot. That is the entire surface. No control port, no
+              <code>torrc</code>, no configuration file, nothing to
+              misconfigure. The app points its sockets at the port and reads the
+              status to draw a banner.
+            </p>
+          </div>
+          <p>
+            This replaced a split design: Arti on iOS only, and Orbot detection
+            on Android. That version had two failure surfaces, two definitions of
+            "on", and a dependency on the user installing a separate app. The
+            Orbot path is gone.
+          </p>
+
+          <h2 id="properties">Three load-bearing properties</h2>
+          <p>
+            Each of these is a decision recorded in the crate, not an accident of
+            how it happens to work.
+          </p>
+          <div class="box ok">
+            <p class="box-title">1. It cannot leak</p>
+            <p>
+              <code>arti_client</code> has <strong>no clearnet path</strong>.
+              Every byte that enters the listener leaves through a circuit or
+              does not leave at all. So failing closed is a property of the
+              design rather than of timing: there is no window, however short, in
+              which a request takes a direct route because the circuit was not up
+              yet.
+            </p>
+            <p>
+              That is a genuinely different guarantee from "we check a flag
+              before dialling". A flag can be read before it is set; a client
+              with no clearnet code path cannot dial the clear net at all.
+            </p>
+          </div>
+          <div class="box ok">
+            <p class="box-title">2. The listener binds before bootstrap</p>
+            <p>
+              <code>start</code> returns only once the port is accepting, so a
+              caller that gets <code>AIRHOP_TOR_OK</code> may dial immediately. A
+              dial made during bootstrap waits for a circuit; a dial made after a
+              bootstrap that never completed fails.
+            </p>
+            <p>
+              Binding after bootstrap instead would leave the app unable to tell
+              "starting" from "broken" for the whole bootstrap, and leave callers
+              probing the port to find out. Neither platform has to probe.
+            </p>
+          </div>
+          <div class="box ok">
+            <p class="box-title">3. Progress is real</p>
+            <p>
+              <code>TorClient::bootstrap_events()</code> is the client's own view
+              of how far along it is and why it is stuck. Nothing infers state
+              from log text, which is the usual way a Tor integration ends up
+              lying to its own UI.
+            </p>
+          </div>
+          <p>
+            One more, smaller: <strong>panics abort</strong> rather than unwind.
+            Unwinding across an FFI boundary is undefined behaviour, and aborting
+            is the one option that is sound without wrapping every entry point in
+            <code>catch_unwind</code>. A panic in a Tor client is a bug worth a
+            crash report, not something to swallow.
+          </p>
+
+          <h2 id="lifecycle">Lifecycle and status</h2>
+          <p>
+            Six operations, identical on both platforms, in
+            <code>src/bridge/NativeAirhopTor.ts</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Call</th><th>Does</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>startTor(bridgeLines)</code></td><td>Resolves once startup has been <em>initiated</em>, not once Tor is usable. Bridge lines are passed per start rather than set separately, so a client cannot come up without stating which it is. Chapter <a href="26-bridges.html">26</a>.</td></tr>
+                <tr><td><code>stopTor()</code></td><td>Stops the client and restores the direct socket factory.</td></tr>
+                <tr><td><code>awaitTorReady(timeoutSeconds)</code></td><td>Resolves true once bootstrapped and SOCKS-ready, false on timeout.</td></tr>
+                <tr><td><code>getTorStatus()</code></td><td>A snapshot: <code>isReady</code>, <code>isStarting</code>, <code>port</code>, <code>progress</code> 0 to 100, and Arti's own <code>bootstrapSummary</code>.</td></tr>
+                <tr><td><code>setAppForeground(bool)</code></td><td>Dormancy. See below.</td></tr>
+                <tr><td><code>wipeTorState()</code></td><td>Panic wipe only. See below.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Status is also pushed, as a <code>TorStatusChanged</code> event.
+            Without a subscriber a stalled bootstrap is never reported, which is
+            why <code>subscribeTorStatus</code> returns null rather than throwing
+            wherever the native module is absent.
+          </p>
+          <pre class="ascii">
+  the status word, packed into one int across the FFI
+
+    bit 0   RUNNING     the client exists
+    bit 1   READY       bootstrapped and SOCKS-ready
+    bit 2   BLOCKED     bootstrap is not progressing
+    bit 3   BRIDGED     came up on a bridge, not a public relay
+    bits 8+ PROGRESS    0 to 100
+
+  return codes, mirrored by NAME in Swift and Kotlin so no call
+  site compares against a bare number
+
+     0  OK                 -4  CLIENT
+    -1  ALREADY_RUNNING    -5  BIND
+    -2  DATA_DIR           -6  NOT_RUNNING
+    -3  RUNTIME            -7  BRIDGE_LINE
+                           -8  BRIDGE_TRANSPORT
+</pre>
+          <p>
+            The TypeScript side collapses that into a three-value
+            <code>TorBootstrapPhase</code>: <code>idle</code>,
+            <code>starting</code>, <code>blocked</code>. The Mesh banner reads it.
+          </p>
+
+          <h2 id="coverage">The one place the platforms differ</h2>
+          <p>
+            The lifecycle is identical. <strong>Coverage is not</strong>, and the
+            difference is not a bug that has gone unfixed. It is a platform
+            constraint.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Android</th><th>iOS</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>How the proxy is applied</strong></td>
+                  <td>Installed into React Native's shared OkHttp client</td>
+                  <td><code>TorWebSocket</code> handed to nostr-tools</td>
+                </tr>
+                <tr>
+                  <td><strong>What is covered</strong></td>
+                  <td class="pill ok">Every socket the app opens, <code>fetch</code> included</td>
+                  <td class="pill warn">Only the Nostr WebSocket</td>
+                </tr>
+                <tr>
+                  <td><strong>Why</strong></td>
+                  <td>OkHttp is one shared client with a proxy setting</td>
+                  <td>React Native's WebSocket cannot speak SOCKS5 on iOS, and there is no shared HTTP client to point at a proxy</td>
+                </tr>
+                <tr>
+                  <td><strong>Consequence</strong></td>
+                  <td>A Cashu mint call goes through Tor</td>
+                  <td>A mint call would go clear, so it is <strong>refused</strong> instead</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Both fail closed at the socket, which is the property that matters:
+            nothing on either platform silently takes a direct route. What
+            differs is how much of the app the protection reaches.
+          </p>
+
+          <h2 id="mint">The mint hole</h2>
+          <div class="box bad">
+            <p class="box-title">The honest statement of it</p>
+            <p>
+              With Tor on, an iPhone cannot make a Cashu mint request without
+              revealing this device's IP to the mint and linking it to the proofs
+              being swapped. Mint calls are plain <code>fetch</code>, and on iOS
+              nothing but the Nostr WebSocket is covered.
+            </p>
+            <p>
+              So <code>wallet-service</code> refuses the call rather than making
+              it. There is a setting to allow it anyway, off by default, which
+              exists because a user in a place where the wallet matters more than
+              the IP should be able to make that trade knowingly rather than
+              discovering it afterwards. Chapter
+              <a href="32-cashu.html">32</a> covers what a mint learns.
+            </p>
+          </div>
+
+          <h2 id="dormancy">Dormancy, not stopping</h2>
+          <p>
+            <code>setAppForeground(false)</code> puts Arti into
+            <code>DormantMode</code>. This is not advisory and it means the same
+            thing on both platforms even though the pressure differs.
+          </p>
+          <pre class="ascii">
+  iOS       the process is suspended anyway, so circuits do not
+            survive a long background spell either way
+
+  Android   the foreground service keeps the process alive, so
+            WITHOUT this a backgrounded Airhop keeps a consensus
+            fresh and guards warm all day on a battery
+
+
+  why dormancy and not a stop:
+
+    stopping would DROP THE GUARDS
+      -> a fresh bootstrap on every return to the app
+      -> and the device looks like a BRAND NEW CLIENT to a
+         guard each time, which is worse for anonymity than
+         keeping one
+
+  safe to call whatever the Tor preference says: with nothing
+  running it is a no-op.
+</pre>
+
+          <h2 id="consent">Why it is off by default</h2>
+          <p>
+            Three reasons, and none of them is that Tor is unsafe.
+          </p>
+          <ul>
+            <li>
+              <strong>It is slow.</strong> Three hops of volunteer bandwidth. A
+              relay connection that took 200 ms takes seconds, and with a bridge,
+              longer.
+            </li>
+            <li>
+              <strong>It is conspicuous where it matters most.</strong> Without a
+              bridge, using Tor is visible to the network operator, and in some
+              places that visibility is itself the risk. Chapter
+              <a href="26-bridges.html">26</a>.
+            </li>
+            <li>
+              <strong>Most people, most of the time, are not the threat model.</strong>
+              An always-on default trades everyone's battery and latency against
+              a risk few of them carry, and it makes the setting meaningless as a
+              signal of intent.
+            </li>
+          </ul>
+          <p>
+            The gate in <code>tor-routing.ts</code> is explicitly
+            <strong>not</strong> a safety measure: both platforms fail closed at
+            the socket, so nothing reaches the clear net whether it is set or not.
+            It prevents futility, not leakage.
+          </p>
+
+          <h2 id="wipe">Tor and the panic wipe</h2>
+          <div class="box warn">
+            <p class="box-title">Why Tor needs its own wipe call</p>
+            <p>
+              Arti's data directory sits <em>outside</em> the media cache on both
+              platforms: Application Support on iOS, the app's files directory on
+              Android. The wipe's ordinary cache sweep does not reach it.
+            </p>
+            <p>
+              What it holds is a cached consensus, chosen guard nodes and
+              directory state. Together those are evidence on disk that this
+              device used Tor and roughly when, which for a user whose reason for
+              wiping is a device search is exactly the wrong thing to leave
+              behind. <code>wipeTorState()</code> stops Arti and deletes all of
+              it.
+            </p>
+            <p>
+              The transport state directory is wiped alongside it, and it sits
+              <em>beside</em> Arti's rather than inside it, because Arti owns the
+              layout of its own directory. Chapter
+              <a href="35-storage-panic.html">35</a> is the whole wipe.
+            </p>
+          </div>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>127.0.0.1:39050</code></td><td>The SOCKS5 listener</td><td>Loopback only. Same port on both platforms, so nothing above the FFI branches.</td></tr>
+                <tr><td>0.46.0</td><td><code>arti-client</code> version</td><td>Pinned in <code>Cargo.toml</code> and in <code>TOOLCHAIN.env</code>, which the build asserts agree.</td></tr>
+                <tr><td>1,205</td><td>Lines of Rust</td><td>Across five files, of which 221 are the two FFI faces.</td></tr>
+                <tr><td>9</td><td>Return codes</td><td>OK plus eight errors, mirrored by name in Swift and Kotlin.</td></tr>
+                <tr><td>4 + 1</td><td>Status bits, plus packed progress</td><td>RUNNING, READY, BLOCKED, BRIDGED, then progress from bit 8.</td></tr>
+                <tr><td>60 s</td><td>Bootstrap deadline, direct</td><td>Per-mode; a bridge gets longer. Chapter <a href="26-bridges.html">26</a>.</td></tr>
+                <tr><td><code>rustls</code></td><td>TLS backend</td><td>Not <code>native-tls</code>: no OpenSSL, and no dependence on the platform trust store beneath the circuit.</td></tr>
+                <tr><td><code>compression</code></td><td>Kept upstream default</td><td><code>default-features = false</code> would drop it, and uncompressed directory downloads cost real bandwidth on mobile.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>A network that blocks Tor.</strong> The common case, and
+              the whole subject of the next chapter. Bootstrap stalls, the
+              deadline fires, and the phase becomes <code>blocked</code>.
+            </li>
+            <li>
+              <strong>A build without the native library.</strong> Any ABI it was
+              not built for. This must degrade to "Tor unavailable" rather than
+              taking the app down at import time, which is why the module is
+              fetched with <code>TurboModuleRegistry.get</code> rather than
+              <code>getEnforcing</code> and every caller null-checks.
+            </li>
+            <li>
+              <strong>Stopping instead of going dormant.</strong> Drops the
+              guards, costs a full bootstrap on every return, and presents the
+              device to a guard as a new client each time.
+            </li>
+            <li>
+              <strong>Inferring state from log text.</strong> The usual way a Tor
+              integration lies to its UI. <code>bootstrap_events()</code> exists
+              precisely so nothing has to.
+            </li>
+            <li>
+              <strong>A panic that unwinds across the FFI.</strong> Undefined
+              behaviour. <code>panic = "abort"</code> makes it a crash instead,
+              which is diagnosable.
+            </li>
+            <li>
+              <strong>Forgetting the state directory in a wipe.</strong> Leaves a
+              cached consensus and a guard list on disk, which is evidence the
+              device used Tor.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            The mesh is untouched, so the app keeps working offline exactly as
+            before. What goes is the ability to use the internet layer without
+            handing a relay operator your IP address, and with it the users for
+            whom that is the point: anyone whose network is watched, anyone whose
+            association with a relay is itself the risk. It would also remove the
+            most complex build machinery in the repository, which is a real cost
+            saved and worth stating honestly. The trade is a smaller, simpler app
+            that is materially less useful to the people it was built for.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Approach</th><th>How it works</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Orbot, or any separate Tor app</td>
+                  <td>Detect a SOCKS proxy another app provides</td>
+                  <td>What Android used to do. It needs the user to install and run a second app, gives two definitions of "on", and leaves the app unable to say why Tor is not working. Removing it removed a whole failure surface.</td>
+                </tr>
+                <tr>
+                  <td>Bundling the C <code>tor</code> binary</td>
+                  <td>The traditional route: ship the executable, write a torrc, drive the control port</td>
+                  <td>iOS forbids an app spawning an executable. It also means a config file, a control protocol and a process to supervise, all of which are surfaces Arti-as-a-library does not have.</td>
+                </tr>
+                <tr>
+                  <td>A VPN</td>
+                  <td>One hop, encrypted, provider-operated</td>
+                  <td>Moves trust rather than removing it: the provider sees everything Tor's guard would, plus the destination, and is a single entity with a billing relationship to you.</td>
+                </tr>
+                <tr>
+                  <td>I2P</td>
+                  <td>Garlic routing, fully peer-to-peer, no exits by design</td>
+                  <td>Strong for in-network services, but Airhop needs to reach ordinary Nostr relays on the open internet, which is exactly what I2P is not for.</td>
+                </tr>
+                <tr>
+                  <td>Nothing, and rely on the mesh</td>
+                  <td>Offline-only, no internet layer at all</td>
+                  <td>Coherent, and it is the fallback whenever Tor fails. It costs the global reach that makes a message deliverable to someone in another city.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Someone asks whether Airhop can leak a real IP while Tor is starting up. Answer precisely.</span>
+              <span class="a">No, and the reason is structural rather than a timing guarantee. <code>arti_client</code> has no clearnet code path at all: every byte entering the SOCKS listener leaves through a circuit or does not leave. A request made before a circuit exists fails; it does not fall back. That is a stronger claim than "we check a flag first", because a flag can be read before it is set. The related honest caveat is coverage rather than leakage: on iOS only the Nostr WebSocket is routed, so a Cashu mint call is refused rather than routed, and on Android the proxy is in the shared OkHttp client so everything including <code>fetch</code> is covered.</span>
+            </li>
+            <li>
+              <span class="q">Why does the SOCKS listener bind before bootstrap rather than after?</span>
+              <span class="a">So that <code>start</code> returning <code>AIRHOP_TOR_OK</code> is a usable signal. A caller can dial immediately: a dial during bootstrap waits for a circuit, a dial after a failed bootstrap fails. If the port only appeared once bootstrap completed, the app could not tell "still starting" from "broken" for the whole bootstrap window, and every caller would have to probe the port to find out. Neither platform probes, which is the observable consequence of the choice.</span>
+            </li>
+            <li>
+              <span class="q">Backgrounding the app makes Tor dormant rather than stopping it. Why is that the better default?</span>
+              <span class="a">Because stopping drops the guard nodes. Guards are deliberately sticky, held for weeks, precisely so that a user gets one chance of picking a hostile entry rather than a fresh chance on every circuit. Restarting from cold on every return to the app both costs a full bootstrap and presents the device to a guard as a brand new client each time, which is worse for anonymity than staying dormant. On iOS the process is suspended anyway so the practical difference is small; on Android the foreground service would otherwise keep a consensus fresh and guards warm all day on a battery, which is the case dormancy exists for.</span>
+            </li>
+            <li>
+              <span class="q">Why did the Orbot path get removed?</span>
+              <span class="a">Because it made "Tor is on" mean two different things. The Android path detected a proxy another app provided, which required the user to install and run Orbot, gave the app no view of bootstrap progress or of why a connection failed, and produced a second fail-closed design to reason about. Embedding Arti on both platforms collapses that into one crate with one lifecycle, one status word and one set of return codes, and nothing above the FFI branches on platform for Tor's lifecycle any more. The only surviving difference is coverage, and that one is a platform constraint rather than a design choice.</span>
+            </li>
+            <li>
+              <span class="q">Why does the panic wipe need a dedicated <code>wipeTorState()</code> rather than relying on the cache sweep?</span>
+              <span class="a">Because Arti's data directory is deliberately not in the cache: Application Support on iOS, the files directory on Android, both outside what the sweep reaches. What it holds is a cached consensus, a chosen guard list and directory state, and together those are evidence on disk that this device used Tor and roughly when. For a user whose reason for wiping is a device search, that is exactly the wrong residue to leave. The pluggable transport state directory sits beside Arti's rather than inside it, because Arti owns its own layout, and it is wiped in the same call.</span>
+            </li>
+            <li>
+              <span class="q">Why is the native module fetched with <code>get</code> rather than <code>getEnforcing</code>?</span>
+              <span class="a">Because a missing Tor library must degrade to "Tor unavailable", not crash the app at import time. That is not hypothetical: a build for an ABI the library was not compiled for, or a build that omitted it, is a real state, and the mesh has no dependence on Tor whatsoever. The same reasoning runs through the layer: <code>subscribeTorStatus</code> returns null rather than throwing when the module is absent, and every caller null-checks. The cost is that a missing subscriber means a stalled bootstrap is never reported, which is why the subscription is set up at the same time the client is started.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

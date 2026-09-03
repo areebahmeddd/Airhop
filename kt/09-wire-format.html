@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 09: Wire format. The packet frame, TLV, padding, compression, packet IDs, signing." />
+    <title>09 Wire format · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 09 · The protocol</p>
+          <h1>The wire format</h1>
+          <p class="kt-lede">
+            Every byte that leaves the radio, in order. This is the contract
+            between Airhop, bitchat iOS, bitchat Android, and any relay hardware
+            in between. It is the one part of the system that cannot be changed
+            unilaterally.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#frame">The frame, byte by byte</a></li>
+              <li><a href="#flags">The flags byte</a></li>
+              <li><a href="#types">The packet type registry</a></li>
+              <li><a href="#tlv">TLV, the encoding used everywhere inside</a></li>
+              <li><a href="#signing">Signing, and the preimage rule</a></li>
+              <li><a href="#padding">Padding: two different rules</a></li>
+              <li><a href="#compression">Compression, pako, and canonical DEFLATE</a></li>
+              <li><a href="#packetid">Packet IDs</a></li>
+              <li><a href="#versions">v1 and v2 headers</a></li>
+              <li><a href="#extending">Extending the format safely</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Every message is put in an envelope with a label on the front. The
+              label says what kind of thing is inside, who sent it, who it is
+              for, when it was sent, and how many more times it is allowed to be
+              passed along. The letter inside might be squashed smaller to fit,
+              and it is signed at the bottom so nobody can pretend to be someone
+              else. Every app that speaks this language uses exactly the same
+              envelope, so an Airhop phone and a bitchat phone can read each
+              other's post.
+            </p>
+          </div>
+
+          <h2 id="frame">The frame, byte by byte</h2>
+          <pre class="ascii">
+  FIXED HEADER (v2 = 16 bytes)
+
+  offset  size  type      field
+  ──────  ────  ────────  ────────────────────────────────────────────
+  [0]        1  u8        version = 2
+  [1]        1  u8        type          (the packet type registry below)
+  [2]        1  u8        ttl           (7 default, decremented per hop)
+  [3..10]    8  u64 BE    timestamp     (Unix MILLISECONDS, not seconds)
+  [11]       1  u8        flags         (see below)
+  [12..15]   4  u32 BE    payloadLength
+
+  VARIABLE SECTIONS, in this exact order
+
+  senderID       8 bytes    always present
+  recipientID    8 bytes    only when hasRecipient = 1
+  route                     only when hasRoute = 1:
+                              [count u8][hop1 8B]...[hopN 8B]
+  originalSize   4 bytes    only when isCompressed = 1
+  payload        payloadLength bytes (minus the originalSize field)
+  signature     64 bytes    only when hasSignature = 1
+
+  THEN, for the packet types that need it, the WHOLE FRAME is
+  PKCS#7-padded up to 256, 512, 1024 or 2048 bytes.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Why it is there</th><th>Trap</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>version</code></td>
+                  <td>Lets a decoder know which header layout follows. Airhop emits 2 and decodes 1 or 2.</td>
+                  <td>bitchat emits its core broadcasts (announce, message, leave) as v1 and uses v2 for file transfer and source-routed packets. Both sides decode either.</td>
+                </tr>
+                <tr>
+                  <td><code>type</code></td>
+                  <td>The discriminator. GATT gives no framing, so the payload's meaning has to be in band.</td>
+                  <td>An unknown type is <strong>relayed but not interpreted</strong>. That is what makes extensions safe.</td>
+                </tr>
+                <tr>
+                  <td><code>ttl</code></td>
+                  <td>Bounds propagation. Decremented at each relay, dropped at zero.</td>
+                  <td>Plaintext and forgeable. Never make a trust decision from it alone. The direct-peer rule pairs it with link binding for exactly this reason.</td>
+                </tr>
+                <tr>
+                  <td><code>timestamp</code></td>
+                  <td>Freshness. Every packet is held to a +/- 2 minute window at ingress and is neither relayed nor acted on outside it.</td>
+                  <td><strong>Milliseconds, not seconds.</strong> A seconds value is decades stale to the receiver and is silently dropped.</td>
+                </tr>
+                <tr>
+                  <td><code>flags</code></td>
+                  <td>Says which optional sections are present.</td>
+                  <td>Two of the five bits are normalised out of the signing preimage. See below.</td>
+                </tr>
+                <tr>
+                  <td><code>payloadLength</code></td>
+                  <td>Where the payload ends. Counts the payload plus the compression preamble, and <strong>not</strong> the route block.</td>
+                  <td>A sender-supplied claim. Every read that uses it is bounds-checked against what actually arrived.</td>
+                </tr>
+                <tr>
+                  <td><code>senderID</code></td>
+                  <td>Who claims to have sent it. 8 bytes, the first half of <code>SHA-256(noiseStaticPubKey)</code>.</td>
+                  <td>A claim. It is meaningful only after the signature is checked against a key bound to that ID.</td>
+                </tr>
+                <tr>
+                  <td><code>recipientID</code></td>
+                  <td>Who it is for. Omitted entirely for broadcasts.</td>
+                  <td>Three encodings mean broadcast: flag clear, all zeros, or all <code>0xFF</code>. Android writes the last one. Refusing it would silently lose Android live voice and public file transfers.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            One packet type is the exception that proves the header design:
+            <code>0x02</code>, a public message in <code>#bluetooth</code>, whose
+            payload is <strong>the message text as bare UTF-8 and nothing
+            else</strong>. bitchat's <code>BLEPublicMessageHandler</code> reads
+            <code>String(data: packet.payload, encoding: .utf8)</code> and
+            renders the whole payload as the body. Anything wrapped around the
+            text would be displayed as part of it. So the framing has to be
+            entirely in the header for that type.
+          </p>
+
+          <h2 id="flags">The flags byte</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Bit</th><th>Value</th><th>Name</th><th>Meaning</th><th>In the signing preimage?</th></tr></thead>
+              <tbody>
+                <tr><td>0</td><td><code>0x01</code></td><td>HAS_RECIPIENT</td><td>The 8 byte recipientID field is present.</td><td>Yes</td></tr>
+                <tr><td>1</td><td><code>0x02</code></td><td>SIGNED</td><td>A 64 byte Ed25519 signature is appended.</td><td>Cleared, so the signature is not signing itself.</td></tr>
+                <tr><td>2</td><td><code>0x04</code></td><td>COMPRESSED</td><td>The payload is raw DEFLATE, preceded by originalSize.</td><td>Yes</td></tr>
+                <tr><td>3</td><td><code>0x08</code></td><td>HAS_ROUTE</td><td>A source route hop list is present.</td><td>Yes</td></tr>
+                <tr><td>4</td><td><code>0x10</code></td><td>IS_RSR</td><td>This is a solicited sync response.</td><td><strong>Cleared</strong>, so a stored packet can be retagged as a response without invalidating its original signature.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="types">The packet type registry</h2>
+          <p>
+            Everything up to <code>0x29</code> matches bitchat's
+            <code>MessageType</code> enum. bitchat allocates forward and has
+            reached <code>0x2C</code>, so Airhop's own types start at
+            <code>0x50</code>, leaving 36 values of headroom.
+            <code>conformance.test.ts</code> parses their enum out of the
+            vendored sources and fails if the gap ever closes to 16.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Hex</th><th>Name</th><th>Direction</th><th>Signed</th><th>Padded</th><th>Gossiped</th><th>bitchat</th></tr></thead>
+              <tbody>
+                <tr><td><code>0x01</code></td><td>ANNOUNCE</td><td>Broadcast</td><td>Mandatory</td><td>No</td><td>Yes, bit 0</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x02</code></td><td>CHANNEL_MSG</td><td>Broadcast</td><td>Mandatory</td><td>No</td><td>Yes, bit 1</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x03</code></td><td>LEAVE</td><td>Broadcast</td><td>Mandatory, <em>before</em> relay</td><td>No</td><td>No</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x04</code></td><td>COURIER_ENV</td><td>Directed</td><td>Yes</td><td>No</td><td>Never</td><td>iOS only</td></tr>
+                <tr><td><code>0x10</code></td><td>NOISE_HANDSHAKE</td><td>Unicast</td><td>No, by design</td><td><strong>Yes</strong></td><td>No</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x11</code></td><td>NOISE_ENCRYPTED</td><td>Unicast</td><td>Yes</td><td><strong>Yes</strong></td><td>No</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x12</code></td><td>DR_ENCRYPTED</td><td>Unicast</td><td>Yes</td><td><strong>Yes</strong></td><td>No</td><td><strong>Airhop only</strong></td></tr>
+                <tr><td><code>0x20</code></td><td>FRAGMENT</td><td>Either</td><td>No, by design</td><td>No</td><td>No</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x21</code></td><td>REQUEST_SYNC</td><td>Unicast</td><td>If possible</td><td>No</td><td>n/a</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x22</code></td><td>FILE_TRANSFER</td><td>Either</td><td>Mandatory</td><td>No</td><td>Deliberately not</td><td>iOS + Android</td></tr>
+                <tr><td><code>0x23</code></td><td>BOARD_POST</td><td>Broadcast</td><td>Mandatory</td><td>No</td><td>Yes, bit 8</td><td>iOS only</td></tr>
+                <tr><td><code>0x24</code></td><td>PREKEY_BUNDLE</td><td>Broadcast</td><td>Mandatory</td><td>No</td><td>bitchat only, bit 9</td><td>iOS only</td></tr>
+                <tr><td><code>0x25</code></td><td>GROUP_MESSAGE</td><td>Broadcast</td><td>Inner payload signed</td><td>No</td><td>Yes, bit 10</td><td>iOS only</td></tr>
+                <tr><td><code>0x26</code></td><td>PING</td><td>Unicast</td><td>No</td><td>No</td><td>Never</td><td>iOS only</td></tr>
+                <tr><td><code>0x27</code></td><td>PONG</td><td>Unicast</td><td>No</td><td>No</td><td>Never</td><td>iOS only</td></tr>
+                <tr><td><code>0x28</code></td><td>NOSTR_CARRIER</td><td>Either</td><td>Event self-signed</td><td>No</td><td>Never</td><td>iOS only</td></tr>
+                <tr><td><code>0x29</code></td><td>VOICE_FRAME</td><td>Broadcast</td><td>Mandatory</td><td><strong>Never</strong></td><td><strong>Never</strong></td><td>iOS + Android</td></tr>
+                <tr><td><code>0x50</code></td><td>CHANNEL_ENC</td><td>Broadcast</td><td>Yes</td><td><strong>Yes</strong></td><td>No</td><td><strong>Airhop only</strong></td></tr>
+                <tr><td><code>0x51</code></td><td>CHANNEL_MSG_AIRHOP</td><td>Broadcast</td><td>Mandatory</td><td>No</td><td>Yes, bit 24</td><td><strong>Airhop only</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Why location channels needed their own type</p>
+            <p>
+              bitchat has the same location channels at the same geohash
+              precisions, but it publishes them to Nostr relays and never over
+              Bluetooth. On the Bluetooth mesh, bitchat has exactly one public
+              room, which its UI labels "bluetooth". So the Bluetooth copy of a
+              location channel message is an Airhop-only path, and a bitchat peer
+              already receives the Nostr copy. Sent under <code>0x02</code> it
+              would be rendered in their mesh room as well, addressed to an
+              audience its author never chose. Under <code>0x51</code> it is a
+              type neither bitchat client interprets, so they relay it without
+              showing it.
+            </p>
+            <p>
+              Unknown does not mean lost. bitchat's type switch logs
+              <code>case .none</code> and falls through to
+              <code>scheduleRelayIfNeeded</code>, and
+              <code>RelayController.decide</code> receives the type as booleans
+              that are all false for an unknown one, so it takes the ordinary
+              broadcast relay path. A named Airhop channel therefore crosses a
+              mesh made entirely of bitchat phones while staying invisible to
+              their users. That is pinned end to end by a three node scenario in
+              the conformance tests.
+            </p>
+          </div>
+
+          <h2 id="tlv">TLV, the encoding used everywhere inside</h2>
+          <p>
+            Almost every payload with more than one field uses type-length-value.
+            It is not one format: the length width differs by payload, and that
+            is a compatibility detail rather than a mistake.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Payload</th><th>Type</th><th>Length</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>ANNOUNCE</td><td>u8</td><td><strong>u8</strong></td><td>Fields are tiny (32 byte keys, 32 byte nicknames) and 31 bytes of advertising discipline carried over. A 1 byte length caps a nickname at 255 bytes, well past its 32 byte budget.</td></tr>
+                <tr><td>File packet</td><td>u8</td><td><strong>u16</strong>, except content which is u32</td><td>File content can be a megabyte. A u16 length would cap it at 64 KiB.</td></tr>
+                <tr><td>Gossip filter</td><td>u8</td><td>u16 BE</td><td>A 400 byte filter needs more than 255.</td></tr>
+                <tr><td>Courier envelope</td><td>u8</td><td>u16 BE</td><td>Ciphertext up to 16 KiB.</td></tr>
+                <tr><td>Group state</td><td>u8</td><td>u16 BE</td><td>A roster of 16 members is over a kilobyte.</td></tr>
+                <tr><td>PrivateMessagePacket</td><td>u8</td><td><strong>u8</strong></td><td>This is the reason DMs are capped at 255 bytes of content. bitchat's is the same, and all three implementations return nothing rather than truncating.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The universal rule is <strong>skip what you do not know</strong>. A
+            decoder reads type and length, and if the type is unrecognised it
+            advances by the length and continues. That is what lets Airhop add
+            TLV <code>0x07</code> (a Nostr public key) to an announce, and tags
+            <code>0x05</code> to <code>0x07</code> to a file packet, at zero cost
+            in either direction: a bitchat client reads the file and ignores the
+            extras.
+          </p>
+          <p>
+            One TLV is read and never written: Bitle relay hardware marks itself
+            with <code>0xB1</code>, outside the range either client assigns.
+            Airhop reads bit 0 and draws those peers as equipment rather than
+            people. That flag decides presentation and nothing else, because a
+            node signs its own announce, so any device can claim to be
+            infrastructure. Since the claim only removes actions from its own
+            row, there is nothing to gain by making it falsely.
+          </p>
+
+          <h2 id="signing">Signing, and the preimage rule</h2>
+          <p>
+            The signature does not cover the bytes on the wire. It covers a
+            <strong>normalised re-encoding</strong> of the packet.
+          </p>
+          <pre class="code">
+  signingBytes(packet) = encodePacket({
+      ...packet,
+      ttl:       0,          // so relays can decrement without breaking it
+      isRSR:     false,      // so a stored packet can be retagged as a response
+      flags:     flags &amp; ~SIGNED,   // so the signature does not sign itself
+      signature: 64 zero bytes,
+  }, padding = TRUE)         // ALWAYS padded, for EVERY type
+
+  signature = Ed25519.sign(signingBytes(packet), signingPrivKey)
+</pre>
+          <p>Three consequences, each of which was a real bug at some point:</p>
+          <ol>
+            <li>
+              <strong>TTL is zeroed.</strong> Otherwise a relay that decrements
+              TTL would invalidate the signature, and no multi-hop packet could
+              ever be verified. This is the whole reason the field is normalised.
+            </li>
+            <li>
+              <strong>IS_RSR is cleared.</strong> Gossip sync answers a request
+              by replaying a <em>stored</em> packet with the RSR flag set. If
+              that flag were in the preimage, the stored signature would no
+              longer verify and every sync response would be dropped.
+            </li>
+            <li>
+              <strong>Padding is forced on, for every type.</strong> bitchat's
+              <code>toBinaryDataForSigning()</code> encodes with padding on
+              unconditionally, so pad bytes are inside the signed material of
+              every signed packet. Using the per-type wire policy here would
+              re-sign announces, messages, board posts and files over a different
+              preimage, and no bitchat node would verify anything Airhop sends.
+            </li>
+          </ol>
+
+          <h3>Not everything is signed, and that is deliberate</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Unsigned</th><th>Why it is safe</th></tr></thead>
+              <tbody>
+                <tr><td>Noise handshake messages (<code>0x10</code>)</td><td>The peer may not hold our signing key yet, and the handshake authenticates itself: it only completes when the remote static key hashes to the claimed peer ID.</td></tr>
+                <tr><td>Messages inside a Noise session or a ratchet</td><td>The session already authenticates them. A redundant signature would cost 64 bytes and leak the sender's identity to relays that can read the header.</td></tr>
+                <tr><td>Fragments (<code>0x20</code>)</td><td>Authenticity belongs to the inner packet, which is signed and re-verified after reassembly. A per-fragment signature would cost 64 of the 512 bytes for nothing. bitchat sends <code>signature: nil</code> and neither side's fragment path inspects one.</td></tr>
+                <tr><td>PING and PONG</td><td>The reply's echoed 8 byte nonce binds it to the probe. They carry no content and cost nothing to forge harmlessly.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Signatures are required exactly where a claimed sender is otherwise
+            unverifiable: announces, public and private channel messages,
+            attachments, voice frames, board posts and gateway uplinks.
+          </p>
+
+          <h2 id="padding">Padding: two different rules</h2>
+          <p>
+            Padding appears twice, and conflating the two breaks the protocol in
+            opposite directions.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Which packets</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Signing preimage</strong></td>
+                  <td>Every type, always</td>
+                  <td>Interop. bitchat's signing encoder pads unconditionally, so any deviation means nothing anyone else sends can be verified here, and nothing sent from here can be verified anywhere.</td>
+                </tr>
+                <tr>
+                  <td><strong>Outbound wire frame</strong></td>
+                  <td><code>0x10</code>, <code>0x11</code>, <code>0x12</code>, <code>0x50</code> only</td>
+                  <td>Privacy. These are the types whose ciphertext length reveals plaintext length. Everything else has a size that is already public.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The algorithm is PKCS#7 into one of four block sizes: 256, 512, 1024,
+            2048. Every pad byte equals the pad length, so stripping is
+            self-describing. The block is chosen for
+            <code>dataSize + 16</code>, budgeting for an AEAD tag, matching
+            bitchat exactly. If the data exceeds the largest block, padding is a
+            no-op, because it will be fragmented anyway.
+          </p>
+          <div class="box">
+            <p class="box-title">Why padding everything is not a safe default</p>
+            <p>
+              It buys nothing for a type whose size is already public, and it
+              costs real airtime on an 18 KiB/s radio. A 30 byte PING becomes 256
+              bytes. Worse, a roughly 309 byte live voice burst becomes 512,
+              which is past the fragment frame budget and past most negotiated
+              MTUs. That is the precise outcome the 210 byte burst content budget
+              exists to prevent: a voice packet must never enter the fragment
+              scheduler, which caps concurrent transfers and would starve file
+              sends while somebody talks.
+            </p>
+          </div>
+          <p>
+            Decoders accept both forms. <code>decodePacket</code> tries the bytes
+            as-is first, then retries after stripping PKCS#7, exactly as bitchat
+            does, so an implementation that pads more than we do stays readable.
+          </p>
+
+          <h2 id="compression">Compression, pako, and canonical DEFLATE</h2>
+          <p>
+            Payloads are compressed with <strong>raw DEFLATE</strong> (RFC 1951,
+            no zlib header, no gzip header) when it is worth it.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr><td>Threshold</td><td>100 bytes</td><td>bitchat <code>compressionThresholdBytes</code>. Below this, DEFLATE overhead exceeds the saving.</td></tr>
+                <tr><td>Level</td><td>6 (zlib default)</td><td>Android passes <code>DEFAULT_COMPRESSION</code>; Apple's <code>COMPRESSION_ZLIB</code> matches.</td></tr>
+                <tr><td>Heuristic</td><td>unique bytes / min(len, 256) &lt; 0.9</td><td>Skip already-compressed or encrypted data, which barely shrinks. bitchat's unique-byte-ratio test, matched exactly.</td></tr>
+                <tr><td>Accept only if smaller</td><td><code>out.length &lt; data.length</code></td><td>Same rule as bitchat.</td></tr>
+                <tr><td>Library</td><td><code>pako</code>, <code>deflateRaw</code>, <code>legacyHash: false</code></td><td>The flag selects the zlib-compatible hash. It is set explicitly so parity does not ride on a default.</td></tr>
+                <tr><td>Max payload</td><td>10 MiB</td><td>bitchat Android's <code>MAX_PAYLOAD_LENGTH</code>. Bounds both the declared length and the decompressed output.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>The non-canonical DEFLATE problem</h3>
+          <p>
+            This is the subtlest thing in the wire layer and it is worth
+            understanding properly.
+          </p>
+          <p>
+            DEFLATE output is <strong>not canonical</strong>. Any conforming
+            encoder produces a valid stream, but not the same bytes. iOS uses
+            Apple's <code>compression_encode_buffer</code>, Android uses
+            <code>java.util.zip.Deflater</code>, and Airhop uses pako. All three
+            inflate each other's streams, but none reproduces another's output,
+            and the "only if smaller" check can even make them disagree on
+            whether to compress at all.
+          </p>
+          <p>
+            Now recall that the signature covers a <em>re-encoding</em>. So
+            verifying a packet re-encodes it, and therefore re-compresses it.
+            Under a different encoder, that produces different bytes, a different
+            preimage, and a rejected signature on a perfectly valid packet.
+          </p>
+          <p>The fix is to never re-compress a payload that arrived compressed:</p>
+          <pre class="code">
+  interface WirePayload {
+    bytes:      Uint8Array;   // exactly as transmitted
+    compressed: boolean;      // whether the ORIGINATOR compressed it
+    forPayload: Uint8Array;   // the decoded array these bytes decode to
+  }
+
+  decodePacket() attaches a WirePayload to every packet.
+  encodePacket() reuses it verbatim, but ONLY when
+      wire.forPayload === packet.payload   (reference identity)
+
+  If a caller replaces the payload, the binding breaks and the encoder
+  falls back to compressing. Without that check, a same-length payload
+  swap would be signed against the pre-swap bytes and verify anyway.
+</pre>
+          <p>This is required in two places:</p>
+          <ul>
+            <li>
+              <strong>Verification</strong>, so a packet signed by any
+              implementation verifies here.
+            </li>
+            <li>
+              <strong>Relaying</strong>, because a relay re-encodes.
+              Re-compressing would replace the originator's bytes with the
+              relay's own and invalidate the signature for every node
+              downstream.
+            </li>
+          </ul>
+          <p>
+            Locally originated packets have no received form and are compressed
+            normally, so this never changes what Airhop emits. Airhop's outbound
+            DEFLATE is byte-identical to reference zlib, locked by test vectors
+            in <code>packet-compression.test.ts</code>, verified against zlib
+            1.3.1 which is also what Android's <code>Deflater</code> produces.
+            It is <strong>not yet verified against Apple's encoder</strong>,
+            which would require running <code>CompressionUtil.compress</code> on
+            Apple hardware.
+          </p>
+
+          <h3>The decompression bomb</h3>
+          <p>
+            <code>originalSize</code> is a sender-supplied field. A packet can
+            declare 100 bytes and carry a stream that expands to a gigabyte.
+            Inflating it whole before noticing is an out-of-memory crash that any
+            unauthenticated peer in radio range can trigger.
+          </p>
+          <p>
+            So output is <strong>capped at the declared size while inflating</strong>,
+            not measured afterwards. The decoder refuses the packet at the first
+            byte over. Both bitchat clients bound it the same way: iOS inflates
+            into a buffer allocated at exactly <code>originalSize</code>, and
+            Android does the same before probing for one further byte. A valid
+            stream inflates to exactly <code>originalSize</code>, so nothing
+            legitimate is affected.
+          </p>
+          <div class="box bad">
+            <p class="box-title">A real finding from this area</p>
+            <p>
+              A 24 byte frame declaring COMPRESSED with
+              <code>payloadLength = 4</code> left the read offset exactly at the
+              end of the buffer, and <code>DataView</code>
+              <strong>throws</strong> on an out-of-range read rather than
+              returning null like every other failure path.
+              <code>decodePacket</code> has no try/catch and neither does its
+              caller, so the <code>RangeError</code> escaped into the native
+              <code>packetReceived</code> listener. Twenty four attacker-chosen
+              bytes. A malformed frame must decode to null, never throw, and
+              there is now an explicit bounds guard before that read.
+            </p>
+          </div>
+
+          <h2 id="packetid">Packet IDs</h2>
+          <p>
+            There is <strong>no nonce field</strong> in the header. Identity is
+            derived from content:
+          </p>
+          <pre class="code">
+  PacketID = SHA-256( type[1] || senderID[8] || timestamp_u64_BE[8] || payload )[0:16]
+</pre>
+          <p>
+            Matching <code>PacketIdUtil.swift</code> and
+            <code>PacketIdUtil.kt</code>. This 128 bit value is used for two
+            things: the deduplication seen-set (1000 entries, 5 minute window)
+            and the gossip sync GCS filter.
+          </p>
+          <p>
+            Notice what is excluded: TTL, flags, recipientID and the signature.
+            So the same logical packet has one ID no matter how many hops it has
+            taken, which is exactly what deduplication needs. And notice what is
+            included: the timestamp. Two identical messages sent one millisecond
+            apart are different packets, which is why a named channel message
+            carries its own message ID inside the payload as well.
+          </p>
+
+          <h2 id="versions">v1 and v2 headers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>v1</th><th>v2</th></tr></thead>
+              <tbody>
+                <tr><td>Header size</td><td>14 bytes</td><td>16 bytes</td></tr>
+                <tr><td>payloadLength</td><td>u16 (max 64 KiB)</td><td>u32 (max 4 GiB, capped at 10 MiB)</td></tr>
+                <tr><td>originalSize field</td><td>u16</td><td>u32</td></tr>
+                <tr><td>Source routes</td><td>Not supported</td><td>Supported</td></tr>
+                <tr><td>Airhop</td><td>Decodes</td><td>Decodes and emits</td></tr>
+                <tr><td>bitchat</td><td>Emits announce, message, leave</td><td>Emits file transfer and routed packets; decodes everything</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Source routes: followed, never originated</h3>
+          <p>
+            When <code>hasRoute = 1</code>, the packet carries a hop list:
+            <code>[count u8][hop1 8B]...[hopN 8B]</code>. The sender and the
+            final recipient are not in the list; they are in the header.
+          </p>
+          <p>
+            Airhop <strong>follows</strong> routes and never
+            <strong>originates</strong> them, and never emits the
+            <code>directNeighbors</code> TLV (<code>0x04</code>) that route
+            planning depends on. Following is close to free and keeps Airhop from
+            being a node other implementations must route around: a relay named
+            in the list unicasts to the next name, and falls back to flooding
+            when that hop is unreachable.
+          </p>
+          <p>
+            Originating would require publishing our adjacency in cleartext to
+            every nearby radio. A ten-entry neighbour list lets one passive
+            listener reconstruct who is standing next to whom, which is exactly
+            the inference the whole design tries to avoid. bitchat's own peer-ID
+            rotation analysis rejects it for the same reason, and bitchat stopped
+            emitting it. Flooding is the documented fallback for a route that
+            cannot be built, and it is what Airhop already does.
+          </p>
+          <p>
+            The cost is real and worth stating: with no adjacency to route on,
+            every directed send falls back to flooding. That is more airtime in
+            a dense mesh, with no correctness change.
+          </p>
+
+          <h2 id="extending">Extending the format safely</h2>
+          <p>Five rules, each learned from a bug:</p>
+          <ol>
+            <li>
+              <strong>New packet types start at <code>0x52</code>.</strong> Never
+              claim a value near bitchat's frontier. One byte with two meanings
+              makes each side's parser depend on the other's validation not to
+              misfire.
+            </li>
+            <li>
+              <strong>New TLV tags go above the range the other side
+              assigns.</strong> bitchat holds ANNOUNCE tags <code>0x01</code> to
+              <code>0x06</code>; Airhop's Nostr key is <code>0x07</code>. Reading
+              one as the other would corrupt both sides.
+            </li>
+            <li>
+              <strong>Skip unknown TLVs by length, never abort.</strong> That
+              single behaviour is what makes forward compatibility work.
+            </li>
+            <li>
+              <strong>Decide the padding rule explicitly.</strong> A new
+              encrypted type belongs in <code>padsBLEFrame</code>. A new public
+              or time-critical type does not.
+            </li>
+            <li>
+              <strong>Decide the gossip rule explicitly.</strong> A type with no
+              sync bit has no catch-up at all, silently. Moving location channels
+              off <code>0x02</code> would have dropped them out of sync entirely
+              if bit 24 had not been allocated at the same time.
+            </li>
+          </ol>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is TTL excluded from the signature but recipientID included?</span>
+              <span class="a">TTL changes legitimately at every hop, so including it would make a signature valid for exactly one hop. RecipientID never changes in transit, and it decides who the packet is for, so it must be authenticated: otherwise a relay could redirect somebody else's directed packet.</span>
+            </li>
+            <li>
+              <span class="q">An Airhop packet fails signature verification on a bitchat phone. Name three plausible causes, in order.</span>
+              <span class="a">One: the padding rule. If we signed with the per-type wire policy instead of forcing padding on, the preimage differs for every unpadded type. Two: re-compression. If verification re-compressed the payload with a different encoder, the preimage differs. Three: a normalisation mismatch, TTL or IS_RSR not being cleared identically. All three produce the same symptom, a valid packet that will not verify, which is why they are pinned by test vectors rather than by inspection.</span>
+            </li>
+            <li>
+              <span class="q">Why does <code>#bluetooth</code> not carry a message ID in its payload?</span>
+              <span class="a">Because bitchat's handler renders the entire payload as the message body, so any wrapper would appear as text. It does not need one: both implementations derive the same content-stable identifier from sender, timestamp and content (<code>bridgeStableID</code> here, <code>MeshMessageIdentity.stableID</code> in bitchat), which is what the bridge keys on and what the Nostr copy dedupes against.</span>
+            </li>
+            <li>
+              <span class="q">Someone proposes padding every outbound frame "for consistency". Argue against it.</span>
+              <span class="a">It buys nothing where the size is already public, and it costs airtime on an 18 KiB/s shared radio: a 30 byte PING becomes 256 bytes. Worse, a roughly 309 byte voice burst becomes 512, past the fragment frame budget and most negotiated MTUs, which would push live voice into the fragment scheduler and starve file transfers. The correct rule is exactly bitchat's: pad only where ciphertext length reveals plaintext length.</span>
+            </li>
+            <li>
+              <span class="q">How would you add a "poll" packet type without breaking anything?</span>
+              <span class="a"><code>0x52</code> in the enum. A codec module in <code>wire/</code> with round-trip and malformed-input tests. A case in <code>routePacket</code>. Not in <code>padsBLEFrame</code> if it is public. A gossip bit above 24 if replies should survive a partition, and a candidate max-age. Signature mandatory, checked through <code>senderIsAuthentic</code>. Then a conformance scenario proving a bitchat node relays it without rendering it.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

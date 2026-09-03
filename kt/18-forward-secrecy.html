@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 18: Forward secrecy. Double Ratchet, X3DH, prekeys, and what each property really means." />
+    <title>18 Forward secrecy · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 18 · Cryptography</p>
+          <h1>Forward secrecy and the ratchet</h1>
+          <p class="kt-lede">
+            The assumption behind this chapter is that your keys will eventually
+            be compromised. The question it answers is how much that costs you,
+            and how quickly you recover.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#definitions">Four properties, precisely</a></li>
+              <li><a href="#symmetric">The symmetric ratchet</a></li>
+              <li><a href="#dh">The DH ratchet</a></li>
+              <li><a href="#together">Both together</a></li>
+              <li><a href="#ooo">Out of order messages</a></li>
+              <li><a href="#seeding">Seeding, and the bug that mattered</a></li>
+              <li><a href="#asymmetry">The responder cannot speak first</a></li>
+              <li><a href="#offline">The offline problem, and prekeys</a></li>
+              <li><a href="#comparison">Airhop against Signal, MLS, Bramble, Session</a></li>
+              <li><a href="#limits">Where it does not apply</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine a padlock that changes its own combination every time you
+              use it, and forgets the old one immediately. If a thief steals the
+              padlock today, they cannot open anything you locked yesterday,
+              because that combination no longer exists anywhere. And after you
+              use it a couple more times, they cannot open tomorrow's things
+              either, because the lock has moved on to combinations they never
+              saw.
+            </p>
+          </div>
+
+          <h2 id="definitions">Four properties, precisely</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Question it answers</th><th>Airhop</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Confidentiality</strong></td>
+                  <td>Can an eavesdropper read this message now?</td>
+                  <td>Yes, everywhere. AEAD under a key only the two parties hold.</td>
+                </tr>
+                <tr>
+                  <td><strong>Forward secrecy</strong></td>
+                  <td>If my key is stolen tomorrow, can they read what I sent yesterday?</td>
+                  <td>Per session from Noise XX. Per message from the Double Ratchet, between Airhop peers.</td>
+                </tr>
+                <tr>
+                  <td><strong>Post-compromise security</strong> (break-in recovery, future secrecy)</td>
+                  <td>If my key is stolen today and I do not notice, will they still be reading in an hour?</td>
+                  <td>Yes, from the DH ratchet, after a few round trips. Not from Noise alone.</td>
+                </tr>
+                <tr>
+                  <td><strong>Deniability</strong></td>
+                  <td>Can the recipient prove to a third party that I said this?</td>
+                  <td>Yes, deniable. Message authenticity comes from a symmetric key both parties hold, so either could have produced it. This is why DMs inside a session carry no Ed25519 signature.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  THE ATTACK TIMELINE
+
+  ─────────────────────────────────────────────────────────────▶ time
+      m1   m2   m3   m4   [COMPROMISE]   m5   m6   m7   m8
+
+  NO FORWARD SECRECY (one static key, e.g. PGP)
+      ████ ████ ████ ████       ✕        ████ ████ ████ ████
+      everything, forever, in both directions
+
+  SESSION FORWARD SECRECY (Noise XX alone)
+      ──── ──── ──── ────       ✕        ████ ████ ████ ████
+      earlier SESSIONS safe. THIS session fully exposed.
+
+  PER-MESSAGE FORWARD SECRECY + PCS (Double Ratchet)
+      ──── ──── ──── ────       ✕        ████ ████ ──── ────
+      nothing before. a few messages after. then closed again.
+</pre>
+
+          <h2 id="symmetric">The symmetric ratchet</h2>
+          <p>
+            The simpler of the two halves. A chain key advances one step per
+            message, and each step throws off a message key and a new chain key.
+          </p>
+          <pre class="code">
+  kdfCk(ck):
+    messageKey = HMAC-SHA256(ck, 0x01)
+    nextCk     = HMAC-SHA256(ck, 0x02)
+    return [nextCk, messageKey]
+</pre>
+          <pre class="ascii">
+  CK0 ──▶ CK1 ──▶ CK2 ──▶ CK3 ──▶ CK4 ...
+   │       │       │       │
+   ▼       ▼       ▼       ▼
+  MK0     MK1     MK2     MK3        one key per message, used once
+
+  ONE WAY. HMAC is not invertible, so from CK3 you cannot compute CK2,
+  and therefore not MK2 or anything before it.
+
+  Delete CK2 after using it and message 2 is gone forever, even from you.
+</pre>
+          <p>
+            The two distinct constant bytes matter: without them the message key
+            and the next chain key would be the same value, and holding one
+            message key would let you advance the chain and read everything
+            after. That is domain separation at its smallest scale.
+          </p>
+          <p>
+            The symmetric ratchet gives forward secrecy but <strong>not</strong>
+            post-compromise security: an attacker who takes the current chain key
+            can compute every future key in that chain. Which is what the second
+            ratchet is for.
+          </p>
+
+          <h2 id="dh">The DH ratchet</h2>
+          <p>
+            Each side carries a ratchet key pair and rotates it. Every time you
+            see a <em>new</em> public key from the other side, you perform a fresh
+            Diffie-Hellman and mix it into the root key.
+          </p>
+          <pre class="code">
+  kdfRk(rootKey, dhOutput):
+    out = HKDF-SHA256(ikm = dhOutput, salt = rootKey,
+                      info = "airhop-dr-root-v1", length = 64)
+    return [newRootKey = out[0:32], newChainKey = out[32:64]]
+</pre>
+          <pre class="ascii">
+  ALICE                                      BOB
+  DHs = A1                                   DHs = B1
+
+  A sees B1 for the first time:
+     RK, CKr = kdfRk(RK, DH(A1, B1))         ← receiving chain
+     generate A2
+     RK, CKs = kdfRk(RK, DH(A2, B1))         ← sending chain
+     send with A2 in the header
+
+  B sees A2 for the first time:
+     RK, CKr = kdfRk(RK, DH(B1, A2))
+     generate B2
+     RK, CKs = kdfRk(RK, DH(B2, A2))
+     send with B2 in the header
+
+  Every reply injects NEW entropy neither side controlled before.
+  An attacker who stole the state at A1/B1 is locked out once both
+  sides have rotated once, because they never saw A2's or B2's
+  private half.
+</pre>
+          <p>
+            This is the source of post-compromise security. It requires
+            <strong>a reply</strong>: a conversation where one side only ever
+            sends never rotates the other side's key, so recovery never happens.
+            That is inherent to the algorithm, not a defect of this
+            implementation.
+          </p>
+
+          <h2 id="together">Both together</h2>
+          <pre class="ascii">
+       DH RATCHET                     SYMMETRIC RATCHETS
+       (turns on each reply)          (turn on each message)
+
+       RK0
+        │  DH(A2, B1)
+        ▼
+       RK1 ──────────────▶ CKs0 ──▶ CKs1 ──▶ CKs2
+        │                    │        │        │
+        │                   MK0      MK1      MK2
+        │  DH(A3, B2)
+        ▼
+       RK2 ──────────────▶ CKs0' ──▶ CKs1'
+                             │         │
+                            MK0'      MK1'
+
+  Sending five messages then receiving one turns the symmetric ratchet
+  five times and the DH ratchet once.
+</pre>
+          <h3>The header</h3>
+          <pre class="code">
+  40 bytes, sent in the clear, AUTHENTICATED AS AAD
+
+    [0..31]   DHs_pub   the sender's current ratchet public key
+    [32..35]  PN        u32 BE, messages sent in the PREVIOUS sending chain
+    [36..39]  N         u32 BE, this message's number in the current chain
+
+  wire: [header 40][ciphertext + 16 byte tag]
+</pre>
+          <p>
+            The header is not encrypted (that would be "header encryption", an
+            optional Signal extension Airhop does not implement) but it
+            <em>is</em> authenticated: it is passed as AEAD associated data, so
+            tampering with <code>N</code> or <code>PN</code> to force key
+            derivation down a wrong path fails the tag check.
+          </p>
+          <p>
+            <code>PN</code> exists so the receiver knows how many messages were
+            in the previous chain and can derive the keys for any that are still
+            missing before switching chains.
+          </p>
+
+          <h2 id="ooo">Out of order messages</h2>
+          <p>
+            Airhop's mesh delivers out of order routinely: two copies of a packet
+            can take different paths with different hop counts. So skipped keys
+            are not an edge case, they are normal.
+          </p>
+          <pre class="code">
+  ratchetDecrypt(state, message):
+    1. is this key already in MKSKIPPED?           -> use it, delete it, done
+    2. is the header's DH key new?                 -> skipMessageKeys(header.pn)
+                                                      dhRatchetStep(header.dhPub)
+    3. skipMessageKeys(header.n)                   -> derive and cache the gap
+    4. derive the next receiving key, decrypt, advance
+
+  skipMessageKeys(until):
+    if until - Nr > 1000  -> THROW "too many skipped messages"
+    while Nr < until:
+      derive MK, store under "&lt;DHr hex&gt;:&lt;Nr&gt;"
+      if the cache is at 1000, evict the oldest
+      Nr++
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Bound</th><th>Value</th><th>Prevents</th></tr></thead>
+              <tbody>
+                <tr><td><code>MAX_SKIP</code></td><td>1000</td><td>A peer claiming <code>N = 4,000,000,000</code> forcing four billion HMAC operations. This is a one-packet denial of service without the bound.</td></tr>
+                <tr><td>Cache size</td><td>1000 entries</td><td>Memory exhaustion by a peer that sends many out-of-order messages. Oldest evicted first, using <code>Map</code> insertion order.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">The tension inside the skipped-key cache</p>
+            <p>
+              A stored skipped key is a message key sitting in memory waiting for
+              a message that may never come. That is a small, bounded erosion of
+              forward secrecy: if the device is compromised while keys are
+              cached, those specific messages become readable. Signal has the same
+              property. The mitigation is the cap plus the fact that the cache is
+              in memory only, never persisted, so it does not survive a process
+              restart. Enlarging the cap would trade more forward secrecy for
+              better out-of-order tolerance; 1000 is Signal's own figure.
+            </p>
+          </div>
+
+          <h2 id="seeding">Seeding, and the bug that mattered</h2>
+          <p>
+            The ratchet needs a shared root key. Airhop takes it from the Noise
+            handshake rather than running a separate key agreement.
+          </p>
+          <pre class="code">
+  rootKey = HKDF-SHA256(
+              ikm  = session.exporterSecret,     // the THIRD HKDF output of split()
+              info = "airhop-dr-seed-v1",
+              len  = 32
+            )
+
+  initSender(rootKey, theirNoiseStaticPub)     // the initiator
+  initReceiver(rootKey, myNoiseStaticPriv)     // the responder
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Candidate seed</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>handshakeHash</code> (<code>h</code>)</td>
+                  <td><span class="pill bad">CRITICAL BUG</span> This is what Airhop originally used. <code>mixHash</code> absorbs only bytes that went over the wire, so <code>h</code> is public to anyone who captured the handshake, and handshakes flood the mesh at TTL 7. Any bystander could recompute the root key and forge or decrypt every Double Ratchet message in that conversation.</td>
+                </tr>
+                <tr>
+                  <td>Static-static ECDH</td>
+                  <td>Rejected. It stays derivable from long-term keys forever, so it provides no forward secrecy at all: the whole point of the ratchet would be undone at its root.</td>
+                </tr>
+                <tr>
+                  <td>A fourth handshake message carrying a fresh secret</td>
+                  <td>Rejected. It costs a round trip, and it would be an Airhop-only message that bitchat cannot parse.</td>
+                </tr>
+                <tr>
+                  <td><code>exporterSecret</code></td>
+                  <td><span class="pill ok">CORRECT</span> The third HKDF output of <code>split()</code>, descending from the chaining key. The chaining key absorbed ephemeral DH outputs whose private halves are destroyed at split, so it cannot be reconstructed from long-term keys and cannot be recomputed by an observer. Both sides already hold it, so it costs no extra round trips, and <code>k1</code>/<code>k2</code> stay bit identical so bitchat interop is untouched.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The migration cost was real and worth noting: old and new builds
+            derive different root keys and cannot decrypt each other's Double
+            Ratchet messages. A protocol-level change like this has no graceful
+            path, which is why the domain separator ends in
+            <code>v1</code>.
+          </p>
+
+          <h2 id="asymmetry">The responder cannot speak first</h2>
+          <p>
+            A subtlety of the algorithm that has bitten this codebase:
+          </p>
+          <pre class="code">
+  initSender(rk, theirPub):
+    DHs = fresh keypair
+    RK, CKs = kdfRk(rk, DH(DHs.priv, theirPub))    ← HAS a sending chain
+    ...
+
+  initReceiver(rk, myStaticPriv):
+    DHs = { priv: myStaticPriv, pub: derived }
+    CKs = NULL                                      ← NO sending chain
+    ...
+</pre>
+          <p>
+            A receiver-initialised state has <strong>no sending chain</strong>.
+            The Double Ratchet grants it one only on its first DH ratchet step,
+            which happens when it <em>receives</em> a message. So the side that
+            answered the handshake cannot send until the side that started it has
+            spoken.
+          </p>
+          <p>
+            That is the algorithm working correctly, not a defect. But
+            <code>ratchetEncrypt</code> throws rather than returning null, and an
+            exception on the send path is not something a UI can do anything
+            useful with. So there is an explicit <code>canEncrypt(state)</code>
+            predicate, and both call sites check it and fall back to the plain
+            Noise transport if the ratchet is not ready. Before that check
+            existed, replying to a first contact crashed the send path.
+          </p>
+          <p>
+            The initiator's ratchet also starts against the responder's
+            <strong>Noise static public key</strong> rather than a fresh
+            ephemeral, because Alice cannot know a fresh ephemeral of Bob's
+            without another round trip. The transcript-derived root key is what
+            keeps that chain secret despite the key being long lived, and Bob
+            rotates to a fresh ratchet key on his first step.
+          </p>
+
+          <h2 id="offline">The offline problem, and prekeys</h2>
+          <p>
+            The Double Ratchet assumes a session exists. Signal solves the
+            "recipient is offline and has no session" case with
+            <strong>X3DH</strong>: the recipient publishes a signed prekey and a
+            batch of one-time prekeys to a server, and a sender combines four DH
+            operations to derive a shared secret without any interaction.
+          </p>
+          <p>Airhop deliberately does not use X3DH. Three reasons:</p>
+          <ol>
+            <li>
+              <strong>X3DH's job is already done.</strong> The Noise handshake
+              seeds the ratchet, so there is no need for a separate asynchronous
+              key agreement for live sessions.
+            </li>
+            <li>
+              <strong>X3DH assumes a server.</strong> Prekeys are published to a
+              key distribution service. Airhop has none, so prekeys are
+              <em>gossiped over the mesh</em> as packet type <code>0x24</code>
+              instead, and are never published to Nostr.
+            </li>
+            <li>
+              <strong>The offline case has a different shape.</strong> Airhop's
+              offline path is the courier: a one-way sealed envelope carried by a
+              stranger. Noise X plus a one-time prekey gives that path forward
+              secrecy without a full X3DH construction.
+            </li>
+          </ol>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Path</th><th>Cryptography</th><th>Forward secrecy</th></tr></thead>
+              <tbody>
+                <tr><td>Live DM, Airhop to Airhop</td><td>Noise XX session, then Double Ratchet (<code>0x12</code>)</td><td><strong>Per message</strong></td></tr>
+                <tr><td>Live DM, Airhop to bitchat</td><td>Noise XX session only (<code>0x11</code>)</td><td>Per session</td></tr>
+                <tr><td>Courier, prekey available</td><td>Noise X to a one-time prekey</td><td><strong>Yes, once the prekey is consumed and its grace window ends</strong></td></tr>
+                <tr><td>Courier, no prekey</td><td>Noise X to the static key</td><td><strong>No</strong></td></tr>
+                <tr><td>Nostr DM</td><td>bitchat's <code>nip44-v2</code> inside a NIP-17 gift wrap</td><td><strong>No.</strong> Static ECDH between the two Nostr identities.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Two honest gaps</p>
+            <p>
+              <strong>Nostr DMs have no forward secrecy.</strong> The conversation
+              key is HKDF over a static ECDH between two long-lived secp256k1
+              keys. Compromise either key and every gift-wrapped DM ever sent
+              between those two identities, including ones an adversary archived
+              from a relay years earlier, becomes readable. This is a property of
+              NIP-17 and of bitchat's construction, not an Airhop choice, and it
+              cannot be fixed unilaterally without breaking interop. It deserves
+              to be stated because "end to end encrypted" reads as stronger than
+              it is here.
+            </p>
+            <p>
+              <strong>Prekeys are not reconciled through gossip sync.</strong>
+              Bundles flood on link-up but bit 9 is unimplemented, so a device
+              that arrives late cannot pull a bundle from a peer that holds one,
+              and its courier envelope silently falls back to the static key. The
+              message still delivers and is still encrypted; only forward secrecy
+              is lost, and nothing in the UI says so.
+            </p>
+          </div>
+
+          <h2 id="comparison">Airhop against Signal, MLS, Bramble, Session</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Airhop</th><th>Signal</th><th>MLS / Marmot</th><th>Briar (Bramble)</th><th>Session</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Session establishment</td><td>Noise XX</td><td>X3DH</td><td>TreeKEM group key agreement</td><td>BTP, a custom handshake</td><td>X3DH derivative</td></tr>
+                <tr><td>Message encryption</td><td>Double Ratchet</td><td>Double Ratchet</td><td>Ratcheted group secrets</td><td>Rotating stream keys</td><td>Double Ratchet</td></tr>
+                <tr><td>Per-message forward secrecy</td><td>Yes, Airhop to Airhop</td><td>Yes</td><td>Yes, per epoch</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td>Post-compromise security</td><td>Yes, on reply</td><td>Yes</td><td><strong>Strongest.</strong> Any member can force a group-wide update.</td><td>Partial</td><td>Yes</td></tr>
+                <tr><td>Group scaling</td><td><strong>16 members</strong>, creator-signed roster</td><td>Pairwise fan-out. Cost grows linearly.</td><td><strong>Thousands.</strong> Logarithmic add and remove.</td><td>Small</td><td>Small</td></tr>
+                <tr><td>Needs a server</td><td><strong>No</strong></td><td>Yes</td><td>Yes, a delivery service that orders messages</td><td>No</td><td>Service node network</td></tr>
+                <tr><td>Works with no internet</td><td><strong>Yes</strong></td><td>No</td><td>No</td><td><strong>Yes</strong></td><td>No</td></tr>
+                <tr><td>Identity</td><td>Key pair, no account</td><td>Phone number</td><td>Credential, often a certificate</td><td>Key pair</td><td>Key pair</td></tr>
+                <tr><td>Deniable</td><td>Yes</td><td>Yes</td><td>Weaker: signatures are common in deployments</td><td>Yes</td><td>Yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Why not MLS, in detail</h3>
+          <p>
+            MLS (RFC 9420) is the strongest group messaging construction that
+            exists, and Marmot, the protocol behind White Noise, brings it to
+            Nostr. It is genuinely better than what Airhop does for groups.
+            Three reasons it does not fit here:
+          </p>
+          <ol>
+            <li>
+              <strong>It needs an ordered delivery service.</strong> MLS epochs
+              advance in a total order, and every member must apply the same
+              commit sequence. A BLE mesh with flooding, dedup and partitions has
+              no total order and cannot manufacture one. Two members in separate
+              partitions would diverge into incompatible epochs with no
+              reconciliation path.
+            </li>
+            <li>
+              <strong>Its advantage appears at scale Airhop does not have.</strong>
+              TreeKEM's logarithmic cost matters at hundreds or thousands of
+              members. At 16, the pairwise key delivery Airhop uses is simpler and
+              cheaper.
+            </li>
+            <li>
+              <strong>Interoperability.</strong> Groups are bitchat compatible on
+              the wire (<code>0x25</code>, creator-signed roster, ChaCha20-Poly1305
+              under an epoch key). Adopting MLS would fork that.
+            </li>
+          </ol>
+          <p>
+            The honest counterpoint: Airhop's group construction has
+            <strong>no per-message forward secrecy within an epoch</strong>. Every
+            member holds the epoch key, and every message in that epoch is
+            encrypted under it. Compromise a member and you read the whole epoch.
+            Key rotation bumps the epoch and older epochs are refused, so it is
+            not unbounded, but it is much weaker than DMs. That is the correct
+            criticism to expect, and the correct answer is that a serverless mesh
+            has no way to run TreeKEM today, not that the current design is
+            equivalent.
+          </p>
+
+          <h2 id="limits">Where it does not apply</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Context</th><th>Forward secrecy</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Public channels</td><td>None, and none is possible</td><td>Plaintext plus a signature, readable by everyone by design.</td></tr>
+                <tr><td>Private channels</td><td>None</td><td>One symmetric key that travels in the invite link and never rotates. Anyone who ever obtains that key reads the whole history they can get hold of. This is the deliberate trade for having no member cap and no roster.</td></tr>
+                <tr><td>Private groups</td><td>Per epoch</td><td>Rotating the key bumps the epoch. Within an epoch, one key covers every message.</td></tr>
+                <tr><td>DM to a bitchat peer</td><td>Per session</td><td>bitchat has no <code>0x12</code> handler, so it gets plain Noise transport.</td></tr>
+                <tr><td>Nostr DM</td><td>None</td><td>Static ECDH between two long-lived identities.</td></tr>
+                <tr><td>Courier without a prekey</td><td>None</td><td>Noise X to a static key. The <code>ss</code> DH is derivable forever.</td></tr>
+                <tr><td>Anything at rest on this device</td><td>Not applicable</td><td>Forward secrecy protects the wire, not the disk. Disk protection is the panic wipe and MMKV encryption. Chapter <a href="35-storage-panic.html">35</a>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Define forward secrecy and post-compromise security, and say which one needs a reply.</span>
+              <span class="a">Forward secrecy: compromising a key today does not reveal messages encrypted before the compromise, because the keys that encrypted them have been deleted. Post-compromise security: after a compromise, the conversation becomes secure again once fresh entropy neither the attacker nor the previous state controlled is injected. PCS needs a reply, because the DH ratchet only turns when you receive a new ratchet public key from the other side. A one-way conversation never recovers.</span>
+            </li>
+            <li>
+              <span class="q">Why are there two ratchets rather than one?</span>
+              <span class="a">They do different jobs. The symmetric ratchet gives forward secrecy cheaply, one HMAC per message, but an attacker who takes the current chain key computes every future key in that chain. The DH ratchet fixes that by injecting fresh Diffie-Hellman entropy whenever the peer rotates its key, which locks out an attacker who does not hold the new private half. Forward secrecy from one, recovery from the other.</span>
+            </li>
+            <li>
+              <span class="q">Why is <code>MAX_SKIP</code> 1000 and not unbounded?</span>
+              <span class="a">Because <code>N</code> is an attacker-controlled 32 bit field in an unauthenticated position until the tag is checked, and deriving keys up to it is a loop. A peer claiming four billion would make the receiver perform four billion HMAC operations, which is a one-packet denial of service. 1000 is Signal's own figure and covers real out-of-order delivery on a mesh comfortably.</span>
+            </li>
+            <li>
+              <span class="q">Someone points out that a photo sent in a DM has weaker properties than the text beside it. Are they right?</span>
+              <span class="a">It depends on the peer. When the recipient has <em>proven</em> capability bit 8 inside a Noise session, the file is sealed as Noise payload <code>0x20</code> and gets session confidentiality. When they have not, it falls back to the signed cleartext <code>FILE_TRANSFER</code>, which is authentic but readable by every node it crosses. Neither form gets Double Ratchet treatment, so an attachment never has per-message forward secrecy. So yes, they are right, and the mitigation is that the fallback is selected only on an <em>authenticated</em> capability, so nobody in radio range can force an attachment into the clear by announcing the bit off.</span>
+            </li>
+            <li>
+              <span class="q">Why is White Noise's MLS not simply better?</span>
+              <span class="a">For groups it is better, and worth saying so. But MLS needs a delivery service that gives every member the same ordered sequence of commits, and a flooding mesh with partitions cannot provide one: two members in separate partitions would advance to incompatible epochs with no reconciliation. Its logarithmic advantage also only appears at hundreds of members, where Airhop caps at 16. The correct framing is that MLS solves a different deployment shape, one that assumes connectivity.</span>
+            </li>
+            <li>
+              <span class="q">What is the weakest link in Airhop's forward secrecy story?</span>
+              <span class="a">Nostr DMs. They use a static ECDH between two long-lived secp256k1 identities, so there is no forward secrecy at all: compromise either key and every gift-wrapped message ever exchanged, including archived ones, is readable. It is inherited from NIP-17 and bitchat's cipher and cannot be changed unilaterally. Second weakest is a courier envelope sealed to a static key when no prekey bundle was available, which happens silently because prekeys are not reconciled through gossip sync.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 30: Files and media. Caps, MIME, magic bytes, pacing, private media, retention." />
+    <title>30 Files and media · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 30 · Media and transports</p>
+          <h1>Files and media</h1>
+          <p class="kt-lede">
+            Sending a photo over a radio that moves 18 KiB per second, to a
+            recipient who may be six phones away, without letting anyone in
+            between read it or forge it. Every constraint in this chapter has a
+            named source.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#packet">The file packet</a></li>
+              <li><a href="#caps">Every size cap, and where it comes from</a></li>
+              <li><a href="#mime">MIME resolution and magic bytes</a></li>
+              <li><a href="#private">Private media, and the downgrade attack</a></li>
+              <li><a href="#where">Where media is allowed</a></li>
+              <li><a href="#lifecycle">On disk, and the retention sweep</a></li>
+              <li><a href="#compression">Image compression</a></li>
+              <li><a href="#failures">Failure modes</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              A photo is far too big to shout in one go, so it is cut into about
+              a thousand numbered pieces and sent one at a time, taking about half
+              a minute. The other phone collects the pieces and glues them back
+              together. Before it shows you the picture, it checks two things:
+              that the signature on it really belongs to the person who claims to
+              have sent it, and that a file claiming to be a photo actually starts
+              with the bytes a photo starts with.
+            </p>
+          </div>
+
+          <h2 id="packet">The file packet</h2>
+          <p>
+            One whole file per packet, as a TLV blob. There is
+            <strong>no application-level chunking</strong>: the fragment layer
+            splits the packet for the radio and reassembles it on the far side.
+            Byte-compatible with bitchat's <code>BitchatFilePacket</code>.
+          </p>
+          <pre class="code">
+  Tag   Field       Length   Notes
+  ────  ──────────  ───────  ──────────────────────────────────────────
+  0x01  fileName    u16
+  0x02  fileSize    u16      the VALUE is a u32
+  0x03  mimeType    u16
+  0x04  content     u32      last. u16 accepted from legacy senders.
+  0x05  channel     u16      AIRHOP: routes a room attachment
+  0x06  durationMs  u16      AIRHOP: voice length, value is u32
+  0x07  caption     u16      AIRHOP: 512 bytes max
+</pre>
+          <p>
+            Tags <code>0x05</code> to <code>0x07</code> are Airhop additions.
+            bitchat skips unknown tags by reading their u16 length, so they cost
+            nothing in either direction: a bitchat client reads the file and
+            ignores the extras.
+          </p>
+          <p>
+            The packet is signed at the outer layer, mandatorily, and the
+            signature is re-verified after reassembly. That was a real High
+            severity finding: attachments were never signature-checked, so anyone
+            in range could drop a photo into a DM thread the UI badges as
+            verified and end-to-end encrypted, attributed to that contact.
+            bitchat already refused the unsigned case
+            ("Dropping raw file transfer with missing/invalid signature").
+          </p>
+
+          <h2 id="caps">Every size cap, and where it comes from</h2>
+          <p>
+            There are six different numbers here and they are not arbitrary.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constant</th><th>Value</th><th>What it bounds</th><th>Why that number</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>MAX_FILE_BYTES</code></td>
+                  <td>1 MiB</td>
+                  <td>The absolute ceiling for any file.</td>
+                  <td>bitchat's general file limit. Not ours to raise.</td>
+                </tr>
+                <tr>
+                  <td><code>MAX_IMAGE_BYTES</code>, <code>MAX_VOICE_BYTES</code></td>
+                  <td>512 KiB</td>
+                  <td>Received photos and voice notes.</td>
+                  <td>bitchat's per-type caps, enforced when it <em>decodes</em>.</td>
+                </tr>
+                <tr>
+                  <td><code>MAX_SENT_IMAGE_BYTES</code></td>
+                  <td><strong>256 KiB</strong></td>
+                  <td>Photos this app <em>sends</em>.</td>
+                  <td>Half the receive cap, and the reason is subtle. bitchat expires a half-built assembly <strong>30 seconds after the FIRST fragment</strong>, not after the last: its buffer stamps a timestamp once and never refreshes it. At about 20 ms pacing, 512 KiB is around 1,120 frames and 22 seconds, so a photo at the ceiling only lands if the link never forces a single retry. 256 KiB is about 11 seconds, which leaves room for the backoff a busy link forces. bitchat's own photos are around 45 KB at a 448 px edge, so this is still generous.</td>
+                </tr>
+                <tr>
+                  <td><code>MAX_BITCHAT_TRANSFER_BYTES</code></td>
+                  <td>350 KiB</td>
+                  <td>The line past which sending to a <em>bitchat</em> peer is worth warning about.</td>
+                  <td>Not a cap. Airhop to Airhop carries the full 1 MiB happily, because Airhop's reassembly times out on <strong>idle</strong> rather than total duration. Above 350 KiB the file is dropped on arrival by a bitchat peer and we would otherwise show a sent tick.</td>
+                </tr>
+                <tr>
+                  <td><code>MAX_FRAMED_FILE_BYTES</code></td>
+                  <td>~1.13 MiB</td>
+                  <td>The reassembly ceiling.</td>
+                  <td>bitchat's <code>FileTransferLimits.maxFramedFileBytes</code> formula, verbatim: 1 MiB plus max fileName and mimeType TLVs plus the packet envelope. Mirrored so the reassembler accepts the largest file a bitchat peer can send.</td>
+                </tr>
+                <tr>
+                  <td><code>MAX_VIDEO_SECONDS</code></td>
+                  <td>15</td>
+                  <td>Camera recording length.</td>
+                  <td>There is no transcoder in the app, and <code>quality</code> in the picker applies to stills only, so length is the only lever on size. At the 1 MiB ceiling a longer clip would be refused <em>after</em> the user had already shot it, which is the worst possible moment to say no. A picked video is still checked at pick time, since nothing bounds what is already in the library.</td>
+                </tr>
+                <tr>
+                  <td><code>MAX_PAYLOAD_BYTES</code></td>
+                  <td>10 MiB</td>
+                  <td>The generic decompression bound.</td>
+                  <td>bitchat <em>Android's</em> number, not iOS's, deliberately. Airhop caps inflation at the declared size while it runs rather than checking afterwards, so a large declared size costs nothing to refuse.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">Why the file cap cannot be raised unilaterally</p>
+            <p>
+              bitchat-iOS refuses any packet whose declared expanded size passes
+              its framed ceiling, and it refuses it by <strong>returning nil with
+              nothing logged</strong>. Raising Airhop's cap past that would leave
+              sending, Android delivery and the local UI all working while every
+              attachment to an iPhone silently stopped arriving, with no error at
+              either end. bitchat-Android allows 10 MiB, so the ceiling is iOS's
+              alone and there is no cross-platform number to raise to.
+            </p>
+            <p>
+              This is enforced rather than remembered:
+              <code>conformance.test.ts</code> reads
+              <code>maxPayloadBytes</code> out of the vendored
+              <code>FileTransferLimits.swift</code> and fails if Airhop's caps no
+              longer fit under the ceiling it implies.
+            </p>
+          </div>
+
+          <h2 id="mime">MIME resolution and magic bytes</h2>
+          <h3>Resolved, never passed through</h3>
+          <p>
+            A picker often returns nothing, and an empty or unrecognised type is
+            dropped on arrival by both clients, which looks identical to a
+            successful send from the sender's side.
+          </p>
+          <pre class="code">
+  resolveMimeType(declared, filename):
+    declared type, IF the allow-list admits it
+    else inferred from the file EXTENSION
+    else "application/octet-stream"     ← always accepted, renders as a document
+</pre>
+          <h3>The allow list</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Category</th><th>Types</th></tr></thead>
+              <tbody>
+                <tr><td>Images</td><td><code>image/jpeg</code>, <code>image/jpg</code>, <code>image/png</code>, <code>image/gif</code>, <code>image/webp</code></td></tr>
+                <tr><td>Audio</td><td><code>audio/mp4</code>, <code>audio/m4a</code>, <code>audio/x-m4a</code>, <code>audio/aac</code>, <code>audio/mpeg</code>, <code>audio/mp3</code>, <code>audio/wav</code>, <code>audio/x-wav</code>, <code>audio/ogg</code></td></tr>
+                <tr><td>Documents</td><td><code>application/pdf</code>, <code>application/octet-stream</code></td></tr>
+                <tr><td>Video</td><td>Any <code>video/*</code>. Airhop's extension; bitchat has no video MIME type at all, which was one of its documented gaps.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Both <code>audio/m4a</code> and <code>audio/x-m4a</code> appear
+            because platforms disagree on which is canonical. Airhop sends
+            <code>audio/mp4</code> and accepts both.
+          </p>
+          <h3>Magic byte validation</h3>
+          <p>
+            On receipt, the declared type is checked against the file's leading
+            bytes, so a file cannot lie about what it is.
+          </p>
+          <pre class="code">
+  image/jpeg    FF D8 FF
+  image/png     89 50 4E 47 0D 0A 1A 0A
+  image/gif     47 49 46 38 (37|39) 61          "GIF87a" or "GIF89a"
+  image/webp    52 49 46 46 .... 57 45 42 50    "RIFF" .... "WEBP"
+  audio/mp4     length > 100 only               recorder output varies by
+  audio/m4a                                     platform; bitchat is lenient
+  audio/aac                                     here too and size-caps instead
+  audio/mpeg    ID3 tag, or an MPEG frame sync
+  application/octet-stream, video/*, unknown    SKIPPED, deliberately
+</pre>
+          <p>
+            <code>application/octet-stream</code> skips validation because its
+            whole meaning is "arbitrary bytes"; there is nothing to check against.
+            Video skips because the container zoo is large and bitchat is lenient
+            there too. This is the same leniency profile bitchat's
+            <code>MimeType.matches</code> uses, which matters because a stricter
+            check would refuse files a bitchat peer considers valid.
+          </p>
+          <p>
+            Scenario M03 pins the attack: "a file that lies about its type is
+            refused".
+          </p>
+
+          <h2 id="private">Private media, and the downgrade attack</h2>
+          <p>
+            A DM attachment can travel two ways, and the difference is
+            confidentiality.
+          </p>
+          <div class="grid two">
+            <div class="box bad">
+              <p class="box-title">The legacy form: signed cleartext <code>0x22</code></p>
+              <p>
+                A directed <code>FILE_TRANSFER</code>. It is signed, so a relay
+                cannot forge it, but it is <strong>not confidential</strong>:
+                every node the fragments cross can read the whole file. bitchat
+                classifies this as the legacy migration fallback and has scheduled
+                its removal.
+              </p>
+            </div>
+            <div class="box ok">
+              <p class="box-title">The sealed form: Noise payload <code>0x20</code></p>
+              <p>
+                The whole file packet is encrypted inside the recipient's Noise
+                session <em>before</em> fragmenting, so relays carry opaque
+                ciphertext. Airhop seals to <code>0x20</code> whenever the
+                recipient has <strong>proven</strong> capability bit 8.
+              </p>
+            </div>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The downgrade attack, and why "proven" is the operative word</p>
+            <p>
+              Announced capability bits are a discovery hint. Anyone can copy a
+              victim's public Noise key off the air and self-sign an announce
+              carrying whatever bits they like. If encrypted media selection
+              depended on the <em>announced</em> bit, an attacker could announce
+              bit 8 <strong>off</strong> for a victim and force every attachment
+              sent to them into the readable form.
+            </p>
+            <p>
+              So the rule is absolute: only a capability proven inside a completed
+              Noise session, via payload <code>0x21</code>, selects encrypted
+              sending. Nobody in radio range can force an attachment into the
+              clear. Scenario M09 pins it: "a private photo is sealed in the
+              session, not signed in the open".
+            </p>
+          </div>
+          <p>
+            Sealing lives in the router (it needs the session) while
+            fragmentation lives in the file transfer service (it needs the paced
+            queue), so there is a <code>buildNoisePayloadPacket</code> that hands
+            the packet back instead of writing it. One Noise ciphertext of a few
+            hundred kilobytes still has to be split into single-write frames and
+            paced onto the radio.
+          </p>
+          <p>
+            Bit 9, <code>privateMediaReceipts</code>, adds durable deduplication
+            of stable media IDs, which is what permits a bounded retry. It does
+            not replace bit 8.
+          </p>
+
+          <h2 id="where">Where media is allowed</h2>
+          <p>
+            Media rides the BLE file-transfer path only. It is flood-broadcast
+            over Bluetooth, never bridged to Nostr, and signed but not encrypted
+            in the public case. So it is offered only where that is coherent.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Context</th><th>Media</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td><code>#bluetooth</code></td><td><strong>Yes</strong></td><td>Public anyway, and everyone in it is reachable over BLE.</td></tr>
+                <tr><td>Mesh DMs, <code>dm:&lt;peerID&gt;</code></td><td><strong>Yes</strong></td><td>Travels over BLE to that peer, sealed when they have proven bit 8.</td></tr>
+                <tr><td>Location channels and teleported cells</td><td>No</td><td>Nostr-scoped. Media cannot ride Nostr, so remote participants would never receive it.</td></tr>
+                <tr><td>Private <code>#name</code> channels</td><td>No</td><td>They encrypt their text. Broadcasting unencrypted media would quietly break the privacy the channel advertises.</td></tr>
+                <tr><td>Private groups</td><td>No</td><td>Same reasoning.</td></tr>
+                <tr><td>Geohash DMs, <code>dm:nostr_&lt;pubkey&gt;</code></td><td>No</td><td>Nostr-only pseudonym chats.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            This mirrors bitchat's <code>canSendMediaInCurrentContext</code>
+            exactly, so the two apps behave identically about what a channel can
+            carry.
+          </p>
+          <p>
+            The channel tag (<code>0x05</code>) had its own finding: it used to
+            auto-join arbitrary rooms. Now the tag must name a room the receiver
+            has actually joined <em>and</em> that <code>canSendMedia</code>
+            allows, otherwise the attachment is refused. Scenario M08 pins it: an
+            attachment cannot be forged, misrouted, or aimed at a room you never
+            joined.
+          </p>
+          <div class="box">
+            <p class="box-title">Why media does not ride Nostr</p>
+            <p>
+              Nostr relays carry small signed events, not file bytes. Sharing a
+              file over Nostr means uploading it to a separate HTTP host and
+              posting a link (NIP-96). That host is a central server that can log,
+              throttle, or take down your files, which is exactly what this app
+              avoids. So attachments travel only over Bluetooth, LAN or WiFi.
+            </p>
+          </div>
+
+          <h2 id="lifecycle">On disk, and the retention sweep</h2>
+          <pre class="ascii">
+  RECEIVE
+     fragments reassemble -> inner packet -> signature re-verified
+     -> magic bytes checked -> written to the CACHE directory
+        with the prefix "airhop_"
+
+  RETENTION  (Privacy -> Keep media for)
+     7 days by DEFAULT, 14 or 30 by choice.  NO UNBOUNDED OPTION.
+     sweepExpiredAttachments() runs at launch, capped at 200 deletions
+     per pass so a large backlog does not block startup.
+
+  PANIC WIPE
+     wipeCacheDirectory() empties the WHOLE cache, not just the
+     airhop_ prefixed files. A sent document, a sent video, a small
+     image sent unmodified and the saved QR card all live under other
+     names or in the pickers' own subdirectories, and every one of them
+     used to survive.
+</pre>
+          <p>
+            The no-unbounded-option decision matters: the threat model lists
+            physical device seizure, and a stored photo outliving its
+            conversation is exactly the evidence a seizure recovers. A "keep
+            forever" setting would be a foot-gun disguised as a preference.
+          </p>
+          <p>
+            Auto-download is a setting. With it off, an incoming attachment shows
+            as a card and nothing touches disk until the user accepts. That
+            mirrors bitchat's explicit-accept behaviour, and it matters on a
+            metered or hostile mesh.
+          </p>
+
+          <h2 id="compression">Image compression</h2>
+          <p>
+            A modern phone photo is 3 to 8 MB. The send cap is 256 KiB. So
+            compression is not an optimisation, it is the only way the feature
+            exists.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Quality setting</th><th>Rough target</th><th>Use</th></tr></thead>
+              <tbody>
+                <tr><td>Low</td><td>Smallest, fastest to send</td><td>A crowded mesh, a weak link, or a bitchat recipient.</td></tr>
+                <tr><td>Medium</td><td>Default</td><td>Ordinary use.</td></tr>
+                <tr><td>High</td><td>Closest to the cap</td><td>A good link where detail matters.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            For comparison, bitchat's own photos are around 45 KB at a 448 pixel
+            edge, which is about two seconds of transfer. That is the size at
+            which media on a mesh is genuinely pleasant, and it is a useful anchor
+            when arguing about caps.
+          </p>
+          <p>
+            An image already small enough is sent unmodified, which is why the
+            panic wipe has to clear the whole cache rather than only prefixed
+            files: an unmodified send never gets the prefix.
+          </p>
+
+          <h2 id="failures">Failure modes</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Symptom</th><th>Cause</th><th>Handling</th></tr></thead>
+              <tbody>
+                <tr><td>Transfer stalls at 90 percent</td><td>Fragments dropped, or a stall longer than the 30 second idle timeout.</td><td>Idle timeout measured from the last fragment, and the paced queue backs off 60 ms on a refused write.</td></tr>
+                <tr><td>Photo never arrives at a bitchat peer</td><td>Over 350 KiB, so it exceeds what fits inside bitchat's 30-second-from-first-fragment window.</td><td>Warn before sending. This is why <code>MAX_BITCHAT_TRANSFER_BYTES</code> exists as a warning line rather than a cap.</td></tr>
+                <tr><td>File arrives and is refused</td><td>Magic bytes disagree with the declared type, or the type is not on the allow list.</td><td>Correct. Refuse rather than render.</td></tr>
+                <tr><td>Attachment missed while out of range is never backfilled</td><td>Files are deliberately excluded from gossip sync (bit 7).</td><td>Accepted. Serving a 1 MiB file from sync is tens of seconds of exclusive radio per asking peer, and bitchat's reassembly would often expire anyway. Media on the mesh is best effort at the moment it is sent.</td></tr>
+                <tr><td>A photo posted in a private channel</td><td>Not possible.</td><td><code>canSendMedia</code> refuses it, because the unencrypted media path would break the channel's advertised privacy.</td></tr>
+                <tr><td>Sending a photo while someone is talking</td><td>Contention for the radio.</td><td>Live voice never enters the fragment scheduler (210 byte burst budget), and fragments use the 8 to 25 ms relay window. Scenario M06 pins that neither starves the other.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does Airhop send photos at 256 KiB when the receive cap is 512 KiB?</span>
+              <span class="a">Because bitchat expires a half-built assembly 30 seconds after the <em>first</em> fragment rather than the last: its buffer stamps a timestamp once and never refreshes it. At about 20 ms pacing, 512 KiB is roughly 1,120 frames and 22 seconds, so a photo at the ceiling only lands if the link never forces a single retry. 256 KiB is about 11 seconds, leaving room for the backoff a busy link forces. Airhop to Airhop is unaffected either way, because Airhop's own reassembly times out on idle rather than total duration.</span>
+            </li>
+            <li>
+              <span class="q">Why is MIME resolved rather than passed through?</span>
+              <span class="a">Because a picker frequently returns nothing, and an empty or unrecognised type is dropped on arrival by both clients, which from the sender's side looks exactly like a successful send. So the type is taken from the declared value when the allow list admits it, else inferred from the extension, else <code>application/octet-stream</code>, which is always accepted and renders as a document. A file always has a type that will be accepted.</span>
+            </li>
+            <li>
+              <span class="q">Explain why "proven" capability matters for private media.</span>
+              <span class="a">Announced capability bits are self-signed with a key carried in the same announce, and the victim's public Noise key is broadcast in the clear, so anyone can announce arbitrary bits under a victim's peer ID. If the encrypted-media decision read the announced bit, an attacker could announce bit 8 off for a victim and force every attachment sent to them into the signed cleartext form, readable by every relay. Only a bit proven inside a completed Noise session, via payload <code>0x21</code>, selects encrypted sending.</span>
+            </li>
+            <li>
+              <span class="q">Why can you not post a photo in a private channel?</span>
+              <span class="a">Because private channel text is sealed with XChaCha20-Poly1305 under the channel key, while media rides the file-transfer path, which is signed but not encrypted. Allowing an attachment there would broadcast it in the clear inside a room the UI presents as private, which is worse than not having the feature. It mirrors bitchat's own policy of allowing media only in the mesh room and mesh DMs.</span>
+            </li>
+            <li>
+              <span class="q">A user asks why their photo from last month is gone. What do you say?</span>
+              <span class="a">Media is swept on a schedule, seven days by default, with 14 and 30 available in Privacy settings and no unbounded option. That is deliberate: the threat model includes physical device seizure, and a stored photo outliving its conversation is exactly the evidence a seizure recovers. If they need to keep something, saving it to the device gallery takes it out of Airhop's cache and out of the sweep.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

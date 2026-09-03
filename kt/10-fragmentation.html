@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 10: Fragmentation. Splitting a file into 467 byte frames and putting it back together." />
+    <title>10 Fragmentation · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 10 · The protocol</p>
+          <h1>Fragmentation</h1>
+          <p class="kt-lede">
+            A photo is half a megabyte. A Bluetooth write is 512 bytes. This
+            chapter is the twelve hundred pieces in between, and the reason the
+            reassembly code is one of the most defensively written files in the
+            repository.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#budget">The budget</a></li>
+              <li><a href="#format">The fragment payload</a></li>
+              <li><a href="#send">Sending: the paced queue</a></li>
+              <li><a href="#receive">Receiving: assemblies</a></li>
+              <li><a href="#hostile">Every hostile case, and its answer</a></li>
+              <li><a href="#relay">Relaying a fragment</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              You want to send a long letter, but the postbox only takes small
+              cards. So you cut the letter into 1,120 numbered cards, write "card
+              47 of 1,120" on each one, and post them one at a time. The person
+              at the other end collects them, sorts them by number, and tapes the
+              letter back together. If some cards go missing they wait a bit, and
+              if nothing new arrives for thirty seconds they throw the pile away,
+              because the sender has clearly gone.
+            </p>
+          </div>
+
+          <h2 id="budget">The budget</h2>
+          <p>
+            The limit is the <strong>whole encoded frame</strong>, not the
+            payload. This is the single most important sentence in the chapter.
+          </p>
+          <pre class="ascii">
+  512 BYTE FRAME BUDGET
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ 16 │  8 │  8 │ 13 │              467                        │
+  └────┴────┴────┴────┴─────────────────────────────────────────┘
+    │    │    │    │                  │
+    │    │    │    │                  └─ fragment data
+    │    │    │    └───────────────────── fragment header
+    │    │    │                            streamID 8, index 2,
+    │    │    │                            total 2, innerType 1
+    │    │    └────────────────────────── recipientID (present on a DM
+    │    │                                 fragment, omitted on a public one)
+    │    └─────────────────────────────── senderID
+    └──────────────────────────────────── v2 packet header
+
+  NO SIGNATURE. Fragments are unsigned by design; the inner packet
+  carries the authenticity and is re-verified after reassembly.
+</pre>
+          <p>
+            512 is not an MTU. It is the Bluetooth core specification's ceiling
+            on the size of a single attribute value, and it holds regardless of
+            what MTU was negotiated. Past it, Android truncates a write without
+            response (which cannot exceed MTU minus 3) and iOS refuses. A
+            truncated frame fails to decode on the far side, and
+            <strong>nothing is reported at either end</strong>.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The 557 byte era</p>
+            <p>
+              Airhop once budgeted 469 bytes of <em>payload</em>. Add a 16 byte
+              header, an 8 byte sender ID and a 64 byte signature and the encoded
+              frame is 557 bytes, 45 over the ceiling. Every fragment of every
+              attachment was discarded before any handler saw it, in both
+              directions, with no error anywhere. Live push-to-talk kept working
+              throughout, because a voice burst is capped at 210 bytes and never
+              enters this path, which is why the bug survived: the feature that
+              looked most fragile was the one that was fine.
+            </p>
+            <p>
+              bitchat derives 469 data bytes from the same 512 byte budget
+              because its fragment header is smaller. Being two bytes under is
+              harmless: the chunk size is a sender-side choice and the receiver
+              reassembles by index without needing to agree on it.
+            </p>
+          </div>
+
+          <h2 id="format">The fragment payload</h2>
+          <pre class="code">
+  outer packet:  type = 0x20 (FRAGMENT), ttl 7, flags = 0 (UNSIGNED)
+                 senderID   = our peer ID
+                 recipientID = THE PARENT PACKET'S recipientID
+
+  payload:
+    [0..7]    streamID      8 bytes, random per original packet
+    [8..9]    index         u16 BE, zero based
+    [10..11]  total         u16 BE
+    [12]      originalType  u8, the inner packet's type
+    [13..]    data          up to 467 bytes of the encoded inner packet
+
+  The "data" across all fragments, concatenated in index order, is the
+  complete wire encoding of the original packet, as returned by
+  encodePacket(). The receiver runs decodePacket() on the result.
+</pre>
+          <div class="box">
+            <p class="box-title">Why a fragment carries its parent's recipientID</p>
+            <p>
+              Addressed to nobody, bitchat classifies a DM's fragments as public.
+              Three things then go wrong: it archives sealed private media in its
+              gossip store, it re-offers that media to third parties, and it
+              floods each fragment to every neighbour instead of sending it down
+              the directed path. Carrying the parent's recipient keeps a private
+              attachment private and keeps the traffic on one path.
+            </p>
+          </div>
+          <div class="box">
+            <p class="box-title">Why fragments are unsigned</p>
+            <p>
+              A per-fragment signature would spend 64 of the 512 bytes, roughly
+              12 percent of every transfer, to authenticate a piece that means
+              nothing on its own. The inner packet is signed and re-verified
+              after reassembly, so a forged fragment can only ever produce a
+              packet that fails verification. bitchat sends
+              <code>signature: nil</code> and neither side's fragment path
+              inspects one, so this is also an interop requirement.
+            </p>
+            <p>
+              The consequence is that both halves of the assembly key (sender ID
+              and stream ID) are attacker-choosable, and fragments skip the
+              deduplicator. Every defence in the receive path exists because of
+              that.
+            </p>
+          </div>
+
+          <h2 id="send">Sending: the paced queue</h2>
+          <pre class="ascii">
+  sendAttachment(file, channel or peer)
+     │
+     ├─ compress the image to the quality setting, check the per-type cap
+     │     photo 512 KiB · voice note 512 KiB · anything else 1 MiB
+     │
+     ├─ build the BitchatFilePacket TLV, then the outer packet, then SIGN it
+     │
+     ├─ encodePacket() -> ~500,000 bytes
+     │
+     ├─ fragmentPacket()
+     │     total = ceil(len / 467)
+     │     streamID = 8 random bytes
+     │     refuse if total > 65,535
+     │
+     └─ hand the array to the PACED QUEUE
+
+  PACED QUEUE
+     one fragment every 25 ms   (directed, IF the path touches BLE)
+     one fragment every 30 ms   (broadcast, to a room)
+     │
+     ├─ write refused?  back off 60 ms and retry the same fragment
+     │                   give up after 250 consecutive refusals
+     │
+     └─ report progress to the transfer store every 250 ms
+</pre>
+          <p>
+            The 25 ms is not politeness, it is required: without it the radio
+            drops fragments and the transfer never completes. The broadcast case
+            uses 30 ms because each broadcast fragment is
+            <strong>one radio write per connected peer</strong>. In a room of six,
+            one fragment is six writes, so airtime cost grows with room size
+            while the sender's clock does not.
+          </p>
+          <p>
+            A refused write is ordinary rather than fatal. The GATT queue fills
+            up, especially while an announce, a prekey bundle and a gossip round
+            are also in flight. So a refusal backs off and retries rather than
+            tearing anything down, and only 250 consecutive refusals count as a
+            dead transfer.
+          </p>
+
+          <h2 id="receive">Receiving: assemblies</h2>
+          <pre class="ascii">
+  fragment arrives
+     │
+     ├─ decodeFragmentPayload()
+     │     reject if:  total == 0
+     │                 total > 10,000
+     │                 index >= total
+     │                 payload shorter than 13 bytes
+     │
+     ├─ key = senderIDhex + "_" + streamIDhex
+     │
+     ├─ evict any assembly idle for 30 seconds
+     │
+     ├─ reject a single fragment whose DATA exceeds the reassembly ceiling
+     │     (before touching the table: see "eviction primitive" below)
+     │
+     ├─ new stream?
+     │     at 128 concurrent assemblies -> evict the oldest slot
+     │     PIN total and originalType from THIS first fragment, forever
+     │
+     ├─ existing stream?
+     │     header disagrees with the pinned total or type -> DROP THE FRAGMENT,
+     │                                                        keep the assembly
+     │     index already present                          -> duplicate, drop
+     │     would push byteCount over the ceiling          -> DROP THE FRAGMENT,
+     │                                                        keep the assembly
+     │
+     ├─ store, bump byteCount, refresh updatedAt, report progress
+     │
+     └─ all `total` indices present?
+           concatenate in index order
+           decodePacket()
+           routePacket() the inner packet, which re-verifies its signature
+</pre>
+
+          <h3>The idle timeout, not a total timeout</h3>
+          <p>
+            The 30 second timeout is measured from the
+            <strong>last fragment that arrived</strong>, not from the first.
+            That distinction is the whole point. A 512 KiB photo is about 1,120
+            fragments paced 25 ms apart, so it cannot arrive in under roughly 28
+            seconds; a 1 MiB file takes twice that. Timing out on total duration
+            deleted the half-built file mid-transfer, and the fragments still
+            arriving then started a fresh assembly that could never reach its
+            total. The file was lost silently and permanently. Idle time is what
+            actually means the sender is gone.
+          </p>
+
+          <h2 id="hostile">Every hostile case, and its answer</h2>
+          <p>
+            Fragments are unsigned and skip the deduplicator, so anyone in radio
+            range can emit one claiming any sender and any stream. Each defence
+            below is written against a specific attack.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Attack</th><th>What it would do</th><th>Defence</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Truncation</strong>: inject a fragment declaring <code>total = 3</code> into a ten fragment stream</td>
+                  <td>The assembly completes early and hands the receive path a truncated payload as the whole message.</td>
+                  <td><code>total</code> and <code>originalType</code> are pinned from the first fragment accepted and never re-read. A conformant sender restates the same values on every fragment, so this refuses nothing legitimate.</td>
+                </tr>
+                <tr>
+                  <td><strong>Kill switch</strong>: inject one oversized fragment into a 90 percent complete transfer</td>
+                  <td>Deleting the stream on an over-ceiling fragment made one cheap packet a remote kill switch for somebody else's photo, with no error at either end.</td>
+                  <td>Refuse the fragment, <strong>keep the assembly</strong>. A genuinely oversized stream still cannot complete and ages out on the idle timeout like any stalled one.</td>
+                </tr>
+                <tr>
+                  <td><strong>Eviction primitive</strong>: with 128 assemblies in flight, send one fragment that will be rejected anyway</td>
+                  <td>Starting an assembly evicts the oldest slot, so a doomed fragment still costs somebody a transfer.</td>
+                  <td>The size check runs <strong>before</strong> the table is touched.</td>
+                </tr>
+                <tr>
+                  <td><strong>Decompression bomb in a fragment</strong>: a 25 byte fragment that inflates to megabytes</td>
+                  <td>One fragment can exceed the reassembly ceiling despite the 512 byte frame budget, because the outer packet may be DEFLATE compressed and the decoder inflates up to the sender-declared size.</td>
+                  <td>The declared size bounds inflation while it runs (chapter <a href="09-wire-format.html">09</a>), and the fragment's data length is checked against the reassembly ceiling.</td>
+                </tr>
+                <tr>
+                  <td><strong>Memory exhaustion</strong>: open thousands of streams</td>
+                  <td>Unbounded table growth.</td>
+                  <td>128 concurrent assemblies, oldest evicted. Plus the per-stream byte ceiling.</td>
+                </tr>
+                <tr>
+                  <td><strong>Relabelling</strong>: change <code>originalType</code> mid-transfer</td>
+                  <td>The UI shows a photo becoming a document, or vice versa.</td>
+                  <td>Progress reports the <strong>pinned</strong> type, not the arriving fragment's claim.</td>
+                </tr>
+                <tr>
+                  <td><strong>Forged content</strong>: reassemble into a packet claiming a trusted sender</td>
+                  <td>A photo attributed to a verified contact in a thread badged end to end encrypted.</td>
+                  <td>The reassembled inner packet goes back through <code>routePacket</code>, and <code>FILE_TRANSFER</code> is held to <code>senderIsAuthentic</code>: a signature checked against the key bound to the claimed sender. A missing key is a failed check, never a skipped one.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="relay">Relaying a fragment</h2>
+          <p>
+            A relay forwards fragments <strong>individually</strong> and never
+            reassembles. Only the addressee reassembles. Three rules apply:
+          </p>
+          <ul>
+            <li>
+              <strong>Time critical jitter.</strong> Fragments use the 8 to 25 ms
+              relay window rather than the ordinary 10 to 220 ms, and the TTL is
+              clamped to 5 in a dense mesh. A sustained stream at full depth in a
+              busy graph would crowd out everything else.
+            </li>
+            <li>
+              <strong>The addressee stops relaying.</strong> A fragment addressed
+              to us has nowhere further to go, so relaying it is pure cost, and
+              for a file that cost is the whole file. Without this, the receiver
+              re-fragmented every byte it had just been handed and pushed it back
+              out over its other links: a photo arrives over WiFi and is then
+              echoed over Bluetooth at 18 KiB/s, spending seconds of radio and
+              both devices' battery on a copy for the sender.
+            </li>
+            <li>
+              <strong>Fragments inherit the parent's version and route</strong>,
+              so a routed file crosses the mesh on the path its parent planned
+              rather than falling back to flooding the moment it is split.
+            </li>
+          </ul>
+
+          <h3>Pacing is per transport, and it was not always</h3>
+          <div class="box bad">
+            <p class="box-title">The Wi-Fi fast path was paced for a radio it never touched</p>
+            <p>
+              The 25 ms gap exists because the Bluetooth stack drops writes handed
+              over faster than it can make them. The pacer had no idea which
+              transport carried a fragment, so a 1 MiB file over WiFi Aware took
+              the same <strong>56 seconds</strong> Bluetooth takes, on a link two
+              orders of magnitude faster.
+            </p>
+            <p>
+              It now asks one question through a callback into the mesh service:
+              <em>does anything on the path touch the Bluetooth radio</em>. That
+              covers channel broadcasts as well as directed sends. If the answer
+              is a definite no, the gap goes to zero; absent an answer it stays on
+              the Bluetooth timings, because a transfer slower than it needed to
+              be is a nuisance and one paced faster than the radio can take drops
+              fragments and never completes.
+            </p>
+            <p>
+              <strong>Fragment size does not change with it.</strong> The receiver
+              reassembles by index, the next hop may be Bluetooth, and bitchat
+              refuses an over-size frame as it decodes. 467 bytes is protocol and
+              stays whatever carries it.
+            </p>
+          </div>
+          <div class="box warn">
+            <p class="box-title">And a second drain loop, from clearing the timer too early</p>
+            <p>
+              <code>drainTimer</code> is cleared before the transport is awaited,
+              so a second transfer starting mid-write set a fresh timer and opened
+              a parallel drain. Two loops shifting one queue hand the radio
+              fragments at twice the spacing, which is precisely the loss the
+              spacing exists to prevent, and a second transfer beginning during a
+              first is entirely ordinary. A <code>draining</code> flag now covers
+              the await and releases before the tail re-schedules; releasing later
+              would swallow that schedule and stall the queue.
+            </p>
+          </div>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constant</th><th>Value</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Frame budget</td><td>512 bytes</td><td>The ATT maximum attribute value. Not negotiable.</td></tr>
+                <tr><td>Data per fragment</td><td>467 bytes</td><td>512 minus 16 header, 8 sender, 8 recipient, 13 fragment header.</td></tr>
+                <tr><td>Fragment header</td><td>13 bytes</td><td>streamID 8, index 2, total 2, inner type 1.</td></tr>
+                <tr><td>Concurrent assemblies</td><td>128</td><td>Matches bitchat. Enough for a busy room, bounded against exhaustion.</td></tr>
+                <tr><td>Idle timeout</td><td>30 s</td><td>From the last fragment. Long enough to survive a stall, short enough to reclaim memory.</td></tr>
+                <tr><td>Max fragments per stream</td><td>10,000 declared, 65,535 encodable</td><td>The u16 field allows 65,535; the decoder refuses anything over 10,000 as implausible.</td></tr>
+                <tr><td>Reassembled ceiling</td><td><code>MAX_FRAMED_FILE_BYTES</code>, about 1.13 MiB</td><td>bitchat iOS's <code>FileTransferLimits.maxFramedFileBytes</code>: 1 MiB of content plus the TLV and packet envelopes.</td></tr>
+                <tr><td>Directed pacing</td><td>25 ms</td><td>The fastest rate at which the Bluetooth stack stops dropping fragments. Applied only when something on the path is Bluetooth.</td></tr>
+                <tr><td>Broadcast pacing</td><td>30 ms</td><td>Same reason, wider gap because a broadcast reaches every link at once.</td></tr>
+                <tr><td>Fast-link pacing</td><td><code>FAST_LINK_SPACING_MS</code> 0</td><td>WiFi Aware or LAN with no Bluetooth on the path. A socket has flow control of its own; the timer only yields to keep the UI responsive.</td></tr>
+                <tr><td>Broadcast pacing</td><td>30 ms</td><td>One write per connected peer, so airtime scales with room size.</td></tr>
+                <tr><td>Refusal backoff</td><td>60 ms</td><td>A full GATT queue drains in tens of milliseconds.</td></tr>
+                <tr><td>Refusal limit</td><td>250 consecutive</td><td>15 seconds of solid refusal means the link is genuinely gone.</td></tr>
+                <tr><td>Progress updates</td><td>every 250 ms</td><td>Faster than a person perceives as laggy, slow enough not to thrash the store.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Why the file cap cannot be raised</p>
+            <p>
+              bitchat-iOS refuses any packet whose declared expanded size passes
+              <code>maxFramedFileBytes</code>, and it refuses it by returning nil
+              with nothing logged. Raising Airhop's cap past that would leave
+              sending, Android delivery and the local UI all working while every
+              attachment to an iPhone silently stopped arriving, with no error at
+              either end. bitchat-Android allows 10 MiB, so the ceiling is iOS's
+              alone and there is no cross-platform number to raise to.
+              <code>conformance.test.ts</code> reads
+              <code>maxPayloadBytes</code> out of the vendored
+              <code>FileTransferLimits.swift</code> and fails if Airhop's caps no
+              longer fit under the ceiling it implies.
+            </p>
+          </div>
+
+          <h2 id="alternatives">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Approach</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>L2CAP connection-oriented channels</strong></td>
+                  <td>BLE 4.1 added credit-based flow-controlled channels that carry an MTU far above 512 with the stack handling segmentation. Genuinely better for bulk transfer. Not used because bitchat does not, and using it would create a path that only Airhop-to-Airhop links could take, which is a second transport to keep in sync for a case the WiFi fast path already covers better.</td>
+                </tr>
+                <tr>
+                  <td><strong>Application-level chunking above the packet</strong></td>
+                  <td>Sending a file as N packets of 64 KiB each, with its own resume logic. This was Airhop's original plan and was dropped: bitchat enforces the size cap when it <em>decodes</em>, so chunks above the cap are rejected outright and interop breaks in both directions. One <code>BitchatFilePacket</code> per file, split by the fragment layer, is what both sides expect.</td>
+                </tr>
+                <tr>
+                  <td><strong>Forward error correction</strong> (fountain codes, Raptor)</td>
+                  <td>Encode 1,120 fragments into 1,300 symbols, any 1,120 of which reconstruct the file. Removes the need for retransmission entirely and is genuinely elegant for a lossy broadcast medium. Costs a 15 percent airtime overhead on every transfer, adds a dependency, and cannot be adopted unilaterally without breaking bitchat. A real option for an Airhop-only fast path, and nothing more.</td>
+                </tr>
+                <tr>
+                  <td><strong>Selective retransmission</strong> (the receiver asks for missing indices)</td>
+                  <td>bitchat's gossip sync has a <code>fragmentIdFilter</code> TLV (<code>0x06</code>) for exactly this, narrowing a sync request to specific stalled streams. Airhop neither emits nor reads it: a stalled reassembly recovers through the ordinary 15 second round instead. A peer that sends one receives a normal full response, so the omission is compatible in both directions.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is 467 the right number and 469 wrong for Airhop?</span>
+              <span class="a">Because the budget is the encoded frame, and Airhop's fragment header plus a recipientID leaves 467. bitchat's smaller header leaves 469 from the same 512. Either is fine as a sender-side choice, since the receiver reassembles by index. What is not fine is treating 469 as a payload budget and then adding a 64 byte signature, which is how the frame reached 557 and every attachment silently failed.</span>
+            </li>
+            <li>
+              <span class="q">Why does an over-ceiling fragment not delete the assembly?</span>
+              <span class="a">Because that would make one cheap unsigned packet a remote kill switch. Both halves of the assembly key are observable on the air, so an attacker can aim a fragment at any transfer in progress and destroy a nearly complete photo with no error at either end. Refusing the fragment and keeping the assembly means a genuinely oversized stream simply cannot complete and ages out on the idle timeout, which is the correct outcome for both the attack and the honest case.</span>
+            </li>
+            <li>
+              <span class="q">A user says a large file transfer "stops at 90 percent every time". Where do you look?</span>
+              <span class="a">First, whether the last fragments are being dropped by the radio: check whether the pacing is being honoured and whether the link is being shared with live voice. Second, whether the idle timeout is firing, which would mean a stall longer than 30 seconds. Third, whether the receiver is hitting the reassembly ceiling, which points at a size cap mismatch. Fourth, if the receiver is a bitchat iPhone, whether the file exceeds <code>maxFramedFileBytes</code>, in which case it is refused silently on arrival regardless of how many fragments landed.</span>
+            </li>
+            <li>
+              <span class="q">Why does the receiver of a directed fragment not relay it?</span>
+              <span class="a">It has nowhere further to go, and relaying it means re-fragmenting every byte just received and pushing it back out over every other link. The measured effect was a photo arriving over WiFi and being echoed over Bluetooth at 18 KiB/s, spending seconds of radio time and both devices' battery on a copy for the sender. The rule is narrow on purpose: only the addressee stops, so middle nodes still relay and multi-hop is untouched, and only <code>FRAGMENT</code> is affected.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

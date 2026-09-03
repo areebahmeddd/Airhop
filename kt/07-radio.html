@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 07: Radio, from scratch. Waves, spectrum, power, range, antennas, interference." />
+    <title>07 Radio, from scratch · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 07 · The physical layer</p>
+          <h1>Radio, from scratch</h1>
+          <p class="kt-lede">
+            Everything Airhop does offline rests on a radio wave travelling a
+            few tens of metres. If you understand why that distance is what it
+            is, most of the protocol's constants stop being arbitrary.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#waves">What a radio wave actually is</a></li>
+              <li><a href="#spectrum">The spectrum, and why 2.4 GHz</a></li>
+              <li><a href="#modulation">Turning bits into a wave</a></li>
+              <li><a href="#power">Power, dBm, and why the numbers are negative</a></li>
+              <li><a href="#budget">The link budget: the one equation that matters</a></li>
+              <li><a href="#propagation">Why walls and people ruin everything</a></li>
+              <li><a href="#antennas">Antennas</a></li>
+              <li><a href="#interference">Sharing the band with everyone</a></li>
+              <li><a href="#law">Regulation</a></li>
+              <li><a href="#airhop">What this means for Airhop's numbers</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              A radio is a torch that flashes in a colour your eyes cannot see.
+              Your phone flashes patterns of that invisible light, and another
+              phone nearby watches for the flashes and turns them back into
+              words. Like a torch, it gets dimmer the further away you are, and
+              walls and people block it. It is not magic and it does not go
+              through the ground. It just goes until it is too dim to read.
+            </p>
+          </div>
+          <p>
+            The engineering version: a radio transmitter converts electrical
+            energy into an electromagnetic field that propagates outward at the
+            speed of light. A receiver a distance away extracts a tiny amount of
+            that energy from its antenna and tries to recover the pattern that
+            was impressed on it. Everything difficult in radio comes from three
+            facts: the energy spreads out over an expanding sphere so it falls
+            off fast, the medium is shared with everybody else, and the receiver
+            has a noise floor below which it simply cannot tell signal from
+            static.
+          </p>
+
+          <h2 id="waves">What a radio wave actually is</h2>
+          <p>
+            An oscillating electric field creates an oscillating magnetic field,
+            which creates an oscillating electric field, and the pair
+            self-propagates through space. That is a Maxwell equation result and
+            it is the same phenomenon as visible light, differing only in
+            frequency.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Definition</th><th>Bluetooth at 2.4 GHz</th></tr></thead>
+              <tbody>
+                <tr><td>Frequency (f)</td><td>Oscillations per second, in hertz.</td><td>2.4 billion per second.</td></tr>
+                <tr><td>Wavelength (λ)</td><td>Distance one oscillation covers. λ = c / f, where c is 300,000,000 m/s.</td><td>300,000,000 / 2,400,000,000 = <strong>12.5 cm</strong></td></tr>
+                <tr><td>Amplitude</td><td>How strong the field is. This is what falls off with distance.</td><td>Set by transmit power, typically 0 to 4 dBm on a phone.</td></tr>
+                <tr><td>Phase</td><td>Where in the oscillation you are, from 0 to 360 degrees.</td><td>The thing BLE actually modulates information onto.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            That 12.5 cm wavelength is worth remembering, because it explains
+            several otherwise strange behaviours. It is roughly the size of a
+            human hand, which is why holding a phone a particular way changes
+            reception. It is much smaller than a wall, which is why walls
+            attenuate rather than diffract around. And an efficient antenna is
+            usually a quarter or a half of a wavelength, so at 2.4 GHz an
+            antenna can be about 3 cm, which is why it fits inside a phone at
+            all.
+          </p>
+          <pre class="ascii">
+  ONE WAVELENGTH AT 2.4 GHz = 12.5 cm
+
+     ╭─╮       ╭─╮       ╭─╮       ╭─╮
+    ╱   ╲     ╱   ╲     ╱   ╲     ╱   ╲
+  ─╯     ╰───╯     ╰───╯     ╰───╯     ╰──▶  travelling at 300,000 km/s
+    │←── 12.5 cm ──→│
+                          2,400,000,000 of these pass a point every second
+</pre>
+
+          <h2 id="spectrum">The spectrum, and why 2.4 GHz</h2>
+          <p>
+            Radio spectrum is a finite, government-allocated resource. Most of
+            it requires a licence. A few small slices are set aside as
+            <strong>ISM bands</strong> (industrial, scientific and medical) where
+            anyone may transmit without a licence, subject to power limits and
+            behaviour rules. 2.4 GHz is the most important of these because it is
+            unlicensed almost everywhere on Earth.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Band</th><th>Wavelength</th><th>Behaviour</th><th>Used by</th></tr></thead>
+              <tbody>
+                <tr><td>Long wave, 150 kHz</td><td>2 km</td><td>Follows the curve of the Earth, goes through almost anything, carries almost no data.</td><td>Submarine comms, time signals.</td></tr>
+                <tr><td>FM broadcast, 100 MHz</td><td>3 m</td><td>Bends around hills, penetrates buildings well, tens of km range.</td><td>Radio stations.</td></tr>
+                <tr><td>Mobile, 700 MHz to 2.6 GHz</td><td>10 to 40 cm</td><td>Good building penetration at the low end, more capacity at the high end.</td><td>4G, 5G.</td></tr>
+                <tr><td>ISM, 433 / 868 / 915 MHz</td><td>33 to 69 cm</td><td>Excellent range and penetration, tiny data rates. Region-specific.</td><td>LoRa, Meshtastic, garage doors. See chapter <a href="47-lora-hardware.html">47</a>.</td></tr>
+                <tr><td><strong>ISM, 2.4 GHz</strong></td><td><strong>12.5 cm</strong></td><td><strong>Moderate range, good data rates, globally unlicensed, extremely crowded.</strong></td><td><strong>Bluetooth, WiFi, Zigbee, microwaves.</strong></td></tr>
+                <tr><td>ISM, 5 GHz and 6 GHz</td><td>5 to 6 cm</td><td>High data rates, poor penetration, shorter range.</td><td>WiFi 5/6/6E.</td></tr>
+                <tr><td>mmWave, 28 GHz+</td><td>1 cm</td><td>Enormous capacity, blocked by a hand, range measured in tens of metres.</td><td>5G mmWave.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop uses 2.4 GHz because Bluetooth uses it, and Bluetooth uses it
+            because that is the only band with three properties at once: legal
+            worldwide without a licence, enough bandwidth for megabits, and a
+            wavelength small enough for the antenna to fit in a phone. Every
+            other choice would fail one of those.
+          </p>
+          <p>
+            There is a genuine trade being made. 868 MHz would roughly double the
+            range for the same power, because free-space loss goes as the square
+            of frequency. But no phone has an 868 MHz radio, and regional
+            allocations differ (433 MHz in some regions, 868 in Europe, 915 in
+            North America), so an app cannot use it without hardware. That is
+            precisely why LoRa relay boxes exist as an <em>addition</em> to the
+            phone mesh rather than a replacement.
+          </p>
+
+          <h2 id="modulation">Turning bits into a wave</h2>
+          <p>
+            A pure sine wave carries no information. To carry information, you
+            change something about the wave over time. That is modulation.
+          </p>
+          <ul>
+            <li>
+              <strong>Amplitude modulation:</strong> make it louder for a 1,
+              quieter for a 0. Simple, and terrible in the presence of noise,
+              because noise is amplitude.
+            </li>
+            <li>
+              <strong>Frequency modulation:</strong> shift slightly higher for a
+              1, slightly lower for a 0. Far more robust. This is what BLE uses,
+              specifically <strong>GFSK</strong> (Gaussian frequency shift
+              keying). The Gaussian filter smooths the transitions so the signal
+              does not splatter energy into neighbouring channels.
+            </li>
+            <li>
+              <strong>Phase modulation:</strong> shift where in the cycle you
+              are. Used by WiFi and by Bluetooth's higher-speed modes.
+            </li>
+            <li>
+              <strong>Spread spectrum:</strong> deliberately smear the signal
+              across a wide band so narrow interference cannot destroy it.
+              Bluetooth uses frequency hopping (see below); LoRa uses chirp
+              spreading (chapter 47); WiFi uses OFDM across many subcarriers.
+            </li>
+          </ul>
+          <p>
+            BLE 1 Mbps uses GFSK with a modulation index around 0.5, which means
+            the frequency deviates by roughly 250 kHz either side of the channel
+            centre. The receiver only has to decide "higher or lower", which is a
+            much easier question than "how loud", and that is where BLE's
+            robustness at low power comes from.
+          </p>
+
+          <h2 id="power">Power, dBm, and why the numbers are negative</h2>
+          <p>
+            Radio power spans an enormous range: a transmitter might emit 1
+            milliwatt and a receiver might detect 0.0000000001 milliwatts. Linear
+            numbers are unusable at that scale, so everything is expressed in
+            decibels relative to a milliwatt: <strong>dBm</strong>.
+          </p>
+          <pre class="code">
+  dBm = 10 x log10(power in milliwatts)
+
+     1 W      = 1000 mW  =  +30 dBm     (a WiFi access point at max legal EIRP)
+   100 mW     =            +20 dBm      (a strong WiFi client)
+    10 mW     =            +10 dBm      (Bluetooth class 1)
+     1 mW     =              0 dBm      (typical phone BLE transmit)
+   0.1 mW     =            -10 dBm      (very close received signal)
+  0.0000001 mW =           -70 dBm      (a normal received signal a room away)
+  0.00000000001 mW =      -100 dBm      (about the noise floor)
+</pre>
+          <div class="box">
+            <p class="box-title">The three numbers to memorise</p>
+            <ul>
+              <li><strong>+3 dB is double the power. -3 dB is half.</strong></li>
+              <li><strong>+10 dB is ten times. -10 dB is one tenth.</strong></li>
+              <li><strong>-6 dB is half the distance</strong> in free space, because power falls off with the square of distance.</li>
+            </ul>
+            <p>
+              From those three you can do most link budget arithmetic in your
+              head. A phone at 0 dBm read at -60 dBm has lost 60 dB, which is a
+              factor of one million.
+            </p>
+          </div>
+          <p>
+            <strong>RSSI</strong> (received signal strength indicator) is the
+            received power in dBm. It is always negative in practice, because the
+            received signal is always a tiny fraction of a milliwatt. Airhop
+            polls it from the native module (every 5 to 60 seconds depending on
+            the power mode) and uses it for two things: drawing distance rings
+            on the mesh radar, and gating whether to open a GATT connection at
+            all.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>RSSI</th><th>Practical meaning</th></tr></thead>
+              <tbody>
+                <tr><td>-30 to -50 dBm</td><td>In the same hand, or a metre away. Excellent.</td></tr>
+                <tr><td>-50 to -70 dBm</td><td>Same room. Reliable.</td></tr>
+                <tr><td>-70 to -85 dBm</td><td>Next room, or across a large space. Usable, with retries.</td></tr>
+                <tr><td>-85 to -95 dBm</td><td>Marginal. Connections drop, throughput collapses.</td></tr>
+                <tr><td>Below -95 dBm</td><td>At or below the noise floor. Not usable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <strong>RSSI is not distance.</strong> It correlates with distance
+            only when nothing is in the way, everything is oriented the same, and
+            both radios have the same power. In a real crowd, none of those
+            hold. A phone in a back pocket ten metres away can read weaker than
+            a phone behind a wall at thirty. The radar draws rings from RSSI
+            because it is the only signal available, and it is labelled as
+            approximate for exactly this reason. This is also why Airhop's peer
+            store deliberately refuses to treat a locally polled RSSI as
+            evidence of liveness: only a packet that arrived proves the peer is
+            there.
+          </p>
+
+          <h2 id="budget">The link budget: the one equation that matters</h2>
+          <p>
+            Every radio question reduces to this. Add up everything that helps,
+            subtract everything that hurts, and compare the result to what the
+            receiver needs.
+          </p>
+          <pre class="code">
+  RX power (dBm) = TX power
+                 + TX antenna gain
+                 - path loss
+                 - obstruction loss
+                 - body loss
+                 + RX antenna gain
+
+  Link works if:  RX power  >  receiver sensitivity  (+ a margin)
+
+  FREE SPACE PATH LOSS, the dominant term:
+
+     FSPL(dB) = 20 x log10(d) + 20 x log10(f) - 147.55
+                (d in metres, f in hertz)
+
+  At 2.4 GHz that comes out as:
+
+     1 m     40 dB          30 m     70 dB
+     3 m     50 dB         100 m     80 dB
+    10 m     60 dB         300 m     90 dB
+</pre>
+          <p>Now do a real phone-to-phone link:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Term</th><th>Value</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>TX power</td><td>+0 dBm</td><td>Typical phone BLE. Some go to +4, some drop to -12 in low power mode.</td></tr>
+                <tr><td>TX antenna gain</td><td>0 dBi</td><td>A phone antenna is roughly omnidirectional and small. Assume no gain.</td></tr>
+                <tr><td>Free space loss at 30 m</td><td>-70 dB</td><td>From the table above.</td></tr>
+                <tr><td>Body loss, sender</td><td>-3 to -10 dB</td><td>A hand or a pocket absorbs. Water absorbs strongly at 2.4 GHz.</td></tr>
+                <tr><td>Body loss, receiver</td><td>-3 to -10 dB</td><td>Same again.</td></tr>
+                <tr><td>RX antenna gain</td><td>0 dBi</td><td></td></tr>
+                <tr><td><strong>Received power</strong></td><td><strong>-76 to -90 dBm</strong></td><td></td></tr>
+                <tr><td>BLE receiver sensitivity</td><td>-90 to -95 dBm</td><td>Typical for a phone chipset at 1 Mbps.</td></tr>
+                <tr><td><strong>Margin</strong></td><td><strong>0 to 19 dB</strong></td><td>Which is why 30 m sometimes works and sometimes does not.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            That arithmetic is where every range figure in Airhop's
+            documentation comes from. "10 to 30 m indoors, up to about 100 m
+            line of sight" is not a marketing number, it is the range over which
+            the margin above stays positive under realistic conditions.
+          </p>
+
+          <h2 id="propagation">Why walls and people ruin everything</h2>
+          <p>
+            Free space loss assumes nothing between the antennas. Reality
+            subtracts more.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Obstruction</th><th>Loss at 2.4 GHz</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td>Plasterboard wall</td><td>3 to 5 dB</td><td>Barely noticed.</td></tr>
+                <tr><td>Wooden door</td><td>3 to 6 dB</td><td>Barely noticed.</td></tr>
+                <tr><td>Brick wall</td><td>6 to 12 dB</td><td>Halves range or worse.</td></tr>
+                <tr><td>Concrete wall</td><td>10 to 20 dB</td><td>One wall can end a marginal link.</td></tr>
+                <tr><td>Reinforced concrete</td><td>20 to 30 dB</td><td>The steel mesh acts as a Faraday cage.</td></tr>
+                <tr><td>A human body</td><td>3 to 10 dB</td><td>We are mostly salt water, which absorbs at 2.4 GHz.</td></tr>
+                <tr><td>A dense crowd</td><td>10 to 20 dB</td><td>Every person between two phones adds loss.</td></tr>
+                <tr><td>Metal (lift, vehicle body, shipping container)</td><td>30 dB+</td><td>Effectively a wall.</td></tr>
+                <tr><td>Rain</td><td>&lt; 1 dB</td><td>Negligible at 2.4 GHz. It matters at mmWave, not here.</td></tr>
+                <tr><td>Glass, plain</td><td>2 to 4 dB</td><td>Low.</td></tr>
+                <tr><td>Glass, metal-coated (low-E)</td><td>25 to 40 dB</td><td>Modern office windows are nearly opaque to radio.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Three further effects matter in the environments Airhop targets:
+          </p>
+          <ul>
+            <li>
+              <strong>Multipath fading.</strong> A signal arrives by several
+              paths (direct, plus bounces off walls and floors). Depending on
+              path length differences those copies add or cancel. Cancellation
+              can produce a 20 dB null in a spot the size of half a wavelength,
+              which at 2.4 GHz is about 6 cm. This is why moving a phone a few
+              centimetres can restore a link, and why frequency hopping helps: a
+              null at one frequency is not a null at another.
+            </li>
+            <li>
+              <strong>The Fresnel zone.</strong> A radio link needs clearance
+              around the direct line, not just an unobstructed line. The first
+              Fresnel zone is an ellipsoid between the antennas; blocking more
+              than about 40 percent of it causes real loss even if you can see
+              from one antenna to the other. At 2.4 GHz over 100 m the zone
+              radius at the midpoint is about 1.8 m, which is why a link across
+              a street can degrade when someone parks a van halfway along it.
+            </li>
+            <li>
+              <strong>Ground reflection.</strong> Two phones held at waist height
+              have a strong ground bounce that can partially cancel the direct
+              path. Range measured with phones on the floor is systematically
+              worse than range measured with phones held up.
+            </li>
+          </ul>
+          <div class="box">
+            <p class="box-title">The consequence for the mesh</p>
+            <p>
+              Range is not a number, it is a distribution. This is the strongest
+              argument for the flooding design: no node can know the topology,
+              because the topology is changing continuously as people move,
+              turn, and put phones in pockets. A routing table computed a second
+              ago is already wrong. Flooding with a hop limit is robust to a
+              topology nobody can measure. See chapter <a href="11-routing.html">11</a>.
+            </p>
+          </div>
+
+          <h2 id="antennas">Antennas</h2>
+          <p>
+            An antenna is a transducer between a current in a wire and a field in
+            space. Its two properties that matter here are gain and pattern, and
+            they are the same property viewed two ways.
+          </p>
+          <ul>
+            <li>
+              <strong>Gain is not amplification.</strong> An antenna is passive.
+              Gain means it concentrates the same energy into a narrower
+              direction, at the cost of the directions it no longer covers. A 12
+              dBi antenna does not create energy; it makes a beam.
+            </li>
+            <li>
+              <strong>dBi</strong> is gain relative to a theoretical isotropic
+              radiator (equal in all directions). <strong>dBd</strong> is
+              relative to a half-wave dipole, and dBi = dBd + 2.15.
+            </li>
+            <li>
+              <strong>Polarisation</strong> is the orientation of the electric
+              field. Two antennas at 90 degrees to each other lose 20 dB or more.
+              This is why phone orientation matters and why a phone lying flat on
+              a table can be much worse than one held upright. Phones use small
+              antennas with messy patterns partly to reduce this sensitivity.
+            </li>
+          </ul>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Antenna</th><th>Gain</th><th>Pattern</th><th>Where you see it</th></tr></thead>
+              <tbody>
+                <tr><td>Phone internal (PIFA / chip)</td><td>-2 to +2 dBi</td><td>Lumpy, roughly omnidirectional</td><td>Every phone. Compromised by having to fit in a metal frame beside a hand.</td></tr>
+                <tr><td>Quarter-wave whip</td><td>2 dBi</td><td>Doughnut around the wire</td><td>The stub on an ESP32 dev board or a LoRa node.</td></tr>
+                <tr><td>Half-wave dipole</td><td>2.15 dBi</td><td>Doughnut</td><td>The reference antenna. Router antennas approximate it.</td></tr>
+                <tr><td>Collinear</td><td>6 to 12 dBi</td><td>Flattened doughnut</td><td>Rooftop mesh nodes. Great for flat terrain, poor for a valley.</td></tr>
+                <tr><td>Yagi</td><td>10 to 20 dBi</td><td>Narrow beam</td><td>Point-to-point links between two fixed sites.</td></tr>
+                <tr><td>Dish</td><td>20 to 40 dBi</td><td>Very narrow beam</td><td>Long-haul backhaul. Needs precise aiming.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            For Airhop on phones there is nothing to tune: the antenna is
+            whatever the manufacturer put in, and the app cannot influence it.
+            This matters for relay hardware though (chapter 47), where a 3 dBi
+            whip versus a 6 dBi collinear on a solar node is a real doubling of
+            coverage area, and where getting the node a few metres higher
+            usually beats any antenna change.
+          </p>
+
+          <h2 id="interference">Sharing the band with everyone</h2>
+          <p>
+            The 2.4 GHz band is 83.5 MHz wide, from 2.400 to 2.4835 GHz, and it
+            is the busiest piece of spectrum in the world.
+          </p>
+          <pre class="ascii">
+  2400 MHz                                              2483.5 MHz
+  │                                                              │
+  ├──────────── WiFi channel 1 (22 MHz) ────┐                    │
+  │                    ├──────── WiFi channel 6 ────┐            │
+  │                                 ├──────── WiFi channel 11 ───┤
+  │                                                              │
+  │ BLE advertising channels, placed in the WiFi gaps:           │
+  │  ch37                    ch38                       ch39     │
+  │  ▲                        ▲                            ▲     │
+  │  2402                    2426                        2480    │
+  │                                                              │
+  │ BLE data channels: 37 more, 2 MHz apart, hopped adaptively   │
+  │ ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮                        │
+  │                                                              │
+  │ Also here: microwave ovens (~2450, leaking tens of watts),   │
+  │ Zigbee, wireless mice and keyboards, video senders, baby     │
+  │ monitors, drones, car key fobs, and everyone else's phone.   │
+</pre>
+          <p>
+            Two design decisions in Bluetooth follow directly from this
+            crowding:
+          </p>
+          <ul>
+            <li>
+              <strong>The three advertising channels are placed deliberately.</strong>
+              Channels 37, 38 and 39 sit in the gaps between the three
+              non-overlapping WiFi channels. That is not a coincidence, it is
+              coexistence engineering. It is also why a device advertises on all
+              three in sequence: if one is blocked, the others may not be.
+            </li>
+            <li>
+              <strong>Adaptive frequency hopping.</strong> Once connected, a BLE
+              link hops between 37 data channels many times per second, and both
+              ends maintain a channel map that excludes channels found to be
+              bad. A microwave oven that destroys 2450 MHz becomes a channel the
+              link stops using.
+            </li>
+          </ul>
+          <p>
+            The practical consequence for Airhop: <strong>a crowded room is
+            harder than an empty field at the same distance</strong>. Not only
+            because bodies absorb, but because everyone's phones, everyone's
+            WiFi, and the venue's own equipment are all contending for the same
+            83.5 MHz. This is the single biggest reason for the relay jitter
+            window and the fanout subsetting in chapter 11: airtime, not
+            bandwidth, is the scarce resource.
+          </p>
+
+          <h2 id="law">Regulation</h2>
+          <p>
+            Unlicensed does not mean unregulated. Every region caps power and
+            imposes behaviour rules, and equipment must be certified.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Region</th><th>Regulator</th><th>2.4 GHz limit</th></tr></thead>
+              <tbody>
+                <tr><td>United States</td><td>FCC, Part 15.247</td><td>1 W conducted, 4 W EIRP for point to multipoint.</td></tr>
+                <tr><td>Europe</td><td>ETSI EN 300 328</td><td>100 mW EIRP, with duty cycle and listen-before-talk rules.</td></tr>
+                <tr><td>Japan</td><td>ARIB / MIC</td><td>10 mW per MHz.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            None of this constrains Airhop as an app: the phone's radio is
+            already certified, and the OS will not let an application exceed what
+            the hardware is approved for. <code>setPowerMode</code> selects among
+            the levels the platform exposes (<code>HIGH</code>,
+            <code>MEDIUM</code>, <code>LOW</code>, <code>ULTRA_LOW</code>), all
+            of which are within the certified envelope. It does constrain relay
+            hardware, where sub-GHz band choice is region specific and duty
+            cycle limits are real: in Europe, 868 MHz LoRa is capped at roughly 1
+            percent duty cycle in most sub-bands, which is a hard limit on how
+            much a node may transmit per hour. Chapter 47 covers that.
+          </p>
+
+          <h2 id="airhop">What this means for Airhop's numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Airhop constant</th><th>Radio reason</th></tr></thead>
+              <tbody>
+                <tr><td>Range 10 to 30 m indoors, up to 100 m line of sight</td><td>The link budget above. Indoors, one or two walls and two bodies eat the entire margin.</td></tr>
+                <tr><td>TTL 7 hops</td><td>7 x 30 to 50 m gives 210 to 350 m, which is a venue, a city block, a protest. Beyond that the flooding cost grows faster than the benefit.</td></tr>
+                <tr><td>512 byte frame ceiling</td><td>The Bluetooth ATT maximum attribute value. Chapter <a href="08-ble.html">08</a>.</td></tr>
+                <tr><td>467 data bytes per fragment</td><td>512 minus the packet header, sender and recipient IDs, and the fragment header.</td></tr>
+                <tr><td>~18 KiB/s throughput</td><td>467 bytes every 25 ms. The 25 ms is required: without it the radio drops fragments.</td></tr>
+                <tr><td>Relay jitter 10 to 220 ms</td><td>Airtime contention. If every node relays instantly, they all transmit at once and collide. Jitter lets the first copy win and silences the rest.</td></tr>
+                <tr><td>Voice jitter 8 to 25 ms and TTL capped at 5 in a dense mesh</td><td>350 ms of jitter buffer minus three hops of ordinary jitter leaves nothing. Live audio needs a tighter budget, and a dense graph needs the flood contained.</td></tr>
+                <tr><td>RSSI-gated connection scheduling</td><td>A -92 dBm link will connect and then fail. Refusing it up front saves the connection slot for a peer that can actually carry traffic.</td></tr>
+                <tr><td>Six concurrent central links</td><td>Android controllers support roughly seven GATT client connections before refusing with status 133. Not a radio limit, a controller limit, but it is the same class of physical constraint.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does Airhop not just increase transmit power to get more range?</span>
+              <span class="a">Three reasons. The app cannot: transmit power is set by the platform within a certified envelope, and <code>setPowerMode</code> only picks among levels the OS exposes. Even at maximum, the gain is small: +10 dB of power buys roughly 3x the distance in free space and much less indoors. And it is not free, since transmit power is the dominant battery cost after scanning, and this app is meant to run in a pocket all day. More range comes from more hops, and more hops come from more people.</span>
+            </li>
+            <li>
+              <span class="q">A user reports the app works across a car park but not through two office walls at half the distance. Explain.</span>
+              <span class="a">Free space loss at 60 m is about 76 dB. Two modern office walls could be 20 to 40 dB on their own, and if the glass is metal-coated it can be worse than the concrete. So 30 m through two walls can easily be a worse link than 60 m across open ground. Distance is only one term in the budget and rarely the dominant one indoors.</span>
+            </li>
+            <li>
+              <span class="q">Why is 2.4 GHz both the right choice and the worst band?</span>
+              <span class="a">Right because it is the only globally unlicensed band with a wavelength small enough for a phone antenna and enough bandwidth for megabits, so every phone already has a radio for it. Worst because that same universality means WiFi, Zigbee, microwave ovens and every other phone in the room are contending for the same 83.5 MHz. Bluetooth's answer is adaptive frequency hopping plus advertising channels placed in the WiFi gaps.</span>
+            </li>
+            <li>
+              <span class="q">Someone proposes showing distance in metres on the mesh radar from RSSI. What do you say?</span>
+              <span class="a">No. RSSI maps to distance only under free space with matched antennas and matched orientation, and none of those hold. A phone in a pocket at 10 m routinely reads weaker than a phone in a hand at 30 m. Showing metres would be a confident lie. Relative rings labelled as approximate are the honest presentation, and that is what the radar does. It is the same principle as reporting delivery state: never claim precision the system does not have.</span>
+            </li>
+            <li>
+              <span class="q">What is the Fresnel zone and why would you mention it to someone deploying relay hardware?</span>
+              <span class="a">It is the ellipsoid around the direct path that needs to stay clear; blocking more than about 40 percent of the first zone costs real signal even with an unobstructed sightline. At 2.4 GHz over 100 m the midpoint radius is about 1.8 m. It is why raising a node two metres often does more than any antenna upgrade, and why a link that worked in winter can fail when trees leaf out.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

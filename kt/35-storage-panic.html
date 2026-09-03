@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 35: Storage and panic wipe. Keychain, Keystore, MMKV, and destroying everything in one second." />
+    <title>35 Storage and panic wipe · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 35 · The device</p>
+          <h1>Storage and the panic wipe</h1>
+          <p class="kt-lede">
+            Every guarantee above this layer assumes the device holds its secrets
+            and can destroy them on demand. This chapter is where those two
+            assumptions are actually implemented, and where they stop being true.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#tiers">Three tiers of storage</a></li>
+              <li><a href="#keychain">The OS keychain</a></li>
+              <li><a href="#accessibility">The accessibility class decision</a></li>
+              <li><a href="#mmkv">MMKV partitions</a></li>
+              <li><a href="#wallet">The encrypted wallet partition</a></li>
+              <li><a href="#names">Names are addresses</a></li>
+              <li><a href="#wipe">The panic wipe, step by step</a></li>
+              <li><a href="#resumable">Resumability, and the two markers</a></li>
+              <li><a href="#honest">The one claim it must not make falsely</a></li>
+              <li><a href="#limits">What a wipe cannot do</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Your phone keeps three kinds of thing. The most important keys go
+              into a special locked drawer the phone's own hardware guards. Your
+              messages go in a normal box the phone encrypts when it is switched
+              off. Photos go in a folder that gets emptied every week. If you tap
+              the panic button three times, all three are destroyed in about a
+              second, in a careful order, and the app tells you honestly if the
+              locked drawer refused to open.
+            </p>
+          </div>
+
+          <h2 id="tiers">Three tiers of storage</h2>
+          <pre class="ascii">
+  ┌──────────────────────────────────────────────────────────────┐
+  │ TIER 1   OS KEYCHAIN / KEYSTORE                              │
+  │          hardware-backed on modern devices                    │
+  │          4 items, all listed in one registry                  │
+  │  · identity (Noise + Ed25519 private keys)                    │
+  │  · wallet MMKV encryption key                                 │
+  │  · wallet P2PK private key                                    │
+  │  · wallet recovery phrase, if enabled                         │
+  ├──────────────────────────────────────────────────────────────┤
+  │ TIER 2   MMKV PARTITIONS                                      │
+  │          memory-mapped key-value files, JSI-bound             │
+  │          15 partitions + 1 encrypted wallet partition         │
+  │  · messages, contacts, outbox, groups, board, settings,       │
+  │    courier bag, prekeys, activity, bookmarks, place names     │
+  ├──────────────────────────────────────────────────────────────┤
+  │ TIER 3   THE CACHE DIRECTORY                                  │
+  │          ordinary files on disk                               │
+  │  · received attachments, sent documents and videos,           │
+  │    small images sent unmodified, the saved QR card            │
+  └──────────────────────────────────────────────────────────────┘
+</pre>
+          <p>
+            A fourth thing exists and is deliberately <strong>not</strong>
+            persisted: live Noise sessions and the peer registry. Those are
+            in-memory only, so a restart discards them and every session
+            re-handshakes. That is a cost paid on purpose.
+          </p>
+
+          <h2 id="keychain">The OS keychain</h2>
+          <p>
+            <code>src/core/crypto/keychain.ts</code> is the only module in the
+            entire codebase that calls <code>expo-secure-store</code>. Everything
+            else goes through it.
+          </p>
+          <pre class="code">
+  export const KEYCHAIN_ITEMS = {
+    identity:            "airhop.identity.v1",
+    walletEncryptionKey: "airhop.wallet.mmkvKey.v1",
+    walletP2pkKey:       "airhop.wallet.p2pk.v1",
+    walletRecoveryPhrase:"airhop.wallet.recovery.v1",
+  } as const;
+
+  export type KeychainItem = (typeof KEYCHAIN_ITEMS)[keyof typeof KEYCHAIN_ITEMS];
+</pre>
+          <div class="box">
+            <p class="box-title">Why this registry is a security control, not a style choice</p>
+            <p>
+              <code>expo-secure-store</code> has <strong>no clear-all</strong>. So
+              the panic wipe deletes the items listed here and nothing else. A
+              secret written under an ad-hoc key would survive a wipe, silently,
+              forever.
+            </p>
+            <p>
+              The exported type is a union of exactly these four names, so a
+              caller <em>cannot</em> write a secret outside the registry: it is a
+              compile error. That turns "remember to add it to the wipe list" into
+              something the type system enforces.
+            </p>
+          </div>
+          <p>
+            One distinction the module documents at the function signature and
+            that callers must respect: <code>readSecret</code> returns
+            <strong>null when absent</strong> and <strong>throws when the keychain
+            is unreachable</strong>. Treating a throw as "no identity" sends a
+            returning user back through onboarding and generates a second
+            identity, orphaning their first.
+          </p>
+          <p>
+            <code>wipeAllSecrets</code> attempts every item even after one fails,
+            because a keychain that refuses one value may release the next, and
+            throws only if something was left behind, so the caller can report
+            <code>keysDestroyed: false</code> rather than overclaiming.
+          </p>
+
+          <h2 id="accessibility">The accessibility class decision</h2>
+          <p>
+            iOS keychain items carry an accessibility class deciding when they can
+            be read. Airhop uses
+            <code>AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY</code> rather than the
+            <code>WHEN_UNLOCKED</code> default, and both halves matter.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Half</th><th>Reason</th><th>Cost</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>AFTER_FIRST_UNLOCK</code></td>
+                  <td>iOS relaunches the app on a Bluetooth event after termination, and that relaunch <strong>must load the identity to join the mesh</strong>. <code>WHEN_UNLOCKED</code> refuses the read on a locked phone, so a phone in a pocket would silently stop being a mesh node.</td>
+                  <td>The item is readable while the phone is locked, as long as it has been unlocked once since boot.</td>
+                </tr>
+                <tr>
+                  <td><code>THIS_DEVICE_ONLY</code></td>
+                  <td>The default class is <strong>included in encrypted iCloud and iTunes backups</strong> and restorable onto another device. An identity that can be restored elsewhere is an identity that can be seized from a backup.</td>
+                  <td>No transfer to a new phone. There is no account recovery, by design.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The residual: the keychain is unreadable between boot and the first
+            unlock. That window is exactly the seizure case, which is why the panic
+            wipe reports whether it succeeded and why the next launch retries.
+          </p>
+
+          <h2 id="mmkv">MMKV partitions</h2>
+          <p>
+            MMKV is a memory-mapped key-value store with a JSI binding, so reads
+            are synchronous and fast enough to call during a render. That is why
+            it is used instead of AsyncStorage: a chat list that has to await its
+            own data cannot render in one pass.
+          </p>
+          <div class="box bad">
+            <p class="box-title">One handle per partition, and this is not negotiable</p>
+            <p>
+              <code>src/store/mmkv.ts</code> is the only place a partition is
+              opened, and it memoizes by id. A second handle on the same file is
+              fatal: MMKV maps the file into memory, and two mappings can produce
+              writes that clobber each other. It also matters for the wipe, which
+              walks a list of partition ids and clears each through its single
+              handle.
+            </p>
+          </div>
+          <p>Fifteen partitions are cleared by the panic wipe:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Partition</th><th>Why a wipe must reach it</th></tr></thead>
+              <tbody>
+                <tr><td><code>chat-store</code></td><td>Every message.</td></tr>
+                <tr><td><code>outbox-store</code></td><td>Undelivered <strong>plaintext</strong> DMs awaiting a route. Exactly the content a wipe exists to destroy.</td></tr>
+                <tr><td><code>contacts-store</code></td><td>Who this identity knows, plus their public keys. The social graph.</td></tr>
+                <tr><td><code>activity-store</code></td><td>The notification feed: message previews and sender names. Plaintext content.</td></tr>
+                <tr><td><code>blocked-store</code></td><td>Who this identity has blocked, which is tied to its relationships.</td></tr>
+                <tr><td><code>board-store</code></td><td>Signed public posts tied to this identity's signing key.</td></tr>
+                <tr><td><code>prekey-store</code></td><td>Our one-time prekey private keys <em>and</em> peers' bundles. Identity-linked key material.</td></tr>
+                <tr><td><code>courier-store</code></td><td>Sealed envelopes carried for other people. Unreadable here, but a bag of a neighbour's mail is evidence this phone stood next to whoever deposited it, and a recipient tag names who it is for to anyone who heard that person announce.</td></tr>
+                <tr><td><code>group-store</code>, <code>group-invite-outbox</code></td><td>Private-group epoch keys, which decrypt every group message, and signed states owed to unreachable members carrying the same keys.</td></tr>
+                <tr><td><code>geohash-bookmarks-store</code></td><td>Cells the user saved. A bookmark reveals a place they care about.</td></tr>
+                <tr><td><code>place-names-store</code></td><td>Geocoded names for cells the user opened, which trace where they have been active.</td></tr>
+                <tr><td><code>transfer-store</code></td><td>In-flight attachment progress.</td></tr>
+                <tr><td><code>settings-store</code></td><td>Only device preferences, but a wipe must leave a clean first-run state.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">One partition is deliberately excluded</p>
+            <p>
+              The wipe marker's own partition must <strong>never</strong> appear
+              in that list. It records that a wipe is running, so clearing it
+              halfway through destroys the only thing that could finish the job
+              after a crash.
+            </p>
+          </div>
+          <p>
+            <code>peer-store</code> is also absent, but for a different reason: it
+            has no MMKV persistence at all, so it resets when the process
+            restarts.
+          </p>
+
+          <h2 id="wallet">The encrypted wallet partition</h2>
+          <p>
+            Cashu proofs are bearer instruments, so this is the one partition
+            opened with an explicit encryption key.
+          </p>
+          <pre class="ascii">
+  FIRST RUN
+    generate 24 random bytes
+    base64 encode -> exactly 32 ASCII characters, which is what AES-256 takes
+    store in the keychain as airhop.wallet.mmkvKey.v1
+
+  EVERY LAUNCH
+    bootstrapWalletStorage()
+      await the keychain read
+      open the MMKV partition with encryptionKey
+      EVERY zustand persist read and write awaits that promise
+
+    keychain refuses?
+      -> the wallet reports itself LOCKED
+      -> it does NOT fall back to opening unencrypted
+      -> no proof ever reaches plaintext disk
+
+  PANIC WIPE
+    deleteMMKV, not clearAll.
+    The file cannot be reopened without its key, and the same wipe
+    destroys the key.
+</pre>
+          <p>
+            Because the key arrives asynchronously, the store cannot exist at
+            module scope. That is an unusual shape for a zustand store and it is
+            forced by the requirement, not chosen.
+          </p>
+          <p>
+            The wipe also has to reset the storage bootstrap itself, not just the
+            service. <code>deleteMMKV</code> unlinks the file, but the JavaScript
+            handle and the resolved ready promise are module scope and survive it.
+            Three things went wrong without that reset: the wallet reported itself
+            unlocked and hydrated against a partition that no longer existed; any
+            later write recreated the file through the stale handle, still holding
+            an AES key whose keychain copy had just been destroyed, leaving
+            ciphertext no future launch could ever open; and re-onboarding in the
+            same process wrote the new identity's proofs under that dead key.
+          </p>
+
+          <h2 id="names">Names are addresses</h2>
+          <p>
+            Three families of string are addresses rather than labels. Renaming
+            one does not move data, it orphans it.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Family</th><th>Shape</th><th>Cost of renaming</th></tr></thead>
+              <tbody>
+                <tr><td>Keychain item</td><td><code>airhop.&lt;domain&gt;.&lt;thing&gt;.v1</code></td><td>The secret becomes unreachable <strong>and survives the panic wipe</strong>.</td></tr>
+                <tr><td>HKDF domain separator</td><td><code>airhop-&lt;purpose&gt;-v1</code></td><td>Every key derived from it changes, so old and new builds cannot decrypt each other.</td></tr>
+                <tr><td>MMKV partition id</td><td><code>&lt;name&gt;-store</code></td><td>The next launch opens a file that has never been written, while the old data sits on disk unreferenced and unwipeable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Three names predate the convention and stay: <code>airhop-chat</code>,
+            <code>wallet-state</code> (beside the <code>wallet-store</code>
+            partition) and <code>activity</code>. No store declares a
+            <code>migrate</code> function, so changing any of these safely means
+            shipping a per-store migration that reads the old name and writes the
+            new one, at least one release before the old name is dropped.
+          </p>
+
+          <h2 id="wipe">The panic wipe, step by step</h2>
+          <p>
+            Triggered from the Profile screen. One tap opens a confirmation sheet;
+            three quick taps skip it and wipe immediately.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Step</th><th>Action</th><th>Timeout</th><th>Why here</th></tr></thead>
+              <tbody>
+                <tr><td>0</td><td><code>beginPanicWipe()</code></td><td></td><td><strong>Record the intent before anything is destroyed.</strong> Everything below is a sequence, not a transaction, and the process can die anywhere in it.</td></tr>
+                <tr><td>0a</td><td><code>bumpWipeGeneration()</code></td><td></td><td>Invalidates startup work still in flight. Stopping the nutzap watcher only reaches one already installed; a startup mid-publish would install its replacement afterwards.</td></tr>
+                <tr><td>0b</td><td><code>stopNutzapWatcher()</code>, <code>setNutzapRebinder(null)</code></td><td></td><td>The watcher holds this identity's Nostr private key in a closure and a relay subscription under its pubkey. And forgetting <em>how</em> to rebuild it matters, because the mesh calls the rebinder on every transport rebuild.</td></tr>
+                <tr><td>0c</td><td><code>dropPendingChatPersistence()</code></td><td></td><td>A throttled write holds a plaintext snapshot of every thread and is armed to put it back on disk. <strong>Cancelled rather than flushed.</strong></td></tr>
+                <tr><td>1</td><td><code>wipeAllSecrets()</code></td><td><strong>5 s</strong></td><td>Guarded <em>and</em> time-boxed: the try/catch covers a keychain that refuses, the deadline one that goes quiet. A Keystore that stalls does not reject, it never answers.</td></tr>
+                <tr><td>2</td><td>Clear 15 MMKV partitions, then <code>wipeWalletStorage()</code></td><td></td><td>The wallet destroys itself through the handle it owns rather than being deleted from here.</td></tr>
+                <tr><td>3</td><td>Reset every zustand store in memory, including transport health flags</td><td></td><td>Clearing persistence does not clear live state. <code>torActive: false</code> in particular, because a security indicator that over-claims is worse than none.</td></tr>
+                <tr><td>4</td><td><code>dismissAllNotifications()</code></td><td>2 s</td><td>Each carries a sender name and a message preview, and they outlive the process. A wipe that cleared the database and left the lock screen showing the last three conversations has not done what the user asked.</td></tr>
+                <tr><td>5</td><td><code>teardownTorState()</code> then <code>wipeTorState()</code></td><td>2 s</td><td>JavaScript first, so the native status listener does not write into the store the wipe just reset. Then stop Arti and delete its directory. Chapter <a href="25-tor.html">25</a>.</td></tr>
+                <tr><td>6</td><td><code>clearLocationCache()</code></td><td></td><td>Module state with a 5 minute TTL, and the wipe does not restart the process, so the next geohash channel would otherwise resolve from the position the old identity observed.</td></tr>
+                <tr><td>7</td><td><code>wipeCacheDirectory()</code></td><td>Yields between batches</td><td>The <strong>whole</strong> cache, not just prefixed attachments.</td></tr>
+                <tr><td>8</td><td><code>endPanicWipe()</code></td><td></td><td><strong>Not in a finally, and not conditional on <code>keysDestroyed</code>.</strong> A throw on the way here means it did not finish, and the marker surviving is what makes the next launch pick it up.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Why the tray and Tor moved to the end</p>
+            <p>
+              Both are slow: dismissing the shade is a native round trip, and
+              wiping Arti polls for its process to exit before deleting a directory
+              tree. For a gesture whose threat model is a phone being taken,
+              running them first spends the seconds that matter on the notification
+              shade and a Tor consensus cache while the keys and fifteen message
+              partitions are still on disk. Neither depends on the keys existing,
+              so both belong after the data is gone.
+            </p>
+          </div>
+          <div class="box">
+            <p class="box-title">Why the cache sweep is the whole directory</p>
+            <p>
+              The wipe used to clear only files prefixed <code>airhop_</code>. A
+              sent document, a sent video, an image small enough to send unmodified
+              and the saved QR card all live under other names or in the pickers'
+              own subdirectories, and every one of them survived every wipe.
+              Prefix-based cleanup is a whitelist, and a whitelist of things to
+              destroy is the wrong way round.
+            </p>
+          </div>
+
+          <h2 id="resumable">Resumability, and the two markers</h2>
+          <p>Two independent mechanisms make a wipe survive a process death.</p>
+          <div class="grid two">
+            <div class="box">
+              <p class="box-title">The wipe marker</p>
+              <p>
+                Written before anything is destroyed, cleared only when the whole
+                sequence completes. Its partition is excluded from the clear list.
+                On the next launch, a surviving marker means the sequence is
+                resumed.
+              </p>
+            </div>
+            <div class="box">
+              <p class="box-title">The orphan sweeper</p>
+              <p>
+                <code>sweepOrphanedSecrets()</code>, called at launch on the branch
+                where there is definitively no identity. It enforces the invariant
+                that no identity means no secrets, and reports whether anything
+                defied it.
+              </p>
+            </div>
+          </div>
+          <p>
+            The sweeper is what turns a failed panic wipe from permanent into a
+            retry, and its reasoning is worth reading in full because it is subtle:
+          </p>
+          <ul>
+            <li>
+              <strong>The wipe most likely to fail is the one that matters.</strong>
+              <code>AFTER_FIRST_UNLOCK</code> refuses reads and deletes on a phone
+              that has booted but not been unlocked, which is exactly the seizure
+              the gesture exists for. Without a retry the keys stay for good. The
+              next launch is past that unlock, where the same delete usually just
+              works.
+            </li>
+            <li>
+              <strong>It is not framed as "retry the wipe", and that is the
+              point.</strong> A secret with no identity to own it has no owner and
+              no reader, so deleting it is unconditionally correct. That means no
+              persisted "a wipe was attempted here" flag is needed, and a wipe
+              leaves no trace of having been attempted.
+            </li>
+            <li>
+              <strong>The identity item is deliberately not swept</strong>, and the
+              reason is a race rather than a scruple. The caller runs this without
+              waiting, on its way to showing the welcome screen, and the very next
+              thing onboarding does is <em>write</em> an identity. A delete still in
+              flight when that lands would destroy the key the user just created,
+              leaving an app that cannot start. Nothing is lost by skipping it,
+              since the caller only reaches here because no identity was found.
+            </li>
+            <li>
+              <strong>It reports a leftover only when positively confirmed:</strong>
+              the delete was refused <em>and</em> a subsequent read still hands
+              back a value. A keychain that refuses both is unreadable rather than
+              dirty, and claiming otherwise would put an alarm about data at rest
+              in front of someone whose device is merely locked.
+            </li>
+          </ul>
+
+          <h2 id="honest">The one claim it must not make falsely</h2>
+          <pre class="code">
+  interface PanicWipeResult {
+    keysDestroyed: boolean;
+  }
+</pre>
+          <p>
+            Every step of the wipe is best effort except this one. The reason is
+            stated directly in the source: <strong>"your keys are gone" must never
+            be claimed falsely.</strong> A locked keychain on a booted-but-unlocked
+            device is exactly the seizure case.
+          </p>
+          <p>
+            So the result carries one boolean, the Profile screen says so when the
+            OS refused, a <code>wipeIncomplete</code> banner appears, and the next
+            launch retries. Everything else, the notifications, Tor, the cache,
+            fails silently because its failure changes nothing the user needs to
+            decide about.
+          </p>
+          <p>
+            This is also why the keychain step continues past a failure rather than
+            abandoning the rest. A throw there used to abandon everything below:
+            all fifteen MMKV partitions, every store, the wallet file and the media
+            cache stayed on disk, and the caller surfaced nothing, so the user got
+            a confirmation haptic and a dead app over completely intact data.
+          </p>
+
+          <h2 id="limits">What a wipe cannot do</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Limit</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Flash memory does not overwrite</strong></td><td>Deleting a file on a flash-based device unlinks it. The physical blocks are reclaimed by the controller's wear levelling on its own schedule, and there is no way to force it from an app. What protects the residue is full-disk encryption: the OS holds the file key, and modern devices delete it, which is why the keychain step matters more than the file deletion does.</td></tr>
+                <tr><td><strong>Copies outside the sandbox</strong></td><td>A photo saved to the gallery, a token copied to the clipboard, a screenshot, a shared file. All outside Airhop's reach.</td></tr>
+                <tr><td><strong>The app switcher snapshot</strong></td><td>iOS and Android capture a screenshot of the app when it backgrounds. Airhop does not cover this, and it is listed in the threat model.</td></tr>
+                <tr><td><strong>The other side of the conversation</strong></td><td>Wiping your device does not wipe theirs. There is no remote delete, and there deliberately never will be, because a remote delete mechanism is also a remote censorship mechanism.</td></tr>
+                <tr><td><strong>What is already on the network</strong></td><td>A gift-wrapped DM sitting on a relay, a courier envelope in somebody's bag, a public message in the mesh's gossip cache. Ephemeral kinds and 24-hour expiries bound it; nothing revokes it.</td></tr>
+                <tr><td><strong>A compromised OS</strong></td><td>All guarantees are void. Listed as out of scope.</td></tr>
+                <tr><td><strong>Zeroing memory reliably</strong></td><td>JavaScript arrays are filled with zeros where possible, but the engine may have copied them during garbage collection and there is no way to reach those copies. An unavoidable limitation of doing cryptography in a managed runtime.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is the keychain item registry a union type rather than just a list?</span>
+              <span class="a">Because <code>expo-secure-store</code> has no clear-all, so the panic wipe can only delete items it knows about. A secret written under an ad-hoc key would survive a wipe silently and forever. Making <code>KeychainItem</code> a union of exactly the registered names turns "remember to add it to the wipe list" into a compile error rather than a review comment.</span>
+            </li>
+            <li>
+              <span class="q">Why <code>AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY</code> and not the default?</span>
+              <span class="a"><code>AFTER_FIRST_UNLOCK</code> because iOS relaunches the app on a Bluetooth event, and that relaunch must load the identity to join the mesh; the <code>WHEN_UNLOCKED</code> default refuses that read on a locked phone, so a phone in a pocket would silently stop being a mesh node. <code>THIS_DEVICE_ONLY</code> because the default class is included in encrypted iCloud and iTunes backups and restorable onto another device, and an identity restorable elsewhere is an identity seizable from a backup. The cost is that the keychain is unreadable between boot and the first unlock.</span>
+            </li>
+            <li>
+              <span class="q">Why does the panic wipe write a marker before it starts?</span>
+              <span class="a">Because the wipe is a sequence, not a transaction, and the process can die anywhere in it: the OS can kill the app, the battery can go, the user can force-quit. A marker written first and cleared only on completion means the next launch can tell that a wipe was interrupted and resume it. That is also why the marker's own partition is excluded from the list of partitions the wipe clears, and why <code>endPanicWipe</code> is not in a <code>finally</code>.</span>
+            </li>
+            <li>
+              <span class="q">Why is <code>keysDestroyed</code> the only thing reported?</span>
+              <span class="a">Because it is the only claim the user must not be lied to about. Failing to dismiss notifications or delete the Tor directory changes nothing they need to decide. "Your keys are gone" changes everything, and the case where it fails is precisely the seizure case: a booted but never unlocked phone whose keychain refuses. So the result carries that one boolean, the screen says so, a banner appears, and the next launch retries through the orphan sweeper.</span>
+            </li>
+            <li>
+              <span class="q">Why does the orphan sweeper skip the identity item?</span>
+              <span class="a">A race. The caller runs it without awaiting, on its way to the welcome screen, and the very next thing onboarding does is write an identity. A delete still in flight when that write lands would destroy the key the user just created, leaving an app that cannot start, which is far worse than the problem being fixed. Nothing is lost, because the sweeper only runs on the branch where <code>loadIdentity</code> found nothing, and a keychain that refuses reads refuses deletes too.</span>
+            </li>
+            <li>
+              <span class="q">A journalist asks whether a wipe makes their phone safe to hand over. What do you say?</span>
+              <span class="a">It destroys the keys, the messages, the contacts, the courier bag, the wallet file and the media cache, and the app confirms whether the keys specifically went. It does not overwrite flash, so residue depends on the OS's full-disk encryption rather than on Airhop. It cannot touch anything outside the sandbox: gallery saves, clipboard, screenshots, the app switcher snapshot. It does not wipe the other side of any conversation, and it does not revoke what is already on a relay or in somebody's courier bag. Those bounds are real and should be stated rather than glossed.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

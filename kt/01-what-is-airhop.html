@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 01: What Airhop is. The mission, the three layers, and the whole feature inventory." />
+    <title>01 What Airhop is · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 01 · Orientation</p>
+          <h1>What Airhop is</h1>
+          <p class="kt-lede">
+            A messaging app whose first assumption is that there is no network.
+            Everything else follows from that one decision.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#problem">The problem it exists for</a></li>
+              <li><a href="#three-layers">The three layers</a></li>
+              <li><a href="#principles">The seven principles</a></li>
+              <li><a href="#inventory">The full feature inventory</a></li>
+              <li><a href="#nots">What it deliberately is not</a></li>
+              <li><a href="#landscape">Where it sits in the landscape</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine you are at a festival and the phone signal is dead.
+              Normally your message has to travel to a company's computer far
+              away and back, so with no signal it goes nowhere. Airhop skips the
+              company. Your phone whispers the message to the phones around you
+              over Bluetooth. Those phones whisper it onward. After a few hops
+              it reaches your friend. Nobody in the middle can read it, because
+              it is locked in a way only your friend can open. If a phone in the
+              middle happens to have internet, it can also throw the message
+              over the internet to cover more ground.
+            </p>
+          </div>
+          <p>
+            The same explanation for a senior engineer: Airhop is a
+            <strong>dual transport, serverless, key-based messenger</strong>.
+            Transport one is a controlled-flood Bluetooth Low Energy mesh with a
+            seven hop time-to-live and per-packet Ed25519 authentication.
+            Transport two is Nostr, a relay protocol where clients publish
+            signed events to independent WebSocket servers. Sessions are Noise
+            XX with a Double Ratchet layered on top for per-message forward
+            secrecy. Value transfer is Chaumian ecash (Cashu), which is a bearer
+            token and therefore moves offline. Identity is an on-device key
+            pair; there is no registration step anywhere in the product.
+          </p>
+
+          <h2 id="problem">The problem it exists for</h2>
+          <p>
+            Every mainstream messenger has an invisible dependency: a company's
+            servers, reachable over an ISP's network, resolved by DNS. Any one
+            of those can be removed, and all three routinely are.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Situation</th><th>What actually fails</th><th>What Airhop does</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>National internet shutdown</td>
+                  <td>Mobile data and fixed lines are cut at the operator. Signal, WhatsApp and Telegram all stop, since all three need a route to their servers.</td>
+                  <td>Bluetooth mesh is unaffected. It is a local radio, not a network service. Nothing is being routed anywhere.</td>
+                </tr>
+                <tr>
+                  <td>Earthquake or hurricane</td>
+                  <td>Cell towers lose power or backhaul. Handsets show bars but nothing routes.</td>
+                  <td>Same. Plus the courier: a phone can physically carry a sealed message out of the dead zone.</td>
+                </tr>
+                <tr>
+                  <td>Crowd of 100,000 people</td>
+                  <td>Cells are congested, not down. Everything times out.</td>
+                  <td>Density is an advantage rather than a problem: more phones means more relays and better mesh reach.</td>
+                </tr>
+                <tr>
+                  <td>Surveillance without shutdown</td>
+                  <td>The network works, and metadata about who talks to whom is collected at the operator or the service.</td>
+                  <td>Bluetooth leaves no internet signature at all. Over Nostr, gift-wrap hides sender and recipient from the relay, and Tor hides the IP.</td>
+                </tr>
+                <tr>
+                  <td>Ship, plane, basement, remote valley</td>
+                  <td>No coverage.</td>
+                  <td>Bluetooth mesh works. WiFi Aware between Androids gives a fast path for files.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The mission statement in the README says it in one line: make
+            censorship-resistant communication available to anyone during
+            disasters, blackouts, protests, or any situation where networks are
+            unavailable, surveilled, or shut down.
+          </p>
+
+          <h2 id="three-layers">The three layers</h2>
+          <p>
+            Almost every question about Airhop is answered by knowing which of
+            three layers the answer lives on.
+          </p>
+          <pre class="ascii">
+  LAYER 3   INTERNET          Nostr relays, Tor, gateway, bridge, nutzaps
+            reach: global     needs: a working internet connection
+            role: EXTENSION   if it disappears, the app still works
+
+  LAYER 2   LOCAL RADIO       BLE mesh, WiFi Aware, mDNS LAN (planned)
+            reach: ~350 m     needs: nothing but the phones
+            role: FOUNDATION  if it disappears, the app is a normal messenger
+
+  LAYER 1   THE DEVICE        keys, storage, panic wipe, the screens
+            reach: one phone  needs: nothing
+            role: TRUTH       everything above is a way of moving what is here
+</pre>
+          <p>
+            The direction of dependency only ever points downward. Layer 3
+            enhances layer 2, never enables it. That is
+            <strong>principle 2</strong> below, and it is the single rule that
+            decides most arguments in the codebase. If a proposed feature would
+            make a core function stop working without internet, it does not go
+            in, or it goes in as an optional extra.
+          </p>
+
+          <h2 id="principles">The seven principles</h2>
+          <p>
+            These come from <code>docs/design/VISION.md</code>. They are not
+            aspirations, they are veto rules. Each one has killed a feature.
+          </p>
+          <ol>
+            <li>
+              <strong>Security first.</strong> Every design decision passes a
+              security lens before a product lens. Example casualty: media in
+              private channels. Channel text is encrypted, but attachments ride
+              the signed-but-unencrypted file path, so allowing them would have
+              quietly broken the privacy the channel advertises. So media is
+              refused there (<code>src/utils/media-policy.ts</code>).
+            </li>
+            <li>
+              <strong>Offline first.</strong> Every feature must work with zero
+              internet. Example casualty: sending attachments over Nostr, which
+              would need an HTTP file host (NIP-96) and therefore a central
+              server that can log, throttle or take down files.
+            </li>
+            <li>
+              <strong>No accounts, ever.</strong> There is no create-account
+              screen. Identity is a key pair generated on first launch. Example
+              casualty: server-side backup, push notifications from a company
+              server, and any username registry.
+            </li>
+            <li>
+              <strong>No central server.</strong> No infrastructure to seize.
+              Example casualty: NIP-29 relay-managed groups, which would make a
+              relay the authority on who may speak.
+            </li>
+            <li>
+              <strong>Ephemerality by default.</strong> No plaintext message
+              content is written to disk. The panic wipe destroys everything in
+              under a second. Example consequence: attachments are swept on a
+              schedule, seven days by default, with no unbounded option.
+            </li>
+            <li>
+              <strong>bitchat wire compatibility.</strong> Airhop nodes must
+              talk to bitchat nodes. The packet format, service UUIDs and peer ID
+              derivation are fixed. Example casualty: raising the file size cap.
+              bitchat iOS refuses anything over roughly 1.13 MiB when it decodes,
+              silently, so raising it would look like it worked while every
+              attachment to an iPhone vanished.
+            </li>
+            <li>
+              <strong>Protocol compliance over clever shortcuts.</strong> When
+              in doubt, do what bitchat does. Example consequence: Airhop
+              implements bitchat's non-standard "nip44-v2" encryption for Nostr
+              DMs rather than the published NIP-44, because byte-identical
+              output is the whole of interoperability there.
+            </li>
+          </ol>
+
+          <h2 id="inventory">The full feature inventory</h2>
+          <p>
+            Grouped by what layer it needs. The <span class="pill">status</span>
+            column is what the code shows, not what the README says. Where those
+            two disagree, chapter
+            <a href="49-review.html">49</a> explains.
+          </p>
+
+          <h3>Messaging</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Feature</th><th>Layer</th><th>How</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Private DMs</td><td>2 and 3</td><td>Noise XX session, optionally Double Ratchet on top. Packet type <code>0x11</code> or <code>0x12</code>. Over the internet, a NIP-17 shaped gift wrap.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Public mesh room</td><td>2</td><td><code>#bluetooth</code>, packet type <code>0x02</code>, plaintext plus signature, flooded at TTL 5 to 7.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Location channels</td><td>2 and 3</td><td>Geohash cells from block to region. Bluetooth copy uses Airhop type <code>0x51</code>; internet copy is Nostr kind 20000.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Private channels</td><td>2, optionally 3</td><td>XChaCha20-Poly1305 under a key that travels in the invite link. Packet type <code>0x50</code>. No member cap.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Private groups</td><td>2</td><td>Creator-signed roster up to 16. ChaCha20-Poly1305 under an epoch key. Packet type <code>0x25</code>. Bluetooth only.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Bulletin board</td><td>2</td><td>Signed notices with 1 to 7 day expiry, packet type <code>0x23</code>, reconciled by gossip sync.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Store and forward courier</td><td>2 and 3</td><td>Noise X sealed envelope, packet type <code>0x04</code>, plus a parked copy on relays as kind 1401.</td><td><span class="pill ok">shipped</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Sharing</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Feature</th><th>Layer</th><th>How</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Photos and video</td><td>2</td><td>One <code>BitchatFilePacket</code> per file, type <code>0x22</code>, split by the fragment layer. 512 KiB photos, 1 MiB video.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Voice notes</td><td>2</td><td>AAC-LC 16 kHz mono, sent as a file after recording.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Live voice (push to talk)</td><td>2</td><td>Packet type <code>0x29</code>, 210 byte bursts, 350 ms jitter buffer. Also in bitchat, so it crosses.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>File transfer</td><td>2</td><td>Any format up to 1 MiB, MIME allow list plus magic byte validation.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Location pin</td><td>2</td><td>19 byte fixed payload inside a Noise session, payload type <code>0x50</code>. Sent once, never couriered.</td><td><span class="pill ok">shipped</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Identity</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Feature</th><th>How</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>No-account identity</td><td>X25519 static key plus Ed25519 signing key, generated on device, stored in the OS keychain.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Derived usernames</td><td><code>adjective-noun-4hex</code> from the peer ID. 128 x 128 x 65536 combinations.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>QR contacts</td><td>A card carrying both public keys, validated against the peer ID before anything is trusted.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Safety numbers</td><td>Six words over both parties' Noise and signing keys, for verification over a call or radio.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Panic wipe</td><td>Triple tap. Keychain, every MMKV partition, the cache directory, Arti's state, and the notification tray.</td><td><span class="pill ok">shipped</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Networking</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Feature</th><th>How</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Bluetooth mesh</td><td>Dual role GATT central and peripheral, service UUID <code>F47B5E2D...</code>, TTL 7.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Multi-hop routing</td><td>Controlled flood, 10 to 220 ms jitter, 1000 entry dedup LRU with a 5 minute window.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>WiFi Aware fast path</td><td>Android to Android only, API 29+ for the data path. Native <code>AirhopWiFiModule.kt</code>.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>iOS MultipeerConnectivity</td><td>Was written, never worked on a device, and was removed. <code>src/bridge/NativeAirhopWiFi.ts</code> states this.</td><td><span class="pill bad">removed</span></td></tr>
+                <tr><td>LAN mesh over mDNS</td><td>Shipped. <code>_airhop-lan-v1._tcp</code> discovery plus TCP links, with native modules on both platforms, a dial ring capped at 8 and a rotating instance name. Off by default: publishing an mDNS record is an attendance list on a venue network. Chapter <a href="29-lan.html">29</a>.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Mesh bridge</td><td>Republishes <code>#bluetooth</code> into a geohash-6 rendezvous cell on Nostr so two islands share one room. Off by default.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Relay node support</td><td>Forwarding rules and the Bitle <code>0xB1</code> announce flag are implemented and simulated. Never run against hardware.</td><td><span class="pill warn">untested on hardware</span></td></tr>
+                <tr><td>bitchat compatibility</td><td>Same wire format both directions, pinned by <code>conformance.test.ts</code> against the vendored sources.</td><td><span class="pill ok">shipped</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Internet</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Feature</th><th>How</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Nostr fallback for DMs</td><td>NIP-17 shaped gift wrap using bitchat's <code>nip44-v2</code> cipher inside each layer.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Geo-relay discovery</td><td>Bundled CSV of 300+ relays, nearest five by Haversine distance to the cell centre.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Internet gateway</td><td>Lend your connection to a nearby offline phone for location channels. Packet type <code>0x28</code>. Off by default.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Tor</td><td>Arti embedded on <strong>both</strong> platforms, one Rust crate, no third-party app. Android covers every socket; iOS covers the Nostr WebSocket. Off by default. Chapter <a href="25-tor.html">25</a>.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Bridges and pluggable transports</td><td>obfs4 and Snowflake compiled in, for networks that block Tor. Built-in directory synced weekly from Moat, plus custom lines. Chapter <a href="26-bridges.html">26</a>.</td><td><span class="pill ok">shipped</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Optional</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Feature</th><th>How</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Cashu ecash</td><td>Offline bearer tokens, NUT-12 DLEQ verified on arrival, reserved rather than deleted on send.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Lightning in and out</td><td>NUT-04 mint quotes, NUT-05 melt quotes, routing reserve returned as change.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Nutzaps</td><td>NIP-61 kind 9321, P2PK locked to the recipient's published key.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Wallet recovery phrase</td><td>Opt in, 12 words, NUT-13 deterministic secrets plus NUT-09 restore.</td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td>Local AI assistant</td><td>Planned for v1.1.0. There is no <code>src/features/ai/</code> and no inference dependency.</td><td><span class="pill warn">not shipped</span></td></tr>
+                <tr><td>AT Protocol bridge</td><td>Planned for v1.2.0.</td><td><span class="pill warn">not shipped</span></td></tr>
+                <tr><td>ActivityPub bridge</td><td>Planned for v1.2.0.</td><td><span class="pill warn">not shipped</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="nots">What it deliberately is not</h2>
+          <div class="grid two">
+            <div class="box">
+              <p class="box-title">Not a video call app</p>
+              <p>
+                Bluetooth carries about 18 KiB per second per link. A low quality
+                video call needs roughly ten times that. And the two same-platform
+                fast paths cannot talk to each other, so there is no cross-platform
+                high bandwidth link to build on. Recorded clips are sent as files.
+              </p>
+            </div>
+            <div class="box">
+              <p class="box-title">Not a server</p>
+              <p>
+                No relays, no mints, no infrastructure is operated by this project.
+                The relay list is a bundled CSV of other people's relays. The mint
+                is whichever one the user adds.
+              </p>
+            </div>
+            <div class="box">
+              <p class="box-title">Not a moderated platform</p>
+              <p>
+                Moderation is client side only: mute and block lists on your own
+                device. There is no protocol-level mechanism to remove content from
+                other people's phones, and there deliberately never will be, because
+                such a mechanism is also a censorship mechanism.
+              </p>
+            </div>
+            <div class="box">
+              <p class="box-title">Not an analytics product</p>
+              <p>
+                No crash reporting to any server, no usage analytics, no tracking.
+                The diagnostics screen shows local counters only.
+              </p>
+            </div>
+          </div>
+
+          <h2 id="landscape">Where it sits in the landscape</h2>
+          <p>
+            Offline and private messengers fall into three families. Knowing
+            which family a competitor is in explains most of the differences.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Family</th><th>Examples</th><th>Works offline</th><th>Needs hardware</th><th>The catch</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Internet-only messengers</td><td>Signal, Threema, Session, White Noise</td><td>No</td><td>No</td><td>Excellent at what they do, and they stop entirely when the network does.</td></tr>
+                <tr><td>Radio mesh with dedicated hardware</td><td>Meshtastic, goTenna</td><td>Yes</td><td>Yes</td><td>Kilometres of range, but you must buy and carry a device, and bandwidth is tiny.</td></tr>
+                <tr><td>Phone-to-phone mesh</td><td>Bridgefy, Berty, Briar, bitchat, Airhop</td><td>Yes</td><td>No</td><td>Works on devices people already own, but range depends on how many people are running it.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop is in the third family and extends it with the second layer
+            of the internet stack. The two closest comparisons deserve a
+            sentence each:
+          </p>
+          <ul>
+            <li>
+              <strong>Briar</strong> is the most philosophically similar: Bluetooth,
+              WiFi and Tor, with its own Bramble protocol stack. It is Android and
+              desktop, has no iOS build, and has no payment or internet-relay layer.
+            </li>
+            <li>
+              <strong>bitchat</strong> is the direct ancestor. Airhop shares its wire
+              protocol byte for byte and can join the same mesh. See chapter
+              <a href="46-bitchat.html">46</a> for the complete difference list.
+            </li>
+          </ul>
+          <div class="box warn">
+            <p class="box-title">A claim worth correcting</p>
+            <p>
+              The README's comparison table lists Airhop's platforms as "iOS,
+              Android, Desktop, Web, CLI" while listing bitchat's as "iOS,
+              Android". Desktop, web and CLI are roadmap items v1.4 to v1.7 and
+              do not exist. Comparing shipped competitors against your own
+              roadmap in the same table is the kind of thing a reviewer notices
+              first. Chapter <a href="49-review.html">49</a> lists this with the
+              other documentation drift.
+            </p>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why can Airhop not simply use Signal's protocol and be done with it?</span>
+              <span class="a">Two reasons. Signal's transport is Signal's own servers, so it does not solve the offline case at all. And the Signal service ties an account to a phone number, which is a registration step and a permanent identifier, which principle 3 forbids. The Signal <em>algorithms</em> are used: Double Ratchet is exactly Signal's, and it is layered on top of Noise XX.</span>
+            </li>
+            <li>
+              <span class="q">If the internet works, why not just use the internet?</span>
+              <span class="a">It does, when available. But the offline path has to be the default rather than a fallback, because a fallback is code that is never exercised and therefore does not work when it is needed. Bluetooth carrying the primary path is what keeps it tested every day.</span>
+            </li>
+            <li>
+              <span class="q">Someone says "a mesh app is useless because nobody else has it installed". What is the honest answer?</span>
+              <span class="a">That is correct and it is the real limitation. Mesh range scales with user density: seven hops of 30 to 50 metres is 210 to 350 metres only if there is a person with the app standing at each hop. Two mitigations exist. Wire compatibility with bitchat doubles the effective user base at zero cost. Relay hardware (chapter 47) puts a node where nobody stands. Neither makes an empty field work.</span>
+            </li>
+            <li>
+              <span class="q">What is the single decision that most shapes the codebase?</span>
+              <span class="a">Wire compatibility with bitchat. It fixes the packet layout, the service UUIDs, the peer ID derivation, the file size caps, the courier expiry, the Nostr DM cipher and the packet type registry. Most "why is it like that" questions bottom out in "because a bitchat phone has to be able to decode it".</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

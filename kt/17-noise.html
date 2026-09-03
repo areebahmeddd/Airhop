@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 17: The Noise protocol. XX and X, message by message, with the state machine spelled out." />
+    <title>17 The Noise protocol · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 17 · Cryptography</p>
+          <h1>The Noise protocol</h1>
+          <p class="kt-lede">
+            Two phones that have never met, with no certificate authority, no
+            server and no shared secret, end up with a mutually authenticated
+            encrypted channel in three messages. This is how.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#framework">What Noise is</a></li>
+              <li><a href="#reading">Reading a pattern name</a></li>
+              <li><a href="#state">The symmetric state</a></li>
+              <li><a href="#xx">XX, message by message</a></li>
+              <li><a href="#split">Split, and the third output</a></li>
+              <li><a href="#transport">The transport session</a></li>
+              <li><a href="#x">Noise X, for the courier</a></li>
+              <li><a href="#airhop">How Airhop drives it</a></li>
+              <li><a href="#properties">What you get and what you do not</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Two strangers want to talk privately in a room full of people. They
+              each pick a random number nobody else knows. They shout out a clue
+              to their number, one each. From the two clues, and their own secret
+              numbers, they can each work out the same shared secret, but nobody
+              listening can. Then, using that secret to whisper, they each tell
+              the other who they really are. If either name turns out to be a lie,
+              the whispering stops working immediately, so neither can pretend.
+            </p>
+          </div>
+
+          <h2 id="framework">What Noise is</h2>
+          <p>
+            Noise is a <strong>framework</strong> rather than a protocol. You
+            choose a handshake pattern and a cipher suite, and the framework
+            generates a protocol with formally analysed properties. It was
+            designed by Trevor Perrin, who also co-designed the Signal protocol.
+            WireGuard is built on Noise IK. WhatsApp's client-to-server transport
+            is Noise. It is deployed at enormous scale and has been formally
+            verified several times over.
+          </p>
+          <p>Its two design decisions that matter here:</p>
+          <ul>
+            <li>
+              <strong>No certificate authorities.</strong> Authentication is by
+              raw public key. There is no PKI to bootstrap, which is exactly what
+              a serverless system needs.
+            </li>
+            <li>
+              <strong>No negotiation.</strong> The protocol name is fixed and
+              both sides must already agree on it. There is no cipher suite
+              negotiation, so there is no downgrade attack. The name itself is
+              mixed into the initial state, so a mismatch fails immediately
+              rather than being exploitable.
+            </li>
+          </ul>
+
+          <h2 id="reading">Reading a pattern name</h2>
+          <pre class="ascii">
+  Noise_XX_25519_ChaChaPoly_SHA256
+       │  │      │           │
+       │  │      │           └── hash function
+       │  │      └────────────── AEAD cipher
+       │  └───────────────────── DH function (Curve25519)
+       └──────────────────────── handshake pattern
+
+  PATTERN LETTERS, one per side (initiator, responder):
+
+    N  no static key for that side
+    K  the static key is Known to the other side in advance
+    X  the static key is transmitted (Xmitted) during the handshake
+
+  So:
+    XX  both sides transmit their static keys during the handshake.
+        Neither needs to know the other beforehand. Mutual auth.
+    X   the initiator transmits its static key; the responder's is
+        known in advance. ONE MESSAGE. No reply.
+    IK  the initiator's is transmitted, the responder's is known.
+        WireGuard uses this.
+    NK  no initiator key at all. Anonymous client to known server.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pattern</th><th>Messages</th><th>Airhop uses it for</th><th>Why that pattern</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>XX</strong></td>
+                  <td>3</td>
+                  <td>Every live DM session over the mesh</td>
+                  <td>Neither party knows the other in advance. Strangers on a mesh is the defining case, and XX is the pattern for it.</td>
+                </tr>
+                <tr>
+                  <td><strong>X</strong></td>
+                  <td>1</td>
+                  <td>Sealing courier envelopes</td>
+                  <td>There is no reply, ever. The recipient is not there. Their static key is known from an announce or a contact card, which is exactly what X assumes.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="state">The symmetric state</h2>
+          <p>
+            Everything in a Noise handshake operates on three variables. If you
+            understand these three, the rest is mechanical.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Variable</th><th>Name</th><th>What it accumulates</th><th>Public?</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>h</code></td>
+                  <td>handshake hash</td>
+                  <td>Every byte that went over the wire, hashed in order. A running transcript digest.</td>
+                  <td><strong>YES.</strong> Anyone who captured the handshake can recompute it exactly.</td>
+                </tr>
+                <tr>
+                  <td><code>ck</code></td>
+                  <td>chaining key</td>
+                  <td>Every DH shared secret, mixed in via HKDF.</td>
+                  <td><strong>NO.</strong> It depends on ephemeral private keys that are destroyed at split.</td>
+                </tr>
+                <tr>
+                  <td><code>k</code></td>
+                  <td>cipher key</td>
+                  <td>The current AEAD key, replaced every time <code>ck</code> advances. Null until the first DH.</td>
+                  <td>No.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Three operations move them:</p>
+          <pre class="code">
+  mixHash(data):    h = SHA-256(h || data)
+                    // absorbs PUBLIC bytes. Never key material.
+
+  mixKey(dhOutput): ck, k = HKDF(ck, dhOutput, 2 outputs)
+                    n = 0                    // reset the nonce counter
+                    // absorbs SECRET material.
+
+  encryptAndHash(plaintext):
+        if k exists:  ct = AEAD(k, n++, aad = h, plaintext); mixHash(ct); return ct
+        else:         mixHash(plaintext); return plaintext unchanged
+
+  decryptAndHash(ciphertext):
+        if k exists:  pt = AEAD-open(k, n++, aad = h, ciphertext)
+                      mixHash(ciphertext); return pt
+        else:         mixHash(ciphertext); return ciphertext unchanged
+</pre>
+          <div class="box">
+            <p class="box-title">The single most important line in this chapter</p>
+            <p>
+              <code>h</code> absorbs only bytes that went over the wire.
+              <code>ck</code> absorbs the secret DH outputs.
+              <strong>Therefore <code>h</code> is public and <code>ck</code> is
+              not.</strong> Using <code>h</code> as key material is a critical
+              vulnerability, and it was one in Airhop: the Double Ratchet root
+              key was seeded from the handshake hash, so anyone who captured the
+              three handshake packets (which flood the mesh at TTL 7) could
+              recompute the root key and forge or decrypt every Double Ratchet
+              message in that conversation.
+            </p>
+            <p>
+              <code>h</code> is safe as a channel binder, which is all Noise
+              defines it for. The Airhop source now carries that warning
+              directly on the <code>handshakeHash</code> field.
+            </p>
+          </div>
+          <p>
+            One more detail that broke interoperability once: initialisation runs
+            <code>mixHash(prologue)</code> <strong>even when the prologue is
+            empty</strong>. Standard Noise always does this, and so does bitchat,
+            so <code>h</code> becomes <code>SHA-256(protocol_name)</code> rather
+            than the protocol name itself. Skipping it left Airhop's
+            <code>h</code> one hash behind bitchat's, which is used as the AEAD
+            associated data when the static key is sealed in message 2. Same key,
+            different AAD, tag mismatch, and no cross-implementation handshake
+            could ever complete.
+          </p>
+
+          <h2 id="xx">XX, message by message</h2>
+          <pre class="ascii">
+  NOTATION
+    e   ephemeral key, freshly generated, used once, destroyed
+    s   static key, the long-lived identity
+    ee  DH(my ephemeral, their ephemeral)
+    es  DH(ephemeral, static)     roles depend on direction
+    se  DH(static, ephemeral)
+
+  THE PATTERN
+    -> e
+    <- e, ee, s, es
+    -> s, se
+</pre>
+
+          <h3>Message 1: initiator sends 32 bytes</h3>
+          <pre class="code">
+  INITIATOR
+    generate ephemeral keypair (e_priv, e_pub)
+    mixHash(e_pub)
+    encryptAndHash(empty)          // k is null, so this is just mixHash(empty)
+    SEND: e_pub                    // 32 bytes, entirely in the clear
+
+  RESPONDER
+    mixHash(e_pub)
+    decryptAndHash(rest)           // k is null, passthrough
+</pre>
+          <p>
+            Nothing is encrypted and nothing is authenticated. An observer sees a
+            random 32 byte value. The only thing accomplished is that both sides
+            now share one public ephemeral key and their transcripts agree.
+          </p>
+
+          <h3>Message 2: responder sends 96 bytes</h3>
+          <pre class="code">
+  RESPONDER
+    generate ephemeral keypair
+    mixHash(my_e_pub)                          // "e"
+    mixKey( DH(my_e_priv, their_e_pub) )       // "ee"  ← FIRST SECRET
+        ck advances, k now exists
+    enc_s = encryptAndHash(my_static_pub)      // "s"   48 bytes (32 + 16 tag)
+        the static key is now ENCRYPTED
+    mixKey( DH(my_static_priv, their_e_pub) )  // "es"
+    enc_payload = encryptAndHash(empty)        // 16 bytes (tag only)
+    SEND: e_pub(32) || enc_s(48) || enc_payload(16)   = 96 bytes
+
+  INITIATOR
+    mixHash(their_e_pub)
+    mixKey( DH(my_e_priv, their_e_pub) )       // same "ee" value
+    their_static = decryptAndHash(enc_s)       // learns who they are
+    mixKey( DH(my_e_priv, their_static) )      // "es" from the other side
+    decryptAndHash(enc_payload)
+</pre>
+          <p>Two things happened here, and both are structural:</p>
+          <ul>
+            <li>
+              <strong>Identity hiding.</strong> The responder's static key is
+              transmitted <em>after</em> the first DH, so it is encrypted. A
+              passive observer never learns who answered. This is why the pattern
+              order is <code>e, ee, s, es</code> and not <code>e, s, ee, es</code>.
+            </li>
+            <li>
+              <strong>The initiator now knows the responder's identity</strong>,
+              and can decide whether to continue.
+            </li>
+          </ul>
+
+          <h3>Message 3: initiator sends 64 bytes</h3>
+          <pre class="code">
+  INITIATOR
+    enc_s = encryptAndHash(my_static_pub)        // "s"   48 bytes
+    mixKey( DH(my_static_priv, their_e_pub) )    // "se"
+    enc_payload = encryptAndHash(empty)          // 16 bytes
+    SEND: enc_s(48) || enc_payload(16)           = 64 bytes
+
+  RESPONDER
+    their_static = decryptAndHash(enc_s)
+    mixKey( DH(my_e_priv, their_static) )        // "se"
+    decryptAndHash(enc_payload)
+</pre>
+          <p>
+            Now both sides have performed the same three DH operations in the
+            same order, so their chaining keys are identical, and each knows the
+            other's static public key. The handshake is complete.
+          </p>
+          <pre class="ascii">
+  THE THREE DH OPERATIONS AND WHAT EACH BUYS
+
+    ee   ephemeral x ephemeral   FORWARD SECRECY
+                                 Both private halves are destroyed at split,
+                                 so a later compromise of either static key
+                                 cannot reconstruct this session.
+
+    es   responder static x initiator ephemeral
+                                 AUTHENTICATES THE RESPONDER to the initiator.
+                                 Only the real holder of that static key can
+                                 compute it.
+
+    se   initiator static x responder ephemeral
+                                 AUTHENTICATES THE INITIATOR to the responder.
+
+  Remove any one and a specific property disappears. Remove ee and there
+  is no forward secrecy. Remove es and you can be talking to anyone.
+</pre>
+
+          <h2 id="split">Split, and the third output</h2>
+          <pre class="code">
+  split():
+    k1, k2, exporterSecret = HKDF(ck, empty, 3 outputs)
+
+    initiator: send with k1, receive with k2
+    responder: send with k2, receive with k1
+
+    then ZERO: localStaticPriv, localEphemeralPriv, k, h, ck
+</pre>
+          <p>
+            Standard Noise derives two outputs. Airhop asks for three and keeps
+            the third as the <code>exporterSecret</code>, which seeds the Double
+            Ratchet.
+          </p>
+          <div class="box ok">
+            <p class="box-title">Why the third output is free</p>
+            <p>
+              HKDF-Expand derives each output block from the previous one:
+              <code>T(1) = HMAC(PRK, info||1)</code>,
+              <code>T(2) = HMAC(PRK, T(1)||info||2)</code>, and so on. Asking for
+              a third block does not change the first two. So <code>k1</code> and
+              <code>k2</code> are <strong>bit identical</strong> to a two-output
+              split, and a bitchat peer negotiates exactly the same transport
+              keys and never knows a third value was computed. Zero
+              interoperability cost.
+            </p>
+            <p>
+              And unlike <code>h</code>, the exporter secret descends from
+              <code>ck</code>, which absorbed ephemeral DH outputs whose private
+              halves are destroyed at split. It cannot be reconstructed from
+              long-term keys, and it cannot be recomputed by an observer. Chapter
+              <a href="18-forward-secrecy.html">18</a> explains why that is
+              exactly the property the ratchet needs.
+            </p>
+          </div>
+          <p>
+            The zeroing at the end is best effort in JavaScript. The arrays are
+            filled with zeros, but the engine may have copied them during garbage
+            collection and there is no way to reach those copies. This is a
+            known and unavoidable limitation of doing cryptography in a managed
+            runtime, and it should be stated rather than glossed.
+          </p>
+
+          <h2 id="transport">The transport session</h2>
+          <pre class="code">
+  encrypt(plaintext):
+    n = sendCounter++
+    ct = ChaCha20-Poly1305(sendKey, nonce(n), aad = empty).seal(plaintext)
+    return [4 byte BE n] || ct
+
+  decrypt(message):
+    n = read the 4 byte BE prefix
+    if replayWindow.isValid(n) is false     -> THROW "replay detected"
+    pt = ChaCha20-Poly1305(recvKey, nonce(n), aad = empty).open(rest)
+    replayWindow.markSeen(n)
+    return pt
+
+  nonce(n) = 12 bytes: [00 00 00 00][n as LE u32][00 00 00 00]
+</pre>
+          <p>
+            The nonce is <strong>prepended in the clear</strong>, which is
+            bitchat's <code>useExtractedNonce: true</code> mode. That is what
+            allows out-of-order decryption, which matters on a mesh where a
+            packet can take two different paths and arrive in the wrong order.
+          </p>
+          <h3>The replay window</h3>
+          <pre class="ascii">
+  A 1024-BIT SLIDING WINDOW, 128 BYTES
+
+  highest = 5000
+                        ┌──── bit 0 = message 5000
+  bits: [1][0][1][1]... │
+         │  │  │  └──── bit 3 = message 4997
+         │  │  └─────── bit 2 = message 4998  (not seen)
+         │  └────────── bit 1 = message 4999
+         └───────────── bit 0 = message 5000  (seen)
+
+  isValid(n):
+     n > highest              -> true, it is new
+     highest - n >= 1024      -> false, too old to judge
+     bit already set          -> false, replay
+     otherwise                -> true
+
+  markSeen(n) with n > highest shifts the whole bitmap left by (n - highest).
+</pre>
+          <p>
+            This is the same construction IPsec and WireGuard use. It tolerates
+            reordering up to 1024 messages while making replay impossible inside
+            that window, and it costs 128 bytes of state per session.
+          </p>
+          <p>
+            The send counter throws at 2^32 rather than wrapping. Wrapping would
+            reuse a (key, nonce) pair, which is the catastrophic failure from
+            chapter <a href="16-primitives.html">16</a>. Four billion messages in
+            one session is not a realistic scenario, but the failure mode has to
+            be "refuse" rather than "silently break".
+          </p>
+
+          <h2 id="x">Noise X, for the courier</h2>
+          <pre class="code">
+  Noise_X_25519_ChaChaPoly_SHA256      pattern:  -> e, es, s, ss
+
+  seal(senderStaticPriv, recipientStaticPub, plaintext):
+    mixHash(recipientStaticPub)              // PRE-MESSAGE: known in advance
+    generate ephemeral e
+    mixHash(e_pub)
+    mixKey( DH(e_priv, recipientStaticPub) )       // "es"
+    enc_s = encryptAndHash(senderStaticPub)        // "s"  48 bytes
+    mixKey( DH(senderStaticPriv, recipientStaticPub) )  // "ss"
+    enc_payload = encryptAndHash(plaintext)
+    ZERO e_priv
+    return e_pub(32) || enc_s(48) || enc_payload
+
+  open(recipientStaticPriv, envelope):
+    ... the mirror image ...
+    returns { plaintext, senderStaticPubKey }
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>XX</th><th>X</th></tr></thead>
+              <tbody>
+                <tr><td>Messages</td><td>3</td><td>1</td></tr>
+                <tr><td>Recipient must be present</td><td>Yes</td><td><strong>No</strong></td></tr>
+                <tr><td>Recipient's static key known in advance</td><td>No</td><td>Yes, required</td></tr>
+                <tr><td>Sender authenticated</td><td>Yes</td><td>Yes, inside the ciphertext</td></tr>
+                <tr><td>Recipient authenticated</td><td>Yes</td><td>Implicitly: only they can open it</td></tr>
+                <tr><td>Forward secrecy</td><td><strong>Yes</strong></td><td><strong>No.</strong> The <code>ss</code> operation is static x static and is derivable forever from long-term keys.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            That missing forward secrecy is the courier's central cryptographic
+            trade-off, acknowledged explicitly in the source comment. It is why
+            one-time prekeys exist: sealing to a single-use prekey instead of the
+            static key restores forward secrecy for that envelope, because the
+            prekey's private half is deleted after use. Chapter
+            <a href="13-courier.html">13</a>.
+          </p>
+
+          <h2 id="airhop">How Airhop drives it</h2>
+          <pre class="ascii">
+  A sends a DM to B, no session exists
+
+  A: sendDm -> no session
+     create NoiseHandshake.createInitiator(myStaticPriv)
+     msg1 = writeMsg1()                            32 bytes
+     packet type 0x10, UNSIGNED, recipientID = B, ttl 7
+     QUEUE the message text as pendingText
+     FLOOD it (B may be several hops away)
+
+  B: onNoiseHandshake, payload is 32 bytes -> this is msg1
+     createResponder(myStaticPriv)
+     readMsg1()
+     msg2 = writeMsg2()                            96 bytes
+     send back
+
+  A: payload is 96 bytes -> msg2
+     readMsg2()
+     msg3 = writeMsg3()                            64 bytes
+     send
+     session = split()
+     tryInitDR()  ← seeds the ratchet from exporterSecret
+
+     ⚠ A COMPLETES ONE MESSAGE BEFORE B DOES.
+       So the DR init and the queued-invite flush happen AFTER msg3
+       goes out, not before, or anything sent in that window is
+       decrypted by nobody.
+
+  B: payload is 64 bytes -> msg3
+     readMsg3()
+     session = split()
+
+     THEN, before storing the session:
+       sessionBindsTo(remoteStaticPub, claimedPeerID)?
+         SHA-256(remoteStaticPub)[0:16] == claimed peer ID
+       no  -> DISCARD. The peer is not who the header says.
+       yes -> store it
+
+  BOTH: flush pendingText over the new session
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Situation</th><th>Handling</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Crossed initiations.</strong> Both sides start a handshake at once.</td>
+                  <td>Tie-break on the lower peer ID. The loser resets to responder, and carries its queued text across the flip so a simultaneous initiation does not drop DMs.</td>
+                </tr>
+                <tr>
+                  <td><strong>Stuck handshake.</strong> msg2 or msg3 lost, or the peer went away mid-handshake.</td>
+                  <td>A 30 second timeout, checked lazily on the next send. bitchat gets the same recovery from event-driven session clears; an age check is the equivalent safety net here.</td>
+                </tr>
+                <tr>
+                  <td><strong>Identity binding.</strong></td>
+                  <td>A completed session is only stored if the authenticated remote static key hashes to the claimed peer ID. This is bitchat's rule and it is what makes the peer ID meaningful rather than a label.</td>
+                </tr>
+                <tr>
+                  <td><strong>A verified LEAVE arrives.</strong></td>
+                  <td>Retire the session. A leave is a deliberate shutdown, so the peer tears their own session down; keeping ours would seal the next DM under a session that no longer exists on the other side, where it is silently discarded but reported as sent.</td>
+                </tr>
+                <tr>
+                  <td><strong>An ordinary link drop.</strong></td>
+                  <td><strong>Keep</strong> the session on purpose. Resuming one is far cheaper than a fresh handshake and radios drop links constantly.</td>
+                </tr>
+                <tr>
+                  <td><strong>Handshakes are unsigned.</strong></td>
+                  <td>Deliberate, and matching bitchat. The peer may not hold our signing key yet, and the handshake authenticates itself: it completes only when the static key derives to the claimed peer ID.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="properties">What you get and what you do not</h2>
+          <div class="grid two">
+            <div class="box ok">
+              <p class="box-title">Guaranteed</p>
+              <ul>
+                <li><strong>Mutual authentication.</strong> Both sides prove possession of their static private key.</li>
+                <li><strong>Forward secrecy per session.</strong> A static key compromised tomorrow does not open today's session, because the ephemeral private halves are gone.</li>
+                <li><strong>Identity hiding.</strong> Static keys are transmitted encrypted. A passive observer of the handshake learns neither party's long-term key.</li>
+                <li><strong>Replay resistance.</strong> The 1024-nonce sliding window inside the session.</li>
+                <li><strong>Integrity.</strong> Every transport message is AEAD authenticated.</li>
+                <li><strong>Deniability.</strong> Everything inside the session is authenticated by a symmetric key both parties hold, so neither can prove to a third party what the other said.</li>
+              </ul>
+            </div>
+            <div class="box bad">
+              <p class="box-title">Not provided</p>
+              <ul>
+                <li><strong>Per-message forward secrecy.</strong> One session key covers the whole session. Compromise it mid-session and every message in that session is readable. This is precisely the gap the Double Ratchet fills.</li>
+                <li><strong>Post-compromise security.</strong> Noise alone never recovers from a compromise within a session.</li>
+                <li><strong>Metadata protection.</strong> The packet header carries sender and recipient IDs in the clear. Who is talking to whom is visible on the mesh.</li>
+                <li><strong>Protection against a wrong key.</strong> XX authenticates that the peer holds the key it presented. Whether that key belongs to the person you think it does is chapter <a href="20-identity.html">20</a>'s problem.</li>
+                <li><strong>Anything, if the handshake is MITMed on first contact.</strong> Trust on first use is a real weakness, and the QR scan and safety number exist to close it.</li>
+              </ul>
+            </div>
+          </div>
+
+          <h2 id="alternatives">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Option</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>TLS 1.3</strong></td>
+                  <td>Rejected. Requires certificate authorities and server certificates, which a serverless system cannot have. Self-signed certificates would reduce it to raw public key authentication with an enormous ASN.1 parser attached, which is a large attack surface for no benefit. It also assumes a client-server asymmetry that a mesh does not have.</td>
+                </tr>
+                <tr>
+                  <td><strong>X3DH alone</strong></td>
+                  <td>Rejected as a session protocol. X3DH is an asynchronous key agreement, and it does not mutually authenticate in the handshake: the receiver does not authenticate the sender. It solves a different problem (initiating with an offline party), which Airhop solves with Noise X plus prekeys instead.</td>
+                </tr>
+                <tr>
+                  <td><strong>Signal protocol wholesale</strong></td>
+                  <td>Rejected. The Signal <em>protocol</em> assumes a server for prekey distribution and message routing, and the Signal <em>service</em> requires a phone number. The Double Ratchet part of it is used, on top of Noise.</td>
+                </tr>
+                <tr>
+                  <td><strong>Noise IK instead of XX</strong></td>
+                  <td>One fewer round trip, and WireGuard's choice. But it requires the initiator to already know the responder's static key, which on a mesh of strangers is exactly what is not true. It would work for a contact whose key you hold, and that is a real optimisation available later.</td>
+                </tr>
+                <tr>
+                  <td><strong>MLS (RFC 9420), as used by Marmot and White Noise</strong></td>
+                  <td>Different problem. MLS is a group key agreement designed to scale to thousands of members with efficient add and remove. Airhop's groups cap at 16 with a creator-signed roster, and its DMs are pairwise. MLS also assumes a delivery service that orders messages, which a mesh with no total order cannot provide. Covered in chapter <a href="18-forward-secrecy.html">18</a>.</td>
+                </tr>
+                <tr>
+                  <td><strong>OTR</strong></td>
+                  <td>Superseded. Its deniability and forward secrecy properties are what Double Ratchet generalised and improved, and it does not handle asynchronous delivery.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is the pattern <code>e, ee, s, es</code> and not <code>e, s, ee, es</code>?</span>
+              <span class="a">Because the <code>ee</code> operation is what creates the first cipher key. Placing <code>s</code> after it means the static key is transmitted encrypted, which gives identity hiding: a passive observer never learns who answered. Placing it before would send the responder's long-term identity in the clear to anyone listening, which on a mesh where handshakes flood at TTL 7 would be a broadcast of who is talking to whom.</span>
+            </li>
+            <li>
+              <span class="q">What exactly is wrong with using the handshake hash as key material?</span>
+              <span class="a">It is public. <code>mixHash</code> absorbs only bytes that went over the wire: the protocol name, the prologue, and each handshake message verbatim. Anyone who captured the three handshake packets recomputes it exactly. Airhop had this bug: the Double Ratchet root key was seeded from it, so any bystander in the room could derive the root key and forge or decrypt every DR message in that conversation. The fix is the exporter secret, which descends from the chaining key and therefore from ephemeral private keys that no longer exist.</span>
+            </li>
+            <li>
+              <span class="q">Why does asking HKDF for three outputs not break bitchat interop?</span>
+              <span class="a">Because HKDF-Expand chains: each output block is derived from the previous one plus a counter. Adding a third block leaves the first two byte-identical. bitchat negotiates exactly the same <code>k1</code> and <code>k2</code> and has no way to know a third value was computed locally.</span>
+            </li>
+            <li>
+              <span class="q">Noise XX already gives forward secrecy. Why add the Double Ratchet?</span>
+              <span class="a">Because Noise's forward secrecy is <em>per session</em>, not per message. One key pair covers every message until the next handshake, so an attacker who compromises the session key mid-conversation reads all of it, before and after. The Double Ratchet rotates a key per message and recovers after a few steps even from a live compromise. It also covers the offline case: a ratcheted message left with a courier keeps forward secrecy while the recipient is away.</span>
+            </li>
+            <li>
+              <span class="q">Why are Noise handshake packets not signed, when almost everything else is?</span>
+              <span class="a">Two reasons. The peer may not hold our signing key yet, since the announce that carries it may not have arrived, so a required signature would make first contact impossible. And the handshake authenticates itself: it completes only when the remote static key hashes to the claimed peer ID, so an impostor cannot complete one under someone else's identity. A signature would add 64 bytes and prove something the handshake already proves.</span>
+            </li>
+            <li>
+              <span class="q">The initiator completes the handshake one message before the responder. What goes wrong if you ignore that?</span>
+              <span class="a">Anything the initiator sends in that window is decrypted by nobody: it has a session, the responder does not yet. Airhop hit this exactly, losing first-contact DMs and group invites. The fix is to run <code>tryInitDR</code> and flush queued invites <em>after</em> msg3 goes out rather than at split.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

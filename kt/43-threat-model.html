@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 43: Threat model. Sybil, flooding, replay, impersonation, seizure, traffic analysis." />
+    <title>43 Threat model · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 43 · Adversaries and proof</p>
+          <h1>Threat model</h1>
+          <p class="kt-lede">
+            The attacker is assumed to be in the room, holding a radio, able to
+            transmit anything. This chapter enumerates what they can do, what stops
+            them, and the six things that stop nothing at all.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#attacker">The attacker</a></li>
+              <li><a href="#surface">The attack surface</a></li>
+              <li><a href="#forgery">Forgery and impersonation</a></li>
+              <li><a href="#sybil">Sybil</a></li>
+              <li><a href="#replay">Replay</a></li>
+              <li><a href="#dos">Denial of service and amplification</a></li>
+              <li><a href="#resource">Resource exhaustion</a></li>
+              <li><a href="#traffic">Traffic analysis</a></li>
+              <li><a href="#seizure">Physical seizure</a></li>
+              <li><a href="#money">Payment attacks</a></li>
+              <li><a href="#outofscope">Explicitly out of scope</a></li>
+              <li><a href="#gaps">Gaps I would raise</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Anyone standing near you can shout anything into the air. They can
+              pretend to be someone else, shout the same thing a thousand times, or
+              record what you said and shout it again tomorrow. The app assumes all
+              of that is happening. It checks the handwriting on every note, refuses
+              to change its address book once it has written someone down, ignores
+              notes that are too old, and puts a hard limit on how much of your
+              phone anyone else can use.
+            </p>
+          </div>
+
+          <h2 id="attacker">The attacker</h2>
+          <div class="grid two">
+            <div class="box bad">
+              <p class="box-title">They CAN</p>
+              <ul>
+                <li>Transmit anything, from anywhere in radio range.</li>
+                <li>Forge any plaintext header field: <code>senderID</code>, <code>ttl</code>, <code>flags</code>, <code>timestamp</code>.</li>
+                <li>Replay captured packets.</li>
+                <li>Mint unlimited identities, each internally consistent.</li>
+                <li>Drop, delay or alter anything passing through them as a relay.</li>
+                <li>Run a Nostr relay, or observe one.</li>
+                <li>Observe BLE advertisements passively.</li>
+                <li>Seize a device.</li>
+              </ul>
+            </div>
+            <div class="box ok">
+              <p class="box-title">They CANNOT</p>
+              <ul>
+                <li>Break Ed25519, X25519 or ChaCha20-Poly1305.</li>
+                <li>Find a SHA-256 preimage.</li>
+                <li>Complete a Noise XX handshake as somebody else.</li>
+                <li>Produce a signature for a key they do not hold.</li>
+                <li>Read a Noise session they are not a party to.</li>
+              </ul>
+            </div>
+          </div>
+          <p>
+            That is a realistic model for a crowd, a protest, a conference or a
+            disaster zone, and it is deliberately strong: it grants the attacker
+            everything the physics allows and nothing the mathematics forbids.
+          </p>
+
+          <h2 id="surface">The attack surface</h2>
+          <pre class="ascii">
+  ┌───────────────────────────────────────────────────────────────┐
+  │ 1. THE AIR                                                     │
+  │    unauthenticated bytes from anyone in range. Every packet    │
+  │    decoder, every TLV parser, every length field.              │
+  ├───────────────────────────────────────────────────────────────┤
+  │ 2. RELAY POSITION                                              │
+  │    an attacker sits between two honest peers and carries       │
+  │    their traffic.                                              │
+  ├───────────────────────────────────────────────────────────────┤
+  │ 3. NOSTR RELAYS                                                │
+  │    a hostile relay, or one that logs. Sees IPs without Tor.    │
+  ├───────────────────────────────────────────────────────────────┤
+  │ 4. COURIER POSITION                                            │
+  │    holding somebody else's sealed mail.                        │
+  ├───────────────────────────────────────────────────────────────┤
+  │ 5. THE MINT                                                    │
+  │    holds the backing value. The only named trusted party.      │
+  ├───────────────────────────────────────────────────────────────┤
+  │ 6. THE DEVICE                                                  │
+  │    seizure, coercion, shoulder surfing, the lock screen.       │
+  ├───────────────────────────────────────────────────────────────┤
+  │ 7. THE SUPPLY CHAIN                                            │
+  │    dependencies, the build, the store binary.                  │
+  └───────────────────────────────────────────────────────────────┘
+</pre>
+
+          <h2 id="forgery">Forgery and impersonation</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Attack</th><th>Countermeasure</th><th>Test</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Message forgery.</strong> Post as somebody else.</td>
+                  <td>Ed25519 signature verified against the key <em>bound to the claimed sender</em>. A missing key or a missing SIGNED flag is a <strong>failed check, never a skipped one</strong>.</td>
+                  <td>C01, C02</td>
+                </tr>
+                <tr>
+                  <td><strong>Identity impersonation.</strong> Claim someone else's peer ID.</td>
+                  <td><code>peerID == SHA-256(noiseStaticPubKey)[0:16]</code>, enforced on announces and on completed Noise sessions. Preimage resistance means a key cannot be constructed to hash to a chosen ID.</td>
+                  <td>C08</td>
+                </tr>
+                <tr>
+                  <td><strong>Signing-key substitution.</strong> Copy the victim's public Noise key off the air, attach your own signing key, self-sign.</td>
+                  <td>Two tiers. An announce is self-signed, so TOFU pinning holds the first key seen and never replaces it over the air. A key proven inside a Noise session (payload <code>0x21</code>) outranks that and may correct a pin an attacker won the race for. No announce can overwrite a proven key, and only an in-person QR scan may re-pin otherwise.</td>
+                  <td>C08</td>
+                </tr>
+                <tr>
+                  <td><strong>Capability downgrade.</strong> Announce bit 8 off for a victim to force attachments into the clear.</td>
+                  <td>Announced bits are a discovery hint and never authorise a change in how we send. Encrypted private media is selected only on an <em>authenticated</em> capability.</td>
+                  <td>M09</td>
+                </tr>
+                <tr>
+                  <td><strong>Man in the middle on a session.</strong></td>
+                  <td>Noise XX mutual authentication, with the authenticated static key required to derive the peer ID it claims.</td>
+                  <td>A06</td>
+                </tr>
+                <tr>
+                  <td><strong>Forged departure.</strong> Send a LEAVE carrying a victim's ID to evict them from everyone's view.</td>
+                  <td>Checked against the <em>pinned</em> signing key <strong>before the relay decision</strong>, so an unverifiable one is neither acted on nor passed to nodes that may check less strictly.</td>
+                  <td>C09</td>
+                </tr>
+                <tr>
+                  <td><strong>Malicious relay injecting messages.</strong></td>
+                  <td>A relay cannot produce the sender's signature, and forwarding is separate from delivery.</td>
+                  <td>R05</td>
+                </tr>
+                <tr>
+                  <td><strong>Confused-deputy delivery.</strong> Make a relay render somebody else's private content.</td>
+                  <td>Directed packets are relayed but <strong>rendered only by the addressee</strong>.</td>
+                  <td>M08</td>
+                </tr>
+                <tr>
+                  <td><strong>Group takeover.</strong> Craft a state naming yourself creator at a higher epoch.</td>
+                  <td>A group pins its <code>creatorFingerprint</code> and refuses a state naming a different creator <em>even at a higher epoch</em>. Enforced in <strong>two places</strong>, because a group state can either update or delete a group: the store pins it for every write, and <code>groupStateAction</code> pins it before the removal branch, which never reaches the store.</td>
+                  <td>F01</td>
+                </tr>
+                <tr>
+                  <td><strong>Group eviction by a stranger.</strong> A group ID travels in the clear on every group message so relays can carry it. Without the ordering above, anyone who saw one could craft a self-signed state naming themselves creator with a roster omitting the victim, and the victim's client would <em>destroy its own key</em> and drop the room.</td>
+                  <td>The creator pin is checked first. This is a good example of a check whose <em>order</em> is the security property.</td>
+                  <td>F01</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Not everything is signed, and that is deliberate</p>
+            <p>
+              Noise handshake messages are unsigned, matching bitchat, because the
+              peer may not hold our signing key yet and the handshake authenticates
+              itself. Messages inside a Noise session or a ratchet carry no
+              redundant signature, since the session already authenticates them.
+              Fragments are unsigned because the inner packet is signed and
+              re-verified after reassembly. Signatures are required exactly where a
+              claimed sender is otherwise unverifiable: announces, public and
+              private channel messages, attachments, voice frames, board posts and
+              gateway uplinks.
+            </p>
+          </div>
+
+          <h2 id="sybil">Sybil</h2>
+          <p>
+            The hardest structural problem in any permissionless network. Anyone
+            can mint an unlimited number of identities, each with a real key pair,
+            a correctly derived peer ID, and a valid self-signature.
+            <strong>Nothing about any individual one is detectably wrong</strong>,
+            which is what makes it a resource problem rather than a signature
+            problem.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Vector</th><th>Bound</th></tr></thead>
+              <tbody>
+                <tr><td>Peer registry growth</td><td>Capped at <strong>200</strong>, oldest-first eviction that <strong>never drops a peer holding a real BLE link</strong>.</td></tr>
+                <tr><td>Radar growth</td><td>Same cap, same rule.</td></tr>
+                <tr><td>Prekey bundle store</td><td>Capped at 200 peers.</td></tr>
+                <tr><td>Fake "direct" peers</td><td>A link binds to the <em>first</em> peer that announces directly on it. A later claim from a different peer ID on that link is downgraded to relayed rather than dropped.</td></tr>
+                <tr><td>Courier pool</td><td>40 envelopes, 20 reserved for the verified tier, 2 per unknown depositor.</td></tr>
+                <tr><td>Sync amplification</td><td>8 responses per peer per 30 s, attributed by <strong>link</strong> rather than by claimed sender ID.</td></tr>
+                <tr><td>Gateway uplinks</td><td>10 per depositor per minute, with the depositor's signature checked.</td></tr>
+                <tr><td>Propagation</td><td>TTL 7 bounds how far any of it travels.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The vector that made every other cap useless</p>
+            <p>
+              A peer counted as "directly connected" whenever
+              <code>packet.ttl == 7</code>, a field an attacker sets freely. Direct
+              peers are the ones protected from eviction, so one hostile radio over
+              one real link could announce hundreds of invented identities that all
+              looked directly connected and were all immune to trimming. Five
+              hundred invented peers survived a flood the caps were specifically
+              there to bound. Each one also overwrote the link's peer binding (today <code>peerByLink</code>) for
+              that link, breaking RSSI attribution and disconnect handling for the
+              genuine peer on it.
+            </p>
+            <p>
+              The fix pairs the TTL heuristic with a physical fact: a link binds to
+              one peer, and direct standing follows the link lifecycle, which no
+              amount of announcing can fake. bitchat rejects the same case by name
+              as <code>directSenderMismatch</code>. Scenario C04.
+            </p>
+          </div>
+          <p>
+            The honest limitation: Sybil resistance here is
+            <strong>bounded damage, not prevention</strong>. There is no proof of
+            work, no stake, no identity cost. An attacker can still fill 200
+            registry slots with invented peers, and the mitigation is that direct
+            neighbours are protected and everything else ages out. In a
+            permissionless system with no cost to identity creation, that is the
+            available answer.
+          </p>
+
+          <h2 id="replay">Replay</h2>
+          <p>
+            A captured packet is correctly signed forever. Signatures alone stop
+            forgery, not replay.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Layer</th><th>Mechanism</th><th>Window</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Freshness at ingress</strong></td><td>Every packet is held to the timestamp window and is neither relayed nor acted on outside it. Relaying a stale packet costs everyone downstream airtime and re-seeds an attacker's recording into a mesh that had already forgotten it.</td><td><strong>+/- 2 minutes</strong></td></tr>
+                <tr><td>Announces</td><td>A tighter, symmetric window. The union of what both bitchat clients accept: iOS uses 900 s backwards only, Android 600 s symmetric.</td><td><strong>15 minutes, symmetric</strong></td></tr>
+                <tr><td>Live voice</td><td>Stale audio is worthless, and replaying a recorded burst at somebody later is a real attack.</td><td><strong>30 seconds</strong></td></tr>
+                <tr><td>Deduplication</td><td>Content-derived packet ID in a 1000-entry LRU.</td><td>5 minutes, <strong>per device</strong></td></tr>
+                <tr><td>Noise transport</td><td>A 1024-nonce sliding window, the same construction IPsec and WireGuard use.</td><td>1024 messages of reordering</td></tr>
+                <tr><td>Double Ratchet</td><td>Message keys are single use and deleted.</td><td>n/a</td></tr>
+                <tr><td>Nostr rumors</td><td>The outer timestamp is randomised by design, so the inner one is the only claim about send time and nothing signs it into a window. Bounded by the subscription lookback plus skew.</td><td>Lookback + 15 min</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Why dedup cannot be the replay bound</p>
+            <p>
+              Its window is five minutes and its state is <strong>per
+              device</strong>, so it says nothing about a phone that never heard
+              the original. Freshness is the part that travels. The two do
+              different jobs and both are needed.
+            </p>
+          </div>
+          <p>
+            The one exemption is gossip sync, which exists to replay old packets.
+            A response carries <code>IS_RSR</code> and <code>ttl = 0</code>, and
+            the receiver skips the window <strong>only</strong> when the packet
+            claims RSR <em>and</em> arrives from a peer it has an outstanding
+            request to, inside a 30 second response window. The flag alone is a
+            sender's claim; the pending request is the receiver's own record. That
+            is precisely why requests are unicast: a broadcast request has no peer
+            to register against.
+          </p>
+          <p>
+            And a nice detail: if two or more <em>different</em> peers send
+            packets outside the window, the app infers that its own clock is wrong
+            rather than blaming them, and shows a banner. One peer sending stale
+            packets is that peer replaying; several peers disagreeing at once
+            points at what they have in common.
+          </p>
+
+          <h2 id="dos">Denial of service and amplification</h2>
+          <p>
+            This is the section a backend engineer will interrogate hardest,
+            because a flooding mesh is an amplifier by construction.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Attack</th><th>Amplification without a control</th><th>Control</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Packet flood</strong></td>
+                  <td>Unbounded. Every node relays to every neighbour, forever, around cycles.</td>
+                  <td>TTL 7 bounds depth. Dedup bounds repetition. Jitter (10 to 220 ms, widening with degree) prevents the broadcast storm and lets the first copy silence the rest.</td>
+                </tr>
+                <tr>
+                  <td><strong>Sync amplification</strong></td>
+                  <td>One small request draws back the responder's entire store, and if responses were relayed they would re-flood the whole mesh.</td>
+                  <td><code>REQUEST_SYNC</code> and <strong>every packet answering one</strong> ride at <code>ttl 0</code>, so they stop at the requester. Responses capped at <strong>8 per peer per 30 s</strong>. The rate limit is checked <em>before decoding</em>, because the diff pass is the expensive part. Attribution is by physical link, so one peer minting sender IDs does not get unbounded budgets.</td>
+                </tr>
+                <tr>
+                  <td><strong>Courier flood</strong></td>
+                  <td>Fill every nearby phone's storage with mail.</td>
+                  <td>40 envelope pool, 2 per unknown depositor, 5 per contact, 20-slot verified sub-cap, 16 KiB per envelope, 24-hour TTL, expiry beyond TTL plus 1 hour slack <strong>refused rather than clamped</strong>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Spray budget inflation</strong></td>
+                  <td><code>copies</code> is unauthenticated input deciding how often a carrier re-emits. An unclamped byte makes every carrier an amplifier for whoever claims 255.</td>
+                  <td>Clamped to 8 on decode, and the budget only rises before the first spray.</td>
+                </tr>
+                <tr>
+                  <td><strong>Gateway abuse</strong></td>
+                  <td>Make somebody else's phone publish arbitrary events to relays under their IP.</td>
+                  <td>Kind 20000 only, 15 minute freshness, the cell must match one this gateway serves, the depositor's signature is checked, 10 uplinks per depositor per minute, 30 downlinks per minute total, queues bounded at 20 total and 5 per depositor.</td>
+                </tr>
+                <tr>
+                  <td><strong>Decompression bomb</strong></td>
+                  <td>25 bytes on the wire, gigabytes after inflation. An out-of-memory crash any unauthenticated peer in range can trigger.</td>
+                  <td>Output capped at the declared size <strong>while inflating</strong>, refused at the first byte over. A valid stream inflates to exactly the declared size, so nothing legitimate is affected.</td>
+                </tr>
+                <tr>
+                  <td><strong>Ratchet skip flood</strong></td>
+                  <td>Claim <code>N = 4,000,000,000</code> and force four billion HMAC operations from one packet.</td>
+                  <td><code>MAX_SKIP</code> of 1000, and a skipped-key cache capped at 1000 entries.</td>
+                </tr>
+                <tr>
+                  <td><strong>Fragment table exhaustion</strong></td>
+                  <td>Open unlimited assemblies.</td>
+                  <td>128 concurrent, oldest evicted, 30 second idle timeout, per-stream byte ceiling, and the size check runs <em>before</em> the table is touched so a doomed fragment is not an eviction primitive.</td>
+                </tr>
+                <tr>
+                  <td><strong>Pong amplification</strong></td>
+                  <td>Ping flood producing a pong flood.</td>
+                  <td>Minimum 100 ms spacing between pong replies on one ingress link.</td>
+                </tr>
+                <tr>
+                  <td><strong>Announce storm</strong></td>
+                  <td>Twelve phones connecting at once put roughly 9,200 announce and 6,600 prekey packets on the air in half a second, because each link-up minted a freshly timestamped packet no relay could dedup.</td>
+                  <td>Both are <strong>reused within a window</strong> so relays can deduplicate them, and the bundle goes only to the new link.</td>
+                </tr>
+                <tr>
+                  <td><strong>Nostr relay flood</strong></td>
+                  <td>Overwhelm the client with events.</td>
+                  <td>The inbound pump yields the thread between batches. Reads are bounded at 6 seconds. Publishes are bounded at 8.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The one amplification control that is documented and absent</p>
+            <p>
+              <code>PROTOCOLS.md</code> lists a fanout subset of roughly
+              <code>ceil(sqrt(n))</code> links as a routing constant. There is no
+              such code: <code>relayPacket</code> writes to every link except the
+              ingress one. Full fanout means the number of transmissions per
+              message grows with the number of edges in the graph, and airtime is
+              the scarce resource. Tested and converging at 25 phones; untested at
+              200. bitchat's message-ID-seeded subset is the available mitigation
+              and it is not taken. Chapter <a href="45-scaling.html">45</a> does
+              the arithmetic.
+            </p>
+          </div>
+
+          <h2 id="resource">Resource exhaustion</h2>
+          <p>
+            Every unbounded collection reachable from an unauthenticated packet is
+            a vulnerability. The audit shape is: find every
+            <code>Map</code>, <code>Set</code> or array written to from the receive
+            path, and check it has a cap.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Structure</th><th>Cap</th><th>Eviction</th></tr></thead>
+              <tbody>
+                <tr><td>Peer registry</td><td>200</td><td>Oldest first, never a direct peer</td></tr>
+                <tr><td>Radar (peer store)</td><td>200</td><td>Same</td></tr>
+                <tr><td>Dedup seen set</td><td>1000</td><td>LRU, 5 min expiry</td></tr>
+                <tr><td>Gossip candidate store</td><td>1000</td><td>Oldest first, plus per-type age windows</td></tr>
+                <tr><td>Fragment assemblies</td><td>128</td><td>Oldest, plus a 30 s idle timeout</td></tr>
+                <tr><td>Courier pool</td><td>40 (20 verified)</td><td>Verified before contact, oldest first</td></tr>
+                <tr><td>Peer prekey bundles</td><td>200</td><td>Oldest received</td></tr>
+                <tr><td>Ratchet skipped keys</td><td>1000</td><td>Oldest, in-memory only</td></tr>
+                <tr><td>Concurrent voice bursts</td><td>8</td><td>Plus a 30 s stale cleanup and a 2x realtime flood guard</td></tr>
+                <tr><td>Gateway and bridge loop caches</td><td>512 each</td><td>Oldest</td></tr>
+                <tr><td>Gateway uplink queue</td><td>20 total, 5 per depositor</td><td>Refuse</td></tr>
+                <tr><td>Outbox</td><td>100 per peer, 8 attempts, 7 day TTL</td><td>Expiry and attempt cap</td></tr>
+                <tr><td>Session sets (courier IDs, dropped IDs, opened IDs)</td><td>Bounded by <code>rememberEventID</code></td><td>Oldest</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Two of these were genuine findings. The peer registry and radar grew
+            without bound for the life of the process: reads were TTL-bounded so a
+            flood never made a fake peer look reachable, but the underlying maps
+            were never swept, so the memory was held forever and every
+            <code>reachablePeers()</code> scan walked all of it. And the courier
+            store accepted any expiry, so one envelope stamped years out held a
+            pool slot for as long as the app was installed.
+          </p>
+
+          <h2 id="traffic">Traffic analysis</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Observation</th><th>Mitigation</th><th>Residual</th></tr></thead>
+              <tbody>
+                <tr><td>Message content on the mesh</td><td>Noise XX, Double Ratchet, channel and group AEAD</td><td>None for private traffic. Public channels are public by design.</td></tr>
+                <tr><td><strong>Who is talking to whom, on the mesh</strong></td><td><strong>Nothing.</strong></td><td><span class="pill bad">out of scope</span> Packet headers carry sender and recipient IDs in the clear, exactly as bitchat's do.</td></tr>
+                <tr><td>Message length</td><td>Padding to 256, 512, 1024 or 2048 byte blocks, for the four encrypted types only</td><td>Public types are unpadded, and their size is already public.</td></tr>
+                <tr><td>Who authored a public message</td><td>Origin TTL drawn from 5 to 7 rather than fixed at 7, so the deterministic "this radio authored it" marker is weakened</td><td>The top of the range is still unambiguous, so roughly a third stay attributable. Removing it entirely needs relays that sometimes decline to decrement, a coordinated protocol change.</td></tr>
+                <tr><td>Adjacency (who stands next to whom)</td><td>The <code>directNeighbors</code> TLV is <strong>never emitted</strong>. bitchat stopped emitting it too.</td><td>An observer with several radios can still infer it from timing.</td></tr>
+                <tr><td>Physical proximity</td><td>Nothing</td><td><span class="pill bad">out of scope</span> A BLE scanner detects that an Airhop device is nearby. That is inherent to a radio.</td></tr>
+                <tr><td>Live voice timing</td><td>Nothing</td><td>A steady ~15 packet per second cadence reveals that someone is speaking, even under encryption.</td></tr>
+                <tr><td>Nostr sender and recipient</td><td>NIP-17 gift wrap: the relay sees an ephemeral pubkey it will never see again</td><td>The relay does see the recipient's <code>p</code> tag, which is needed for delivery.</td></tr>
+                <tr><td>Nostr message length</td><td>Nothing. bitchat's cipher does not pad.</td><td>Ciphertext length reveals plaintext length to a relay.</td></tr>
+                <tr><td>IP address</td><td>Tor, when enabled</td><td>Off by default. Tor use is visible to the network on a direct connection; obfs4 or Snowflake hides it. Chapter <a href="26-bridges.html">26</a>.</td></tr>
+                <tr><td>Location channel participation</td><td>Per-cell identities break cross-cell correlation. Presence restricted to precisions 2, 4 and 5.</td><td>A relay serving a cell sees every pubkey posting in it.</td></tr>
+                <tr><td><strong>Courier mail linkability</strong></td><td><strong>Nothing.</strong></td><td><span class="pill bad">out of scope</span> The tag is an HMAC keyed on the recipient's <em>public</em> Noise key, which every announce broadcasts, so anyone who heard one announce can compute that peer's tags for any day and follow their mail. Inherited from bitchat, which documents the same flaw. Fixing it needs a coordinated v2 tag keyed on a shared secret.</td></tr>
+                <tr><td><strong>A stable peer ID</strong></td><td><strong>Nothing.</strong></td><td><span class="pill bad">out of scope</span> Derived from the long-term Noise key, it does not rotate, so the same device is linkable across sessions until the identity is regenerated.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="seizure">Physical seizure</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Control</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td>Panic wipe</td><td>Triple tap. Keys, 15 MMKV partitions, the encrypted wallet file, the whole cache directory, Arti's state, the notification tray. Chapter <a href="35-storage-panic.html">35</a>.</td></tr>
+                <tr><td>Keys in the OS keychain</td><td>Hardware-backed on modern devices, <code>THIS_DEVICE_ONLY</code> so they are excluded from backups.</td></tr>
+                <tr><td>No plaintext at rest</td><td>Persisted content is encrypted at rest by the OS, and the wallet partition additionally by AES-256 under a keychain-held key.</td></tr>
+                <tr><td>Attachment retention</td><td>Swept on a schedule, 7 days by default, 14 or 30 by choice, <strong>with no unbounded option</strong>, so a stored photo does not outlive its conversation.</td></tr>
+                <tr><td>Notification previews</td><td>Withheld by default, since the system renders them on the lock screen.</td></tr>
+                <tr><td>Screenshot announcement</td><td>A screenshot taken inside a chat is announced to the other side.</td></tr>
+                <tr><td>Wipe honesty</td><td><code>keysDestroyed</code> is reported, and a banner stands until it stops being true, because a locked keychain on a booted-but-unlocked device is exactly the seizure case.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Not covered: the app-switcher snapshot, coercion (there is no duress
+            password or decoy mode), and anything outside the sandbox.
+          </p>
+
+          <h2 id="money">Payment attacks</h2>
+          <p>
+            Summarised here; chapters <a href="32-cashu.html">32</a> and
+            <a href="33-wallet-ops.html">33</a> have the detail.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Attack</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr><td>Double spend offline</td><td><strong>Not preventable without a network.</strong> Handled by honesty: proofs received offline are stored as unverified and never counted as settled.</td></tr>
+                <tr><td>Forged token</td><td>NUT-12 DLEQ against cached mint keys, before the store sees it. Missing keys report "unchecked", never "valid".</td></tr>
+                <tr><td>Inflated amount</td><td>Amounts come from the decoded proofs, never a self-declared field, and every proof is bounded before summing.</td></tr>
+                <tr><td>Hostile mint via a nutzap</td><td>Redeemed only from a mint the wallet already holds. A High severity finding when it was not.</td></tr>
+                <tr><td>Interrupted send</td><td>Proofs are reserved rather than deleted, and the token stays on the transaction, so it is reclaimable.</td></tr>
+                <tr><td>IP linkage over Tor on iOS</td><td>Mint HTTP would bypass Arti's WebSocket-only wrapping, so mint calls are refused while Tor is on unless the user opts in.</td></tr>
+                <tr><td>Malicious memo or unit in a token card</td><td>Sanitised: control characters and newlines stripped (they would fake extra UI lines), unit must be alphanumeric, host truncated.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="outofscope">Explicitly out of scope</h2>
+          <p>
+            Naming these is the most valuable part of the threat model, because an
+            unnamed gap is a gap somebody assumes is covered.
+          </p>
+          <ol>
+            <li><strong>Physical proximity.</strong> BLE mesh reveals that you are near certain peers.</li>
+            <li><strong>A location you chose to send.</strong> A location pin carries real coordinates. It is encrypted inside the recipient's Noise session, so no relay reads it, but the recipient holds it and can do what they like with it. Sent only on an explicit tap, to one contact, never automatically, never as a reply in kind, never forwarded onward by the app, and never couriered or gossiped.</li>
+            <li><strong>A stable peer ID.</strong> It does not rotate.</li>
+            <li><strong>Attachment confidentiality in a public room.</strong> A photo in <code>#bluetooth</code> is signed but not encrypted, exactly like the text beside it.</li>
+            <li><strong>The fact that Tor is in use.</strong> No bridges or pluggable transports on either platform.</li>
+            <li><strong>Traffic timing correlation.</strong> An observer watching several BLE radios could infer communication patterns.</li>
+            <li><strong>Courier mail linkability.</strong> Inherited from bitchat, documented in both projects.</li>
+            <li><strong>Who you are talking to on the mesh.</strong> Headers carry sender and recipient IDs in the clear.</li>
+            <li><strong>Public message authorship, some of the time.</strong> The origin TTL range weakens the marker rather than removing it.</li>
+            <li><strong>A compromised OS.</strong> All guarantees are void.</li>
+            <li><strong>Mint trust.</strong> Cashu requires trusting the mint to honour redemption.</li>
+          </ol>
+
+          <h2 id="gaps">Gaps I would raise</h2>
+          <p>
+            Beyond what the project already documents, these are the items I would
+            put in front of an auditor. They are argued in full in chapter
+            <a href="49-review.html">49</a>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Gap</th><th>Severity</th><th>Note</th></tr></thead>
+              <tbody>
+                <tr><td>Fanout subsetting documented but not implemented</td><td>Medium</td><td>Full fanout at 200 nodes is untested and is the most likely scaling failure.</td></tr>
+                <tr><td>Prekey bundles not reconciled through gossip sync (bit 9)</td><td>Medium</td><td>Courier envelopes silently fall back to static-key sealing, losing forward secrecy, with nothing in the UI to say so.</td></tr>
+                <tr><td>Nostr DMs have no forward secrecy</td><td>Medium</td><td>Static ECDH between two long-lived identities. Inherited from NIP-17 and bitchat's cipher, but "end to end encrypted" reads stronger than it is here.</td></tr>
+                <tr><td>Private channel keys never rotate</td><td>Medium</td><td>One symmetric key in an invite link, no forward secrecy, no revocation. Anyone who ever holds it reads everything they can obtain.</td></tr>
+                <tr><td>No key rotation or revocation anywhere</td><td>Medium</td><td>A compromised identity can only be abandoned, and there is no message that says so.</td></tr>
+                <tr><td>No Tor bridges</td><td>Medium</td><td>In a country that blocks Tor, the feature does not work; in one that monitors, turning it on is a signal.</td></tr>
+                <tr><td>Relay hardware never tested against real hardware</td><td>Low</td><td>Simulated only.</td></tr>
+                <tr><td>Gateway recovery time unbounded and unasserted</td><td>Low</td><td>The scenario records the recovery leg but does not bound it.</td></tr>
+                <tr><td>Pure-JavaScript crypto cannot guarantee constant time</td><td>Low, for this threat model</td><td>Fine against a network attacker, not against a local timing adversary with repeated measurements.</td></tr>
+                <tr><td>Scheduled relays are not cancelled on a duplicate</td><td>Low</td><td>bitchat cancels; Airhop keeps the timer map but drops duplicates before reaching cancellation. Wasted airtime in a dense room.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">State the attacker model in two sentences.</span>
+              <span class="a">Anyone within radio range can transmit anything: they can forge every plaintext header field, replay captured packets, mint unlimited internally-consistent identities, and drop or alter anything passing through them as a relay. They cannot break Ed25519, X25519, ChaCha20-Poly1305, or SHA-256 preimage resistance.</span>
+            </li>
+            <li>
+              <span class="q">Why does a valid signature not stop impersonation on its own?</span>
+              <span class="a">Because an announce is signed with a key carried inside that same announce, so the signature proves only internal consistency. The victim's public Noise key is broadcast in the clear, so an attacker copies the peer ID and Noise key, substitutes their own signing key, and signs. Both the derivation check and the signature check pass. What stops it is refusing to <em>replace</em> a key already bound to that peer ID, with the sole exception of a key proven inside a completed Noise session, which requires possession of the private half.</span>
+            </li>
+            <li>
+              <span class="q">A security engineer asks how you bound sync amplification. Answer precisely.</span>
+              <span class="a">Four controls. Requests and every packet answering one ride at TTL 0, so a rejoining peer's catch-up stops at the requester rather than re-flooding the mesh. Responses are capped at 8 per peer per 30 seconds. The rate limit is checked before the filter is decoded, because the diff pass is the expensive part and a looping peer should not make us pay for it. And the budget is attributed to the peer bound to the physical link rather than to the claimed sender ID, so one peer minting IDs cannot get unbounded budgets over one radio link.</span>
+            </li>
+            <li>
+              <span class="q">How is a Sybil flood bounded, and what is the honest limitation?</span>
+              <span class="a">Caps with eviction that protects physical facts: the registry and radar are capped at 200 with oldest-first eviction that never drops a peer holding a real BLE link, and direct standing follows the link lifecycle rather than a forgeable TTL field. The honest limitation is that this is bounded damage, not prevention. There is no proof of work, no stake, and no cost to creating an identity, so an attacker can still fill the non-direct slots. In a permissionless system that is the available answer, and the design says so rather than claiming Sybil resistance.</span>
+            </li>
+            <li>
+              <span class="q">Why is a two minute freshness window enough, and what backs it up?</span>
+              <span class="a">Phones are NTP synced and an offline real-time clock drifts by seconds a day rather than minutes, so the failure is rare and visible: a peer whose clock is wrong cannot talk to anyone, and the app detects that case by noticing that several different peers disagree at once. It is backed up by the deduplicator for the local repeat case, by a tighter 15 minute symmetric window on announces, and by a 30 second window on live voice where staleness is itself the attack.</span>
+            </li>
+            <li>
+              <span class="q">Which single out-of-scope item would you most want fixed?</span>
+              <span class="a">Peer ID rotation, because it is the root of several others. A non-rotating ID makes a device linkable across every session, and the courier tag's linkability is a direct consequence of the same long-lived key being public. It is also genuinely hard: rotation breaks the direct-link rule, the courier tags, contact pinning and the outbox at once, which is why bitchat has an entire design document on it and has not shipped it either.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

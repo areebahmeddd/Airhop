@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 03: User flows. First launch to panic wipe, traced end to end." />
+    <title>03 User flows · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 03 · Orientation</p>
+          <h1>User flows, end to end</h1>
+          <p class="kt-lede">
+            What actually happens, in order, from the moment the app icon is
+            tapped for the first time to the moment somebody triple taps the
+            panic button. Every flow names the code that runs.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#first-launch">First launch and onboarding</a></li>
+              <li><a href="#every-launch">Every launch after that</a></li>
+              <li><a href="#discovery">Two phones finding each other</a></li>
+              <li><a href="#public">Sending to a public room</a></li>
+              <li><a href="#dm">Sending a direct message</a></li>
+              <li><a href="#unreachable">When the recipient is not reachable</a></li>
+              <li><a href="#attachment">Sending a photo</a></li>
+              <li><a href="#ptt">Holding the microphone</a></li>
+              <li><a href="#geo">Opening a location channel</a></li>
+              <li><a href="#pay">Paying somebody</a></li>
+              <li><a href="#verify">Adding and verifying a contact</a></li>
+              <li><a href="#panic">The panic wipe</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="first-launch">First launch and onboarding</h2>
+          <p>
+            Three screens, no account, no server call. The state machine is
+            <code>OnboardingStep = "welcome" | "generating" | "reveal"</code> in
+            <code>src/app/app.tsx</code>.
+          </p>
+          <pre class="ascii">
+  TAP ICON
+     │
+     ▼
+  app.tsx boots
+     │  polyfill crypto.getRandomValues (must be the FIRST import)
+     │  load fonts
+     │  loadIdentity() from the OS keychain
+     │
+     ├── identity found  ──────────────▶ skip to the app
+     │
+     └── null returned
+            │
+            │  sweepOrphanedSecrets()   fire and forget, no await
+            │  (no identity means no secrets should exist; this is
+            │   also the retry for a panic wipe the OS refused)
+            ▼
+     ┌─────────────────────┐
+     │ 1. WELCOME          │  wordmark, one sentence, one button
+     └─────────┬───────────┘
+               ▼
+     ┌─────────────────────┐  generateIdentity()
+     │ 2. GENERATING       │    32 random bytes -> X25519 static key
+     │  held ≥ 5 seconds   │    32 random bytes -> Ed25519 signing key
+     │  even if keygen     │    peerID = hex(SHA-256(noisePub))[0:16]
+     │  takes 4 ms         │  saveIdentity() -> keychain
+     └─────────┬───────────┘
+               ▼
+     ┌─────────────────────┐  peerIDToUsername(peerID)
+     │ 3. REVEAL           │    byte[0] % 128 -> adjective
+     │  "swift-falcon-3a9f"│    byte[1] % 128 -> noun
+     │  this is permanent  │    first 4 hex   -> suffix
+     └─────────┬───────────┘
+               ▼
+     PERMISSION PRIMER SHEET   explains why Bluetooth is needed,
+     (mounted outside the      BEFORE the OS dialog, so a refusal
+      onboarding flow on       is not the first thing a user sees
+      purpose)
+               ▼
+     ensureBlePermissions() -> the real OS prompt
+               ▼
+     initMeshService(identity) -> start(nickname)
+               ▼
+     THE APP
+</pre>
+          <div class="box">
+            <p class="box-title">Why the generating screen is held for five seconds</p>
+            <p>
+              Key generation is two calls to
+              <code>crypto.getRandomValues</code> and two scalar
+              multiplications. It finishes in single-digit milliseconds. A
+              screen that flashes past communicates that nothing happened. The
+              five second hold with staged text is doing a real job: it is the
+              only moment in the product where the user learns that their
+              identity is a key on this phone and nowhere else. That
+              understanding is what makes the panic wipe and the missing backup
+              make sense later.
+            </p>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The failure that must not happen</p>
+            <p>
+              <code>loadIdentity()</code> returns <code>null</code> when there
+              is no identity, and <strong>throws</strong> when the keychain is
+              unreachable. Treating a throw as "no identity" would send a
+              returning user through onboarding and generate a second identity,
+              orphaning their first. <code>keychain.ts</code> documents this
+              distinction at the function, and <code>app.tsx</code> branches on
+              it: an error falls through to onboarding only after the
+              possibility of a locked keychain has been considered.
+            </p>
+          </div>
+
+          <h2 id="every-launch">Every launch after that</h2>
+          <ol>
+            <li>
+              <strong>Identity loads</strong> from the keychain. The item is
+              stored <code>AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY</code>, so this
+              read succeeds on a locked phone as long as it has been unlocked
+              once since boot. That matters because iOS relaunches the app on a
+              Bluetooth event, and that relaunch has to be able to join the
+              mesh.
+            </li>
+            <li>
+              <strong>The wipe marker is checked.</strong> If a previous panic
+              wipe died partway through, it resumes here.
+            </li>
+            <li>
+              <strong>MeshService is constructed and started.</strong> Radios
+              come up through the reconciler, the announce timer starts at 4
+              seconds (isolated cadence), gossip sync starts on a 15 second
+              interval, the courier store loads from disk, prekeys are
+              replenished.
+            </li>
+            <li>
+              <strong>Nostr is built</strong> if the internet toggle is on and
+              the Tor gate allows it. Relays connect, the DM inbox subscribes
+              with a 24 hour lookback, courier drops for today's and
+              neighbouring days' tags subscribe.
+            </li>
+            <li>
+              <strong>The wallet bootstraps.</strong>
+              <code>bootstrapWalletStorage()</code> fetches the AES key from the
+              keychain and opens the encrypted partition. If the keychain
+              refuses, the wallet reports itself locked rather than opening
+              unencrypted.
+            </li>
+            <li>
+              <strong>Deferred work runs</strong> once past onboarding:
+              notification permission, media retention sweep, nutzap watcher,
+              Tor revalidation.
+            </li>
+          </ol>
+
+          <h2 id="discovery">Two phones finding each other</h2>
+          <p>
+            This is the flow that must work before anything else does.
+          </p>
+          <pre class="ascii">
+  PHONE A                                            PHONE B
+  ───────                                            ───────
+  advertise service UUID F47B5E2D...                 scanning
+  (peripheral role)                                  (central role)
+       │                                                  │
+       │◀────────── scan result, RSSI -68 ────────────────│
+       │                                                  │
+       │            connection scheduler decides:         │
+       │            signal strong enough? under the        │
+       │            6-link cap? not already linked?        │
+       │                                                  │
+       │◀────────── GATT connect ─────────────────────────│
+       │                                                  │
+       │─── linkConnected event fires on BOTH sides ──────│
+       │                                                  │
+       │─── ANNOUNCE (ttl 7, signed) ────────────────────▶│
+       │      TLV: nickname, X25519 pub, Ed25519 pub,     │
+       │           capabilities, Nostr pubkey             │
+       │                                                  │
+       │                     B checks, in this order:     │
+       │                     1. timestamp within 15 min   │
+       │                     2. SHA-256(noisePub)[0:16]   │
+       │                        == claimed senderID       │
+       │                     3. Ed25519 signature valid   │
+       │                        against the key inside    │
+       │                     4. no different key already  │
+       │                        pinned for this peer      │
+       │                                                  │
+       │◀── ANNOUNCE from B ──────────────────────────────│
+       │                                                  │
+       │─── PREKEY_BUNDLE (0x24) ────────────────────────▶│
+       │◀── REQUEST_SYNC (0x21, ttl 0, unicast) ──────────│
+       │─── whatever B is missing, IS_RSR tagged ────────▶│
+       │                                                  │
+  both now show each other on the Mesh radar
+  both drop announce cadence from 4 s to 15-30 s jittered
+</pre>
+          <p>
+            Notice what is <em>not</em> here. There is no pairing, no bonding,
+            no PIN, no user prompt. GATT writes are open on the characteristic.
+            Authentication is entirely at the application layer, by Ed25519
+            signature, which is why every check in step 2 above matters.
+          </p>
+          <div class="box">
+            <p class="box-title">The direct-link rule</p>
+            <p>
+              An announce still carrying TTL 7 came straight from its author,
+              because every relay decrements. So it can bind a link to a peer.
+              But TTL is a plaintext field an attacker sets freely. So the rule
+              has a second half: a link binds to the <em>first</em> peer that
+              announces directly on it, and a later claim from a different peer
+              ID on the same link is treated as relayed. Without that second
+              half, one hostile radio could mint unlimited "directly connected"
+              identities, all of them immune to eviction because direct peers
+              are the ones protected from trimming. That is scenario C04.
+            </p>
+          </div>
+
+          <h2 id="public">Sending to a public room</h2>
+          <p>Typing in <code>#bluetooth</code> and pressing send.</p>
+          <pre class="ascii">
+  composer
+     │  optimistic local bubble, with a LOCAL id
+     ▼
+  MessageRouter.sendChannelMessage(channel, text, msgId, ts)
+     │
+     │  channel == "#bluetooth" ?
+     │     yes -> type 0x02, payload = raw UTF-8 and nothing else
+     │     no  -> type 0x51, payload = [chLen][ch][idLen][id][text]
+     │
+     │  ttl = random 5, 6 or 7   (NOT always 7)
+     │  flags = SIGNED
+     │  signature = Ed25519 over encodePacket(ttl=0, isRSR=0, unsigned, padded)
+     ▼
+  floodRouter.originate(packet)     record our own id so we do not relay it back
+     ▼
+  broadcast over every BLE link and every WiFi link
+     │
+     │  each fragment is one GATT write, ≤ 512 bytes
+     ▼
+  gossip.track(packet)              so a peer that missed it can pull it later
+     ▼
+  if the mesh bridge is on and this is #bluetooth:
+     also publish a signed copy to the geohash-6 rendezvous cell on Nostr
+     ▼
+  ChannelSendResult { msgId, bleLinks, nostr, gateway }
+     │
+     └─ bleLinks == 0 &amp;&amp; !nostr  ->  the UI must say "this reached nobody"
+</pre>
+          <div class="box">
+            <p class="box-title">Why the origin TTL is randomised</p>
+            <p>
+              A relay decrements TTL. So a packet arriving with the protocol
+              maximum was authored by whoever just transmitted it. To a passive
+              listener with a radio, that separates "this phone is nearby" from
+              "this phone is talking". Drawing from 5 to 7 weakens the signal:
+              two thirds of public messages become ambiguous. It does not remove
+              it, because the top of the range is still unambiguous. Removing it
+              entirely would need relays that sometimes decline to decrement,
+              which is a coordinated protocol change across implementations.
+            </p>
+            <p>
+              This is applied to public messages only. Announces keep a fixed
+              TTL 7 because the direct-link rule depends on it, and weakening
+              that rule to gain a little unlinkability would reopen the Sybil
+              vector above.
+            </p>
+          </div>
+
+          <h2 id="dm">Sending a direct message</h2>
+          <pre class="ascii">
+  sendDm(peerID, text)
+     │
+     ├─ 1. Is there a live Noise session with this peer?
+     │       no  -> start a Noise XX handshake, queue the text,
+     │              send it when msg3 goes out
+     │       yes -> continue
+     │
+     ├─ 2. Can we use the Double Ratchet?
+     │       both sides Airhop, ratchet initialised, CKs != null
+     │         yes -> ratchetEncrypt, packet type 0x12 (DR_ENCRYPTED)
+     │         no  -> session.encrypt, packet type 0x11 (NOISE_ENCRYPTED)
+     │                 payload = [0x01][PrivateMessagePacket TLV]
+     │
+     ├─ 3. Build the packet: HAS_RECIPIENT | SIGNED, ttl 7
+     │
+     ├─ 4. unicast(peerID, packet)
+     │       a WiFi link to that peer?  use it
+     │       a BLE link to that peer?   use it
+     │       neither?                   FLOOD it, addressed to them
+     │                                  (relays carry it, only they decrypt)
+     │
+     └─ 5. ALWAYS enqueue in the outbox, even on success.
+           Nothing counts as delivered without an authenticated receipt.
+              │
+              ▼
+        DELIVERED receipt arrives -> outbox entry resolved, tick shown
+        READ receipt arrives      -> double tick
+</pre>
+          <div class="box warn">
+            <p class="box-title">The bug this shape exists to prevent</p>
+            <p>
+              A DM over an established session with a direct link used to return
+              "sent" and never be queued. If the peer had restarted and
+              discarded its session, it received nothing while the sender saw a
+              tick. Now every mesh send is enqueued, matching bitchat's rule
+              that nothing counts as delivered without an authenticated
+              acknowledgement. All three receipt paths clear the entry, and a
+              receipt arrives well inside the 15 to 30 second flush interval, so
+              the cost is a queue entry that lives for a few seconds.
+            </p>
+          </div>
+
+          <h2 id="unreachable">When the recipient is not reachable</h2>
+          <p>
+            This is the ladder that makes the app useful in the situations it
+            was built for. It is evaluated in order and stops at the first rung
+            that can carry the message.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rung</th><th>Condition</th><th>What happens</th><th>What the user sees</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>1. Direct</td>
+                  <td>A Noise session exists.</td>
+                  <td>Encrypt and unicast over WiFi or BLE. If no direct link, flood it addressed to them, so it crosses up to 7 hops.</td>
+                  <td>Sent, then a tick on the receipt.</td>
+                </tr>
+                <tr>
+                  <td>2. Nostr</td>
+                  <td>Their Nostr pubkey is known (from an announce or a saved contact) and a relay is live.</td>
+                  <td>Gift wrap the message (rumor 14, seal 13, wrap 1059) and publish to the DM relay set.</td>
+                  <td>Sent over the internet.</td>
+                </tr>
+                <tr>
+                  <td>3. Courier</td>
+                  <td>At least one directly linked peer whose Noise key we hold.</td>
+                  <td>Seal once with Noise X to a one-time prekey if we have one, else to their static key. Hand the same bytes to up to 4 couriers, each with a spray budget of 4. Also park a copy on relays as kind 1401 if online.</td>
+                  <td>Carried by a friend.</td>
+                </tr>
+                <tr>
+                  <td>4. Outbox only</td>
+                  <td>Nothing above was possible.</td>
+                  <td>Held locally for up to 7 days, retried on every reconnect and every 45 seconds.</td>
+                  <td>Queued. Not a tick, and not a failure.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The honesty rule matters as much as the ladder. "Carried by a
+            friend" is returned <em>only</em> when a courier actually accepted
+            the write onto its own link. A speculative flood at a peer several
+            hops away resolves false, because there is nothing to acknowledge
+            it. A relay drop is not a carrier either: nobody carried that copy
+            and it never touched the mesh.
+          </p>
+
+          <h2 id="attachment">Sending a photo</h2>
+          <pre class="ascii">
+  pick or capture
+     │
+     │  image-compression.ts: resize and re-encode to the quality setting
+     │  (low / medium / high). A photo must land under 512 KiB.
+     ▼
+  build a BitchatFilePacket TLV
+     │  0x01 fileName   0x02 fileSize   0x03 mimeType
+     │  0x04 content    0x05 channel    0x06 durationMs   0x07 caption
+     │
+     │  MIME is RESOLVED, never passed through:
+     │    declared type if the allow-list admits it,
+     │    else inferred from the extension,
+     │    else application/octet-stream (always accepted)
+     ▼
+  DM to a peer who has PROVEN capability bit 8?
+     yes -> seal inside the Noise session as payload type 0x20
+            (confidential; relays cannot read it)
+     no  -> signed cleartext FILE_TRANSFER 0x22
+            (authentic but readable by every node it crosses)
+     ▼
+  the packet is now ~500 KB. It cannot be one BLE write.
+     ▼
+  fragmentPacket()
+     │  467 data bytes per fragment
+     │  header: [streamID 8][index u16][total u16][innerType u8]
+     │  fragments are UNSIGNED; the inner packet carries the signature
+     │  fragments carry the PARENT's recipientID
+     ▼
+  paced queue: one fragment every 25 ms directed, 30 ms broadcast
+     │  512 KiB / 467 bytes = ~1,120 fragments
+     │  1,120 x 25 ms = ~28 seconds
+     ▼
+  receiver reassembles by index, up to 128 concurrent streams,
+  30 second IDLE timeout (measured from the last fragment, not the first)
+     ▼
+  decode the inner packet, re-verify its signature, validate magic bytes
+  against the declared MIME, then write to the cache directory
+     ▼
+  swept after 7 days by default (Privacy -> Keep media for)
+</pre>
+          <div class="box bad">
+            <p class="box-title">The 45 bytes that broke every attachment</p>
+            <p>
+              The fragment budget is the <strong>whole encoded frame</strong>,
+              not the payload. Spending 469 bytes on payload plus a 16 byte
+              header, an 8 byte senderID and a 64 byte signature produces a 557
+              byte frame, 45 over the 512 byte ATT ceiling. Android writes
+              without response and the stack truncates to MTU minus 3; iOS
+              refuses the write. Either way the far side fails to decode, and
+              <strong>nothing is reported at either end</strong>. Every fragment
+              of every attachment was discarded before any handler saw it, in
+              both directions, while live voice kept working because a burst is
+              capped at 210 bytes and never fragments. This is the single best
+              example in the codebase of why silent failures are the dangerous
+              kind.
+            </p>
+          </div>
+
+          <h2 id="ptt">Holding the microphone</h2>
+          <pre class="ascii">
+  press and hold
+     │  audio session switches to record mode
+     │  native capture starts: AAC-LC, 16 kHz, mono, 16 kbps
+     ▼
+  first encoded frame arrives (NOT on button-down)
+     │  START packet: [burstID 8][seq=0][flags=0x01][codec=0x01]
+     │  a burst is only real once there is audio in it
+     ▼
+  DATA packets, seq 1, 2, 3...
+     │  [burstID][seq][flags=0x00][len u16][AAC frame][len][frame]...
+     │  batched up to 210 bytes so a burst NEVER fragments
+     │  ~15 packets per second, ~2 KiB/s
+     │  signed like a public message
+     ▼
+  relays forward with 8 to 25 ms jitter (not the usual 10 to 220)
+     │  TTL clamped to 5 in a dense mesh, 7 otherwise
+     ▼
+  receiver: VoicePlayer assembles, buffers 350 ms, then plays
+     │  up to 8 concurrent bursts
+     │  a burst may legitimately BEGIN at a DATA packet
+     │    (walked into range mid-sentence, or START was lost)
+     ▼
+  release
+     │  END packet: [totalDataPackets u16][durationMs u32]
+     │  the same audio is also finalised as an .m4a and sent
+     │  as an ordinary voice note, so the reliable copy lands in chat
+</pre>
+          <p>
+            Two rules make this work on a shared radio. Voice frames are never
+            padded, because padding would push a 309 byte burst to 512 and into
+            the fragment scheduler. And voice frames are never gossiped, because
+            replaying stale audio is worthless and would cost airtime that live
+            audio needs.
+          </p>
+
+          <h2 id="geo">Opening a location channel</h2>
+          <pre class="ascii">
+  tap #city
+     │
+     ├─ location permission?  no -> the channel still works over BLE only
+     │                              (named channels degrade, never fail)
+     │
+     ├─ getCoarseLocation() -> lat, lng
+     │     truncate to the channel's precision:
+     │       #block 7 chars (~153 m)      #neighborhood 6 (~1.2 km)
+     │       #city 5 (~4.9 km)            #province 4 (~39 km)
+     │       #region 2 (~1250 km)
+     │     RAW COORDINATES NEVER LEAVE THE DEVICE
+     │
+     ├─ derive a per-cell identity:
+     │     privkey = HMAC-SHA256(seed, utf8(geohash) || u32_be(i))
+     │     so posting in #city and #region are NOT linkable to each other,
+     │     and neither is linkable to your durable Nostr key
+     │
+     ├─ pick relays: the 5 nearest to the CELL CENTRE, not to you
+     │     (two people in opposite corners of one cell must converge
+     │      on the same relay set or they never see each other)
+     │
+     ├─ subscribe: kind 20000 with tag g=&lt;geohash&gt;, 1 hour lookback,
+     │             capped at 200 events on join
+     │
+     ├─ presence: kind 20001 heartbeat every 40 to 80 seconds, jittered
+     │             ONLY at precision 2, 4 or 5. Never 6 or 7.
+     │
+     └─ ALSO broadcast over Bluetooth as packet type 0x51,
+        so someone standing next to you with no internet still sees it
+</pre>
+          <p>
+            Teleport is the same flow with the geohash entered by hand instead
+            of derived from a fix. Nobody in Bluetooth range is in that cell, so
+            it runs over Nostr only, and its messages carry a
+            <code>t=teleport</code> tag so other clients list the sender as
+            teleported rather than nearby.
+          </p>
+
+          <h2 id="pay">Paying somebody</h2>
+          <p>
+            Four entry points (the DM attach menu, a contact sheet, a mesh peer
+            sheet, and the wallet Zap button) all call one function,
+            <code>payPerson</code> in
+            <code>src/services/payment-router.ts</code>, so they cannot disagree
+            about what a payment does.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rung</th><th>Rail</th><th>When</th><th>Final</th><th>Reclaimable</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>Radio</td><td>A direct BLE or WiFi link exists.</td><td>No</td><td>Yes</td></tr>
+                <tr><td>2</td><td>Nutzap</td><td>No radio link, their Nostr key is known, they published a kind 10019, and we hold value at a mint they accept.</td><td><strong>Yes</strong></td><td>No</td></tr>
+                <tr><td>3</td><td>Token in a DM</td><td>Anything else. <code>sendDm</code> then picks Nostr, courier or the outbox.</td><td>No</td><td>Yes</td></tr>
+                <tr><td>4</td><td>Manual</td><td>Nothing carried it. The token string is returned for the user to hand over.</td><td>No</td><td>Yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Radio comes first so that someone standing in front of you does not
+            wait on a mint round trip, and so the in-person case works with no
+            internet on either phone. Rung 2 beats rung 3 when available,
+            because P2PK-locked proofs are the recipient's whether or not they
+            ever come online, whereas a bearer token is only theirs once
+            claimed.
+          </p>
+          <p>Two invariants hold across the whole ladder:</p>
+          <ul>
+            <li>
+              <strong>One commitment per payment.</strong> Proofs are either
+              reserved (rungs 1, 3, 4) or P2PK-locked (rung 2), never both. A
+              rung that fails before committing falls through; a rung that fails
+              after committing retries delivery only.
+            </li>
+            <li>
+              <strong>Finality is reported, never inferred.</strong>
+              <code>PayResult.final</code> is true for rung 2 alone, and every
+              confirmation names the rail that carried the money and says
+              whether Pending will offer it back.
+            </li>
+          </ul>
+
+          <h2 id="verify">Adding and verifying a contact</h2>
+          <p>
+            Two things are tracked separately, and confusing them is a security
+            bug rather than a UX detail.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Question it answers</th><th>Values</th></tr></thead>
+              <tbody>
+                <tr><td><code>source</code></td><td>How did the keys arrive on this device?</td><td><code>qr</code>, <code>link</code>, <code>manual</code></td></tr>
+                <tr><td><code>verification</code></td><td>Has a human confirmed these are the right keys?</td><td>verified or not</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>They are independent. A contact learned from a link can be verified later on a phone call. Two routes exist:</p>
+          <ol>
+            <li>
+              <strong>Scan their QR in person.</strong> The camera witnesses the
+              exchange. This is the only route allowed to re-pin keys already
+              bound to a peer ID, because the physical presence is the evidence.
+              The card carries both public keys, and the peer ID is checked
+              against <code>SHA-256(noisePub)[0:16]</code> before anything is
+              trusted.
+            </li>
+            <li>
+              <strong>Compare a safety number.</strong> Six words derived from
+              both parties' Noise and signing keys, identical on both phones,
+              read to each other over a channel they trust: a call, a radio,
+              another app. This confirms keys already held rather than importing
+              any, so it grants no re-pinning power and needs none. It is what
+              lets somebody you can only reach by voice be verified at all.
+            </li>
+          </ol>
+          <p>
+            An <code>airhop://</code> link records
+            <code>source: "link"</code> and is never marked verified. That
+            distinction was a real security finding: a linked card used to mint
+            a "Verified" contact, which would let anyone who could get you to
+            tap a link impersonate someone.
+          </p>
+          <p>
+            The safety number covers <strong>both</strong> keys deliberately. A
+            peer ID is SHA-256 of the Noise key alone, so reading a peer ID
+            aloud would not catch the attack that matters: a forged card that
+            keeps the victim's real peer ID and Noise key while substituting the
+            attacker's signing key.
+          </p>
+
+          <h2 id="panic">The panic wipe</h2>
+          <p>
+            One tap on the Profile screen opens a confirmation. Three quick taps
+            skip it entirely. The sequence is ordered, time-boxed and resumable.
+          </p>
+          <pre class="ascii">
+  0.  beginPanicWipe()            write the marker FIRST. Everything below is
+                                  a sequence, not a transaction, and the process
+                                  can die anywhere in it.
+  0a. bumpWipeGeneration()        invalidate startup work still in flight
+  0b. stopNutzapWatcher()         it holds this identity's Nostr key in a closure
+      setNutzapRebinder(null)     and forget HOW to rebuild it
+  0c. dropPendingChatPersistence()cancel a throttled write that is armed to put
+                                  a plaintext snapshot of every thread on disk
+
+  1.  wipeAllSecrets()            walk the keychain registry. Every item is
+      timeout 5 s                 attempted even after one fails. Guarded AND
+                                  time-boxed: a Keystore that stalls does not
+                                  reject, it never answers.
+                                  -> keysDestroyed: true | false
+
+  2.  clearAll() on 15 MMKV partitions
+      wipeWalletStorage()         deleteMMKV, not clearAll: the file cannot be
+                                  reopened without its key and step 1 destroyed
+                                  the key
+
+  3.  reset every zustand store in memory, including the transport health flags
+      (torActive false, bridgeActive false, clockSkewed false: a security
+       indicator that over-claims is worse than none)
+
+  4.  dismissAllNotifications()   each carries a sender name and a preview,
+      timeout 2 s                 and they outlive the process
+
+  5.  teardownTorState()          then NativeAirhopTor.wipeTorState():
+      timeout 2 s                 stop Arti and delete its directory. It sits
+                                  under Application Support, not the cache, and
+                                  holds a cached consensus, chosen guard nodes
+                                  and timestamps: evidence that this device used
+                                  Tor and roughly when.
+
+  6.  clearLocationCache()        module state with a 5 minute TTL
+
+  7.  wipeCacheDirectory()        the WHOLE cache, not just airhop_ prefixed
+                                  files. A sent document, a sent video, a small
+                                  image sent unmodified and the saved QR card
+                                  all live under other names or in the pickers'
+                                  own subdirectories, and every one used to
+                                  survive.
+
+  8.  endPanicWipe()              NOT in a finally, and NOT conditional on
+                                  keysDestroyed. A throw on the way here means
+                                  it did not finish, and the marker surviving is
+                                  what makes the next launch pick it up.
+
+  return { keysDestroyed }
+</pre>
+          <div class="box">
+            <p class="box-title">Why the ordering is what it is</p>
+            <p>
+              The notification tray and Tor moved to <em>last</em> on purpose.
+              Both are slow: dismissing the shade is a native round trip, and
+              wiping Arti polls for its process to exit before deleting a
+              directory tree. For a gesture whose threat model is a phone being
+              taken, running those first would spend the seconds that matter on
+              a notification shade while the keys and fifteen message partitions
+              were still on disk.
+            </p>
+            <p>
+              <code>keysDestroyed</code> is the one thing reported to the user,
+              because a locked keychain on a booted-but-unlocked device is
+              exactly the seizure case, and "your keys are gone" must never be
+              claimed falsely. If it comes back false, the profile screen says
+              so, a banner appears, and the next launch retries the delete
+              through <code>sweepOrphanedSecrets</code>.
+            </p>
+          </div>
+          <p>
+            After the wipe the app is left in a first-run state and drops to
+            onboarding. The process is not terminated and the sandbox is not
+            otherwise touched.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">A user says "it says sent but my friend never got it". Walk through the possibilities.</span>
+              <span class="a">Ask what the indicator actually said. "Sent" with no tick means it left the radio but no receipt came back, which is normal for a multi-hop send and is why the outbox keeps retrying. "Carried by a friend" means a courier accepted it, which means delivery waits on that person physically meeting the recipient. "Queued" means nothing carried it. If a tick appeared, a DELIVERED receipt was authenticated, so it did arrive. The one historical bug in this area, a mesh DM reported sent and never queued after the peer had discarded its session, is fixed by always enqueueing.</span>
+            </li>
+            <li>
+              <span class="q">Why does the location channel publish to relays near the cell centre rather than near the user?</span>
+              <span class="a">Because publisher and subscriber must independently arrive at the same relay set. Two people in opposite corners of one city cell would otherwise pick different nearest relays, publish to relays the other never subscribed to, and never see each other despite being in the same channel. Ties in the sort break on URL rather than insertion order for the same reason, since many relays in the directory share coordinates.</span>
+            </li>
+            <li>
+              <span class="q">The panic wipe is interrupted by the phone being switched off. What happens on next boot?</span>
+              <span class="a">The wipe marker is still set, because <code>endPanicWipe</code> was never reached. The next launch reads it and resumes the sequence. Separately, if the keychain refused the delete because the phone had booted but not been unlocked, <code>sweepOrphanedSecrets</code> retries at the next launch, which is past that unlock, where the same delete usually just works. Its marker partition is deliberately excluded from the list of partitions the wipe clears, since clearing it halfway through would destroy the only thing that could finish the job.</span>
+            </li>
+            <li>
+              <span class="q">Why does a photo go out at 25 ms per fragment rather than as fast as possible?</span>
+              <span class="a">Because without the delay the radio drops fragments and the transfer never completes. It is a Bluetooth requirement, not a protocol one: LAN transport needs no such pacing. A channel attachment uses 30 ms instead of 25, because each broadcast fragment requires one radio write per connected peer, so airtime cost grows with room size.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

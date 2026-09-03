@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 28: Transport selection. Bluetooth, WiFi Aware, LAN, Nostr, courier, and how one is picked." />
+    <title>28 Transport selection · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 28 · Media and transports</p>
+          <h1>Transport selection</h1>
+          <p class="kt-lede">
+            Five ways a message can travel, and no user-facing choice between
+            them. This chapter is what each one is for, how one gets picked, and
+            the two that are documented but not shipped.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#matrix">The transport matrix</a></li>
+              <li><a href="#not-ladder">Not a ladder: radios run together</a></li>
+              <li><a href="#ladder">The one place there is a ladder</a></li>
+              <li><a href="#wifi">WiFi Aware</a></li>
+              <li><a href="#mc">MultipeerConnectivity, removed</a></li>
+              <li><a href="#lan">LAN over mDNS</a></li>
+              <li><a href="#reconciler">The reconciler pattern</a></li>
+              <li><a href="#honesty">Reporting where a message actually went</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Your phone has several ways to shout: Bluetooth, which is always
+              available and slow; WiFi straight to another phone, which is fast
+              but only works between two of the same kind of phone; and the
+              internet, when there is one. It does not make you choose. It shouts
+              on everything it has at once, and if nobody hears at all, it asks a
+              passer-by to carry the message.
+            </p>
+          </div>
+
+          <h2 id="matrix">The transport matrix</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Bluetooth LE mesh</th><th>WiFi Aware</th><th>LAN (mDNS)</th><th>Nostr</th><th>Courier</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>Status</strong></td><td><span class="pill ok">shipped</span></td><td><span class="pill ok">Android only</span></td><td><span class="pill ok">shipped</span>, off by default</td><td><span class="pill ok">shipped</span></td><td><span class="pill ok">shipped</span></td></tr>
+                <tr><td><strong>Carries</strong></td><td>Everything</td><td>DMs and files, when a link exists</td><td>Everything Bluetooth carries</td><td>DMs and geohash channel messages</td><td>Sealed text envelopes, 16 KiB each</td></tr>
+                <tr><td><strong>Needs internet</strong></td><td>No</td><td>No</td><td>No, but everyone on one network</td><td>Yes</td><td>No</td></tr>
+                <tr><td><strong>iPhone to Android</strong></td><td><strong>Yes</strong></td><td>No</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><strong>Range</strong></td><td>10 to 30 m indoors, up to 100 m line of sight, extended by each hop</td><td>~30 m</td><td>Wherever the network reaches</td><td>Global</td><td>Wherever the carrier walks</td></tr>
+                <tr><td><strong>Max hops</strong></td><td><strong>7</strong></td><td>1</td><td>1</td><td>1</td><td>1 carrier, unbounded in time</td></tr>
+                <tr><td><strong>Speed</strong></td><td>~18 KiB/s to one peer, ~15 KiB/s to a channel</td><td>~18 KiB/s (shares the paced queue for now)</td><td>Network speed, no radio pacing</td><td>Not used for files</td><td>Not used for files</td></tr>
+                <tr><td><strong>Latency per hop</strong></td><td>10 to 220 ms, randomised</td><td>n/a</td><td>Network round trip</td><td>Relay round trip, more over Tor</td><td>Whenever the carrier meets the recipient</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Text messages are tiny and effectively instant on any transport.
+            Throughput only matters for files. A 1 MiB file, the per-file cap,
+            takes about 56 seconds to one peer over Bluetooth.
+          </p>
+
+          <h2 id="not-ladder">Not a ladder: radios run together</h2>
+          <p>
+            The most common misunderstanding is that Airhop picks the best radio
+            and uses it. It does not.
+          </p>
+          <pre class="ascii">
+  A MESSAGE ADDRESSED TO A PEER IS TTL-BOUNDED AND FLOODED ON
+  EVERY LINK THE DEVICE HAS.
+
+     phone ──┬── BLE link 1 ──▶ neighbour A
+             ├── BLE link 2 ──▶ neighbour B
+             ├── BLE link 3 ──▶ neighbour C
+             └── WiFi link  ──▶ neighbour D
+
+  All four get the same packet at the same time.
+  A packet that ENTERS on one radio is RELAYED OUT on the other.
+  Duplicates are collapsed by the seen set and by the message ID,
+  so it is DISPLAYED once however many radios delivered it.
+</pre>
+          <p>
+            The reason is simple: <strong>no node knows the topology</strong>. The
+            recipient may be several hops away and unreachable on the radio that
+            looks best. Choosing one radio would mean guessing, and a wrong guess
+            is a message that silently does not arrive.
+          </p>
+
+          <h2 id="ladder">The one place there is a ladder</h2>
+          <p>
+            Two ladders exist, and they answer different questions.
+          </p>
+          <h3>1. The direct link shortcut, in the transport layer</h3>
+          <pre class="code">
+  unicast(peerID, packet):
+    links.linkFor(peerID)  ->  write there, done
+         the best link this peer has, in SEND_PREFERENCE
+         order: wifi, then lan, then ble
+    none                   ->  FLOOD it, addressed to them
+</pre>
+          <p>
+            Once a peer is bound to a link, a packet addressed to it goes over
+            that link. WiFi Aware wins when one exists, then LAN, then Bluetooth,
+            because the point of the fast paths is to move an attachment that BLE
+            would have to fragment into hundreds of writes. One call answers it
+            for every transport at once, which is the whole reason the link
+            registry exists: see chapter
+            <a href="14-peers-queues.html">14</a>. This is an
+            <strong>optimisation, not the delivery guarantee</strong>: the moment
+            the peer is more than one hop away it disappears and flooding takes
+            over.
+          </p>
+          <h3>2. The DM ladder, in the router</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rung</th><th>Condition</th><th>Result</th></tr></thead>
+              <tbody>
+                <tr><td>1. Direct</td><td>An active Noise session exists</td><td>Encrypt, then hand to <code>unicast</code>, which picks WiFi or BLE or floods. Returns <code>"sent"</code>.</td></tr>
+                <tr><td>2. Nostr</td><td>A send function was injected and the peer's Nostr pubkey is known</td><td>Fire-and-forget gift wrap. Returns <code>"sent-nostr"</code>.</td></tr>
+                <tr><td>3. Courier</td><td>Anything else</td><td>Returns <code>"needs-courier"</code> so the caller can seal and hand to connected peers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            There is deliberately no separate WiFi tier in the router. It would
+            duplicate what the injected <code>unicast</code> callback already
+            does, meaning the transport is consulted twice. Transport selection
+            belongs in the callback that owns the link maps; the router only
+            decides <em>which tier</em> to use.
+          </p>
+
+          <h2 id="wifi">WiFi Aware</h2>
+          <p>
+            WiFi Aware, also called Neighbour Awareness Networking, is a
+            radio protocol for direct device-to-device WiFi with no router and no
+            internet. It is <strong>Android only</strong> in Airhop.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fact</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td>Throughput</td><td>Up to 250 Mbps on paper</td></tr>
+                <tr><td>Range</td><td>About 30 m</td></tr>
+                <tr><td>Discovery API level</td><td>26</td></tr>
+                <tr><td><strong>Data path API level</strong></td><td><strong>29.</strong> The peer's address is a link-local IPv6 delivered in <code>WifiAwareNetworkInfo</code>, which does not exist before then. Below 29 the transport reports itself unavailable and BLE carries everything.</td></tr>
+                <tr><td>Android 17</td><td>Additionally gates the socket behind <code>ACCESS_LOCAL_NETWORK</code>, declared already.</td></tr>
+                <tr><td>Framing</td><td>Native adds a 4-byte big-endian length prefix to each frame.</td></tr>
+                <tr><td>Events</td><td><code>packetReceived</code>, <code>linkConnected</code>, <code>linkDisconnected</code>, <code>availabilityChanged</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>availabilityChanged</code> is the important one. It carries
+            <strong>both edges</strong>, from the framework's WiFi Aware state
+            broadcast, which fires when the user toggles WiFi, when the OS
+            reclaims the radio for tethering, or when battery saver intervenes.
+            That is what lets the fast path recover without a relaunch.
+          </p>
+          <div class="box warn">
+            <p class="box-title">The honest assessment of the fast path today</p>
+            <p>
+              WiFi currently <strong>shares the same paced fragment queue</strong>
+              as Bluetooth, so it runs at roughly the same 18 KiB/s. The 25 ms
+              pacing is a Bluetooth requirement, not a protocol one, and lifting
+              it for WiFi links is planned rather than done. So the feature
+              currently buys link diversity and a second path, not speed. Given
+              the protocol caps a file at 1 MiB anyway, the ceiling BLE has to
+              clear is seconds rather than minutes, which is part of why lifting
+              it has not been urgent.
+            </p>
+          </div>
+
+          <h2 id="mc">MultipeerConnectivity, removed</h2>
+          <div class="box bad">
+            <p class="box-title">Documentation says this ships. It does not.</p>
+            <p>
+              The README stack table, <code>ARCHITECTURE.md</code> sections 3 and
+              12 (including an <code>AirhopMCModule</code> row in the native
+              modules table), <code>VISION.md</code>, <code>GLOSSARY.md</code>,
+              the landing FAQ and the landing architecture page all describe iOS
+              MultipeerConnectivity as a shipped same-platform fast path. There is
+              no such file in <code>ios/</code> and no reference to it in
+              <code>src/</code> outside comments explaining its removal.
+            </p>
+            <p>
+              <code>PROGRESS.md</code> line 115 is accurate: "The iOS
+              MultipeerConnectivity counterpart was written, never worked on a
+              device, and was removed." This is listed in chapter
+              <a href="49-review.html">49</a> with the other documentation drift.
+            </p>
+          </div>
+          <p>
+            The removal reasoning, recorded in
+            <code>src/bridge/NativeAirhopWiFi.ts</code>, is sound and worth
+            reading:
+          </p>
+          <ul>
+            <li>
+              bitchat-iOS has never had a same-platform fast path, so removing it
+              costs no interoperability.
+            </li>
+            <li>
+              The protocol caps an attachment at 1 MiB (512 KiB for a sent photo),
+              so the ceiling Bluetooth has to clear is seconds rather than
+              minutes.
+            </li>
+            <li>
+              The implementation had two independently fatal defects. Every device
+              advertised the same <code>MCPeerID</code>, so the invite tie-break
+              compared equal strings and no two iPhones ever paired. And the
+              Bonjour declaration was missing its UDP service, so iOS 14's
+              local-network gate refused browsing outright.
+            </li>
+          </ul>
+          <p>
+            The practical consequence: <strong>iPhone to iPhone has no fast
+            path.</strong> Bluetooth carries everything on iOS. Apple shipped a
+            standards-based Wi-Fi Aware framework in iOS 26 which could close the
+            gap and would even be cross-platform, at the cost of making the
+            feature iOS 26+ only.
+          </p>
+
+          <h2 id="lan">LAN over mDNS</h2>
+          <div class="box ok">
+            <p class="box-title">Shipped, and it was the highest-value missing transport</p>
+            <p>
+              This section used to say the LAN transport was documented as a
+              built-in feature and absent from the code. It shipped: mDNS on
+              <code>_airhop-lan-v1._tcp</code> plus TCP links, with native
+              modules on both platforms, a reconciler, a pure dial policy and a
+              simulation fabric. Note the service name differs from the
+              <code>_airhop-mesh._tcp</code> the older documents named, kept
+              apart from WiFi Aware's so neither reads as a typo of the other.
+            </p>
+          </div>
+          <p>
+            The gap it closes: WiFi Aware is a radio protocol rather than a way
+            of using a network, so two phones on the same router cannot reach
+            each other over it, and Apple demands a paired data path Android
+            cannot complete. An iPhone and an Android sharing a WiFi network
+            therefore had no local path at all. That is the situation on a ship,
+            in a hotel, at a conference, or anywhere with WiFi and no route out.
+          </p>
+          <pre class="ascii">
+  mDNS service:  _airhop-lan-v1._tcp
+  transport:     ordinary TCP links carrying the SAME packet frames BLE
+                 carries, so the engine needs no new concept and the wire
+                 format does not move
+
+  MAX_LAN_LINKS  8       a dial ring, not a full mesh: 30 phones fully
+                         connected is 435 sockets and 841 writes per
+                         broadcast instead of 29
+  instance name  random, 16 hex, minted per PUBLISHING SESSION, never
+                 the peer ID: an mDNS record is cleartext and is logged
+  default        OFF. publishing is an attendance list on a venue network
+</pre>
+          <p>
+            It sits <em>beside</em> WiFi Aware rather than replacing it. Aware
+            needs no network at all, which mDNS structurally cannot do; mDNS
+            reaches everyone on a network, which Aware cannot. Neither is a
+            superset.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constraint</th><th>Consequence</th></tr></thead>
+              <tbody>
+                <tr><td>Client isolation</td><td>Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI says "No Airhop devices on this network" rather than spinning or claiming a failure it cannot prove.</td></tr>
+                <tr><td>mDNS filtering</td><td>Common even where ordinary traffic works. A manual join by address covers it.</td></tr>
+                <tr><td>iOS background</td><td>A TCP socket has no equivalent of <code>bluetooth-central</code>, and a suspended app has its listener reclaimed without getting it back on resume. Foreground only, as WiFi Aware already is on iOS.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The 467-byte fragment size stays regardless, because the receiver
+            reassembles by index and the next hop may be Bluetooth. The 25 ms
+            pacing does not: it is a Bluetooth requirement, and the pacer now
+            asks whether anything on the path touches the radio before applying
+            it. Chapter <a href="10-fragmentation.html">10</a>.
+          </p>
+          <p>
+            Chapter <a href="29-lan.html">29</a> is the whole transport: the
+            dial ring, the rotating name, the reconciler, the six states, and
+            why it is the only transport that is off until the user turns it on.
+          </p>
+
+          <h2 id="reconciler">The reconciler pattern</h2>
+          <p>
+            Both radio controllers use the same shape, and it is worth
+            understanding because it is the answer to a whole class of bug.
+          </p>
+          <pre class="ascii">
+  THE ANTI-PATTERN
+
+    NativeAirhopWiFi?.startWiFi().catch(() => {});
+
+  One attempt. No retry. The rejection code, the only thing that says
+  WHICH of eight failures happened, discarded before anything reads it.
+
+  Three failures follow immediately:
+    1. WiFi off at start -> refused, swallowed, never retried. Turning
+       WiFi on later changes nothing for the rest of the process.
+    2. Permission granted a moment after start (the ordinary first-install
+       race) -> the fast path is dead on a device entitled to it.
+    3. WiFi toggled off mid-session -> sockets torn down natively, the
+       module latched into a "started" state it cannot leave, so even an
+       explicit restart resolves instantly having done nothing.
+
+  THE RECONCILER
+
+    a DESIRED state, an OBSERVED outcome, and ONE idempotent pass that
+    closes the gap and schedules a retry when it cannot.
+
+    backoff: 500ms, 1.5s, 4s, 10s, 30s
+    "unsupported" is LATCHED FOREVER. No hardware, or an API level below
+    the data path, is not a state a device leaves.
+</pre>
+          <p>
+            One deliberate difference between the two controllers: the WiFi one
+            publishes <strong>no blocker</strong>. WiFi Aware is an accelerator
+            and BLE carries everything either way, so a user with WiFi off has not
+            lost the mesh, and saying they have would be a false alarm on the one
+            screen that must stay trustworthy. What it does report is
+            <em>which</em> situation it is in, so the Mesh tab can say the fast
+            path is off in the same neutral voice it uses for battery saver.
+            Saying nothing at all was its own small lie: the same file takes
+            seconds with Aware and much longer without it, and with no note the
+            difference reads as the app being slow.
+          </p>
+
+          <h2 id="honesty">Reporting where a message actually went</h2>
+          <p>
+            Because transports run together and some can silently reach nobody,
+            the result type is explicit rather than a boolean.
+          </p>
+          <pre class="code">
+  interface ChannelSendResult {
+    msgId:   string
+    bleLinks: number    // how many radio links it went out on
+    nostr:    boolean   // a relay was LIVE when the publish went out
+    gateway:  boolean   // no relay, but a nearby gateway took it
+  }
+
+  bleLinks === 0 &amp;&amp; !nostr   ->  it reached NOBODY.
+                                 The UI must say so rather than render
+                                 a normal sent bubble.
+</pre>
+          <p>
+            <code>nostr</code> is deliberately "a relay was live", not "this
+            channel can reach Nostr". The latter holds whether or not the phone
+            has internet, so a region message carried by Bluetooth alone would
+            report "sent" having reached nobody.
+          </p>
+          <p>
+            Groups get their own type for the same reason. Groups have no delivery
+            receipts on either client, so <code>GroupSendResult</code> reports
+            whether the message was sealed and how many links it went out on, and
+            that is the only honest signal the UI ever gets. Zero links means it
+            reached nobody, and a group is Bluetooth only, so there is no internet
+            path to fall back on.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does Airhop not pick the best radio and use it?</span>
+              <span class="a">Because no node knows the topology, and the recipient may be several hops away on a path the "best" radio does not cover. A message addressed to a peer is TTL-bounded and flooded on every link the device has, and a packet entering on one radio is relayed out on the other. Duplicates are collapsed by the seen set and the message ID. The only place a radio is chosen is the direct link shortcut, which is an optimisation for a peer already mapped to a specific link.</span>
+            </li>
+            <li>
+              <span class="q">A user asks why sending a photo iPhone to iPhone is not faster than iPhone to Android. What is true?</span>
+              <span class="a">There is no same-platform fast path on iOS. MultipeerConnectivity was written, never worked on a device, and was removed, and several documents still say otherwise. So Bluetooth carries everything on iOS, at about 18 KiB/s. Android to Android does have WiFi Aware, but it currently shares the same paced fragment queue, so it runs at roughly the same speed too. The fast path today buys a second link rather than more throughput.</span>
+            </li>
+            <li>
+              <span class="q">What problem does the LAN transport solve that WiFi Aware cannot?</span>
+              <span class="a">Cross-platform local connectivity on a shared network. WiFi Aware is a radio protocol, not a way of using a network: two phones on the same router cannot reach each other over it, and Apple does not implement it at all. So an iPhone and an Android on one WiFi network have no local path, which is the situation on a ship, in a hotel or at a conference. mDNS plus TCP closes it, is platform-neutral, and carries the whole mesh rather than the subset Nostr can express. It is designed in the architecture document and not implemented.</span>
+            </li>
+            <li>
+              <span class="q">Why does the WiFi controller publish no blocker when the BLE one does?</span>
+              <span class="a">Because WiFi Aware is an accelerator and BLE carries everything either way. A user with WiFi off has not lost the mesh, so reporting a blocker would be a false alarm on the one screen that must stay trustworthy. What it does report is which situation it is in, so the Mesh tab can note that the fast path is off in the same neutral voice it uses for battery saver, because saying nothing at all makes the missing speed read as the app being slow.</span>
+            </li>
+            <li>
+              <span class="q">Why is <code>ChannelSendResult</code> a struct rather than a boolean?</span>
+              <span class="a">Because "sent" is not a single fact. A message can leave the radio on zero links and be published to no relay, which means it reached nobody, and rendering a normal sent bubble for that is a lie. The struct separates how many radio links carried it, whether a relay was live at publish time, and whether a nearby gateway took it instead. The <code>nostr</code> field specifically means a relay was live, not that the channel is capable of reaching Nostr, because the second is true even with no connection.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

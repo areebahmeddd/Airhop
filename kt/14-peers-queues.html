@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 14: Peers, sessions and queues. The registry, reachability versus identity, the outbox, every store." />
+    <title>14 Peers, sessions and queues · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 14 · The protocol</p>
+          <h1>Peers, sessions and queues</h1>
+          <p class="kt-lede">
+            Between the wire format and the screens sits a layer of bookkeeping:
+            who is out there, what we know about them, whether we can reach them,
+            and what we still owe them. Get any of it wrong and messages vanish
+            while the interface says everything is fine.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#two-questions">Identity is not reachability</a></li>
+              <li><a href="#registry">The peer registry</a></li>
+              <li><a href="#links">The link registry</a></li>
+              <li><a href="#sessions">Session lifecycle</a></li>
+              <li><a href="#outbox">The outbox</a></li>
+              <li><a href="#queues">Every queue in the app</a></li>
+              <li><a href="#stores">Every store, and what it holds</a></li>
+              <li><a href="#peerstore">The registry against the radar</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Your phone keeps two lists. One is an address book: people it has
+              met, and the fingerprint that proves each one is really them. That
+              list never forgets. The other is a list of who it can hear right
+              now, and that one is constantly changing as people walk around. It
+              also keeps a small pile of letters it has not managed to deliver
+              yet, and every time somebody comes back into earshot it checks the
+              pile for anything addressed to them.
+            </p>
+          </div>
+
+          <h2 id="two-questions">Identity is not reachability</h2>
+          <div class="box ok">
+            <p class="box-title">The single most important distinction in this chapter</p>
+            <p>
+              <strong>"Do I know who this is?"</strong> and
+              <strong>"Can I reach them right now?"</strong> are different
+              questions with different lifetimes, and conflating them was a real
+              bug more than once.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Identity</th><th>Reachability</th></tr></thead>
+              <tbody>
+                <tr><td>The question</td><td>Which keys belong to this peer ID?</td><td>Is there a path to them now?</td></tr>
+                <tr><td>Expiry</td><td><strong>None.</strong> Pinning is permanent while the peer is remembered.</td><td>45 to 60 seconds since the last announce.</td></tr>
+                <tr><td>Established by</td><td>The first announce, an authenticated <code>0x21</code>, or an in-person QR scan.</td><td>A recent announce, a held link, or a packet that decrypted.</td></tr>
+                <tr><td>Accessor</td><td><code>pinnedSigningKey()</code>, <code>sessionFor()</code></td><td><code>get()</code>, <code>isReachable()</code>, <code>reachablePeers()</code></td></tr>
+                <tr><td>Used for</td><td>Verifying a <code>LEAVE</code>, decrypting an inbound packet, answering a receipt.</td><td>Deciding how to send something new.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">Two bugs from getting this wrong</p>
+            <p>
+              <strong>Genuine departures were refused.</strong> A
+              <code>LEAVE</code> arrives precisely when a peer has stopped
+              announcing, so resolving its signing key through the reachability
+              window rejected the real ones. Fixed by
+              <code>pinnedSigningKey()</code>, which ignores the TTL entirely.
+            </p>
+            <p>
+              <strong>Inbound DMs were dropped.</strong> Decryption resolved the
+              Noise session through <code>get()</code>, so a message from a direct
+              peer whose announce had aged out was discarded, while the sender's
+              <code>sendDm</code> reported "sent" and the outbox queued no retry.
+              Fixed by <code>sessionFor()</code>: the packet <em>having
+              arrived</em> is the presence that the window only estimates.
+            </p>
+          </div>
+
+          <h2 id="registry">The peer registry</h2>
+          <p class="kt-note">
+            Everything in this chapter is owned by one object. What that object
+            is, how it is built and torn down, and how a packet moves through
+            it are <a href="15-mesh-service.html">15</a>.
+          </p>
+          <p>
+            <code>PeerRegistry</code> in <code>core/router/message-router.ts</code>
+            is the protocol layer's model of everyone it knows about.
+          </p>
+          <pre class="code">
+  interface PeerEntry {
+    peerID:      string          16 hex chars
+    noisePubKey: Uint8Array      32 bytes X25519, for sealing and courier tags
+    signingPubKey: Uint8Array    32 bytes Ed25519, for verifying their packets
+    nickname:    string          self-asserted, decoration only
+    lastSeenMs:  number          refreshed by ANNOUNCE and by noteHeard
+    isDirect:    boolean         we hold an actual link to them
+    nostrPubkey?: string         learned from announce TLV 0x07
+    capabilities?: number        ANNOUNCE bits. A HINT. Never authoritative.
+    authenticatedCapabilities?: number   proven inside a Noise session (0x21)
+    signingKeyAuthenticated?: boolean    whether the key was PROVEN or assumed
+    bridgeGeohash?: string       rendezvous cell a bridge peer advertises
+    session?:    NoiseSession    the live encrypted session, if any
+  }
+</pre>
+          <h3>The three write paths, in order of authority</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Path</th><th>Trust</th><th>May create a pin</th><th>May replace a pin</th></tr></thead>
+              <tbody>
+                <tr><td><code>update()</code> from an ANNOUNCE</td><td>Self-signed, so self-consistent only</td><td>Yes, if none exists</td><td><strong>Never</strong></td></tr>
+                <tr><td><code>setAuthenticatedState()</code> from payload <code>0x21</code></td><td>Proven inside a completed Noise session</td><td>Yes</td><td><strong>Yes.</strong> Proven beats assumed.</td></tr>
+                <tr><td><code>update({ trusted: true })</code> from a QR scan</td><td>A human was physically present</td><td>Yes</td><td><strong>Yes</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An announce that conflicts with a pinned key is rejected
+            <strong>entirely</strong>, not merged. The nickname and capability
+            bits in a conflicting announce come from the same unverified source,
+            so accepting any of it would still let an attacker rewrite how that
+            peer is presented. And <code>update()</code> can never lower
+            <code>authenticatedCapabilities</code> or clear
+            <code>signingKeyAuthenticated</code>, which is what stops a later
+            announce quietly reducing a proof back to a claim.
+          </p>
+          <h3>The cap, and why direct peers survive it</h3>
+          <pre class="ascii">
+  MAX_TRACKED_PEERS = 200
+
+  enforceCap():
+     take every entry that is NOT direct
+     sort oldest first
+     delete until back under the cap
+
+  A DIRECT PEER IS NEVER EVICTED.
+</pre>
+          <p>
+            The reasoning is worth stating precisely. Registry entries come from
+            announces, which are unauthenticated input: anyone in radio range can
+            mint unlimited internally consistent identities with real key pairs,
+            correctly derived peer IDs and valid self-signatures. Nothing about any
+            individual one is detectably wrong, which is what makes a Sybil flood a
+            <em>resource</em> problem rather than a signature problem.
+          </p>
+          <p>
+            Reads were always TTL-bounded, so a flood never made a fake peer look
+            reachable. But the underlying map grew without limit and was never
+            swept, so the memory was held for the life of the process and every
+            <code>reachablePeers()</code> scan walked all of it. The cap fixes
+            that, and protecting direct peers is what makes the cap meaningful: a
+            direct peer holds a physical link, which no amount of announcing can
+            fake, so they are simultaneously the entries most worth keeping and
+            the ones an attacker most wants pushed out.
+          </p>
+
+          <h2 id="links">The link registry</h2>
+          <p>
+            A <strong>link</strong> is a live radio connection with exactly one
+            peer on the far end. That last part is the whole security property.
+          </p>
+          <pre class="ascii">
+  ONE REGISTRY, EVERY TRANSPORT      core/mesh/links/link-registry.ts
+
+  kindByLink     linkID -> ble | wifi | lan       what opened it
+  peerByLink     linkID -> peerID                 who is on it
+  linksByPeer    peerID -> [linkID, ...]          how to reach them
+
+  peerByLink is trustworthy BY CONSTRUCTION. A senderID header is
+  plaintext and forgeable; the far end of a socket we hold is not.
+
+  linksByPeer is a LIST, not one slot per transport. Bluetooth is
+  dual-role, so two phones that meet each dial the other and hold
+  TWO BLE links to the same peer. One slot cannot represent that,
+  and closing either link would unbind the other.
+
+  TRANSPORT_KINDS   ble, wifi, lan     what order do we LIST things
+  SEND_PREFERENCE   wifi, lan, ble     which link do we USE
+
+  Two different questions, so two different orders, and both are
+  load-bearing. See the note below each.
+</pre>
+
+          <h3>Peer registry against link registry</h3>
+          <p>
+            Two objects with similar names and completely different jobs. Every
+            question in this chapter belongs to exactly one of them, and knowing
+            which is most of knowing the layer.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th><code>PeerRegistry</code></th><th><code>LinkRegistry</code></th></tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>Answers</strong></td><td>Who is this, and what do I know about them</td><td>How do I physically reach them, right now</td></tr>
+                <tr><td><strong>Holds</strong></td><td>Public keys, nickname, pinned signing key, capabilities, Nostr key, session state</td><td>Sockets, and the peer bound to each</td></tr>
+                <tr><td><strong>Filled by</strong></td><td>ANNOUNCE packets, from any distance</td><td>Link-up events from the native modules</td></tr>
+                <tr><td><strong>Lives</strong></td><td>In <code>core/router/message-router.ts</code></td><td>In <code>core/mesh/links/link-registry.ts</code></td></tr>
+                <tr><td><strong>Transports</strong></td><td>All four, including Nostr and courier, which hold no sockets</td><td>Only the three that carry links: BLE, WiFi Aware, LAN</td></tr>
+                <tr><td><strong>Forgets</strong></td><td>On a 45 to 60 second reachability TTL, and at a 200-peer cap</td><td>The instant a socket closes</td></tr>
+                <tr><td><strong>Can be faked?</strong></td><td>Partly. An announce is a packet, and anyone can emit one.</td><td>No. A socket is physical.</td></tr>
+                <tr><td><strong>Decides anything?</strong></td><td>Trust: TOFU pinning, re-pin rules</td><td>Nothing. It holds links and answers questions.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The rule the link registry is built around</p>
+            <p>
+              <strong>One question gets one answer covering every transport,
+              never an answer per transport for the caller to combine.</strong>
+              Before it, the mesh service held four maps, two per transport, and
+              every caller that wanted "can I reach this peer" had to ask twice
+              and merge. Adding LAN would have made it six maps and three
+              questions. Adding a transport is now a member of
+              <code>TRANSPORT_KINDS</code> and a writer for it.
+            </p>
+            <p>
+              It also decides nothing. Which packet goes where, what makes a peer
+              count as direct, and what a refused write means all stay in
+              <code>mesh-service.ts</code>. The writers are injected and nothing
+              in the file imports native code, so it runs in CI without a radio.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Query</th><th>Answers</th></tr></thead>
+              <tbody>
+                <tr><td><code>peerOf(linkID)</code></td><td>Who is on this socket. The trustworthy way to attribute an inbound packet.</td></tr>
+                <tr><td><code>hasPeer(peerID)</code></td><td>Do we hold a link to them. The strict test: a flood is a hope, a link is a route.</td></tr>
+                <tr><td><code>linkFor(peerID, kind?)</code></td><td>The best single link, in <code>SEND_PREFERENCE</code> order. This is the whole of the courier's transport decision.</td></tr>
+                <tr><td><code>linksFor(peerID)</code></td><td>All of them, for callers that cannot use the first: a relay must not send back down the link a packet arrived on.</td></tr>
+                <tr><td><code>directPeers(kind?)</code></td><td>Deduplicated, since one peer on two transports is still one peer. Order matters: couriers are the first few of these.</td></tr>
+                <tr><td><code>degree()</code></td><td>How crowded the mesh looks. <strong>Bluetooth peers only.</strong> See below.</td></tr>
+                <tr><td><code>size(kind?)</code></td><td>Open sockets. Distinct from <code>degree</code>: this is what the announce reports and the diagnostics screen shows.</td></tr>
+                <tr><td><code>send</code> / <code>broadcast</code> / <code>relay</code></td><td>The only place bytes are written to a link, which is what makes <code>bytesSent</code> accurate by construction.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">degree() counts Bluetooth PEERS, and both halves were bugs</p>
+            <p>
+              The flood router scales relay jitter and the time-critical TTL cap
+              by how crowded the mesh looks. That count used to be
+              <em>links, across every transport</em>, and both parts were wrong.
+            </p>
+            <p>
+              <strong>Peers, not links,</strong> because Bluetooth is dual-role:
+              two phones that meet each dial the other, so one neighbour
+              contributed two links and every room read as twice as crowded as it
+              was. The dense threshold was crossed at three real peers where
+              bitchat crosses at six, clamping voice and fragment range to five
+              hops earlier than it should.
+            </p>
+            <p>
+              <strong>Bluetooth only,</strong> because the delay exists for radio
+              contention: every phone in earshot hears a packet at the same
+              instant, and rebroadcasting together drowns the room out. A socket
+              on LAN or WiFi Aware does not compete for that airtime, so counting
+              it slows the radio down for no reason.
+            </p>
+            <p>
+              Both halves now match bitchat's
+              <code>peerRegistry.connectedCount</code>. The fix is invisible to
+              the simulator, which models one link per pair; on hardware the
+              degree roughly halves.
+            </p>
+          </div>
+          <div class="box ok">
+            <p class="box-title">Why the two orders are both load-bearing</p>
+            <p>
+              <code>SEND_PREFERENCE</code> is <code>wifi, lan, ble</code>, fastest
+              first. WiFi Aware leads because it is a direct radio link with no
+              access point in the path; LAN goes phone to router to phone, still
+              far past Bluetooth's roughly 18 KiB/s; Bluetooth is the floor and
+              the fallback.
+            </p>
+            <p>
+              <code>TRANSPORT_KINDS</code> is <code>ble, wifi, lan</code>, and it
+              is the enumeration order, which is observable. The announce carries
+              only the first ten <code>directPeers()</code> as TLV 0x04, and that
+              list is the mesh graph other clients draw. A phone on a busy network
+              holds more LAN peers than Bluetooth ones, so LAN goes last
+              deliberately: letting it crowd out the Bluetooth neighbours would
+              hand bitchat a graph full of edges it cannot use.
+            </p>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The Sybil vector that defeated every other cap</p>
+            <p>
+              A peer counted as directly connected whenever
+              <code>packet.ttl === 7</code>, on the reasoning that relays
+              decrement, so a full TTL means it came straight from its author.
+              True, and <strong>TTL is a plaintext header field an attacker sets
+              freely.</strong>
+            </p>
+            <p>
+              So one hostile radio, over one real link, could announce hundreds of
+              invented identities that all looked directly connected. Each
+              overwrote the link's peer binding (today <code>peerByLink</code> in the link registry), breaking RSSI
+              attribution and disconnect handling for the genuine peer on it. And
+              because direct peers are protected from eviction, every one of them
+              was immune to trimming. Five hundred invented peers survived a flood
+              the caps existed to bound.
+            </p>
+            <p>
+              The fix pairs the TTL heuristic with a physical fact:
+              <strong>a link binds to the first peer that announces directly on
+              it</strong>, and a later claim from a different peer ID on that same
+              link is downgraded to relayed rather than dropped. Downgrading is the
+              gentler equivalent of bitchat's outright
+              <code>directSenderMismatch</code> rejection: the announce is still
+              useful topology, it simply does not earn direct standing. Scenario
+              C04.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Event</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td><code>linkConnected</code></td><td>A link exists but nobody is bound to it yet. The peer is unknown until an announce arrives.</td></tr>
+                <tr><td>Direct announce on that link</td><td>Bind the link to the peer. <code>markDirect()</code> in the registry, <code>setDirect(true)</code> in the radar.</td></tr>
+                <tr><td>Relayed announce</td><td>Update the entry, but pass <code>isDirect: undefined</code> so an existing direct standing is <strong>preserved rather than demoted</strong>. The flood router delivers whichever copy arrives first, so a relayed copy easily precedes the direct one.</td></tr>
+                <tr><td><code>linkDisconnected</code></td><td><code>markIndirect()</code>. The peer may still be reachable through the mesh until its announce expires.</td></tr>
+                <tr><td>A refused write</td><td><strong>Nothing.</strong> A refusal is not a disconnect: the stack says the same thing when its queue is simply full. Teardown belongs to the disconnect event alone.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Two caps bound the link layer. Six concurrent central links on both
+            platforms, because Android controllers support roughly seven GATT
+            client connections and refuse the rest with an opaque status 133. And
+            a 15 second reaper that reclaims a duplicate link, which happens
+            because iOS rotates its Bluetooth address and the same device
+            reappears as a new advertiser.
+          </p>
+
+          <h2 id="sessions">Session lifecycle</h2>
+          <pre class="ascii">
+  NO SESSION
+      │  sendDm to this peer
+      ▼
+  HANDSHAKING          NoiseHandshake, initiator or responder
+      │                pendingText queued, carrying its message id so the
+      │                eventual send keeps the id the UI already shows
+      │
+      ├─ crossed initiation?   tie-break on the LOWER peer ID.
+      │                        the loser resets to responder and CARRIES
+      │                        its queued text across the flip
+      │
+      ├─ 30 seconds elapsed?   treated as dead, dropped lazily on the next
+      │                        send, so a lost msg2 or msg3 never wedges
+      │                        future DMs to that peer
+      ▼
+  msg3 written / read
+      │
+      ├─ sessionBindsTo()?     SHA-256(remoteStaticPub)[0:16] must equal the
+      │                        claimed peer ID, or the session is DISCARDED
+      ▼
+  ESTABLISHED          two ChaCha20 keys, a 1024-nonce replay window,
+      │                and an exporterSecret seeding the Double Ratchet
+      │
+      ├─ link drops            KEEP the session. Resuming is far cheaper
+      │                        than a fresh handshake, and radios drop
+      │                        links constantly.
+      │
+      ├─ verified LEAVE        RETIRE the session. A leave is a deliberate
+      │                        shutdown, so the peer has torn theirs down;
+      │                        keeping ours would seal the next DM under a
+      │                        session that no longer exists on the far
+      │                        side, where it is silently discarded but
+      │                        reported as sent.
+      │
+      └─ app restart           GONE. Sessions are memory-only.
+</pre>
+          <div class="box warn">
+            <p class="box-title">The one-message asymmetry</p>
+            <p>
+              The initiator completes on msg2, one message before the responder
+              completes on msg3. Anything sent in that window is decrypted by
+              nobody: the initiator has a session and the responder does not yet.
+              Airhop lost first-contact DMs and group invites to exactly this. The
+              fix is that <code>tryInitDR</code> and the queued-invite flush run
+              <em>after</em> msg3 goes out rather than at split.
+            </p>
+            <p>
+              A second asymmetry follows from the ratchet itself: a
+              receiver-initialised state has no sending chain until it receives
+              something, so the side that answered the handshake cannot speak
+              first. That is the algorithm working correctly, and it is why there
+              is an explicit <code>canEncrypt()</code> predicate and a fallback to
+              plain Noise transport, rather than an exception on the send path.
+            </p>
+          </div>
+          <p>
+            Sessions are deliberately <strong>not persisted</strong>. The cost is
+            a re-handshake after every restart. The benefit is that a seized
+            device holds no live session keys on disk, and that a peer which
+            restarted and discarded its own session cannot leave the other side
+            sealing messages nobody can open. That second case is exactly why
+            <em>every</em> mesh send is enqueued in the outbox regardless of
+            apparent success.
+          </p>
+
+          <h2 id="outbox">The outbox</h2>
+          <p>
+            The queue behind "queued for delivery". Without it, the promise that a
+            message will arrive when the recipient returns is a lie and every
+            out-of-range DM is lost.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constant</th><th>Value</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td>TTL</td><td><strong>7 days</strong></td><td>bitchat uses 24 hours. This is Airhop's <em>one</em> deliberate divergence, and it is safe because nothing about the outbox goes on the wire. Courier envelopes held by third parties still expire at 24 hours to match the wire rule, so the sender's own queue is the only thing that can still deliver on a later encounter. A week covers people who do not meet daily, which is the case this app exists for.</td></tr>
+                <tr><td>Cap</td><td>100 <strong>per recipient</strong></td><td>Matching bitchat's per-peer cap. A single global cap evicted the oldest entry whatever it was, so one chatty unreachable peer silently deleted somebody else's queued mail, and the sender was never told because eviction is invisible. Per-recipient makes the cost of an unreachable conversation land on that conversation.</td></tr>
+                <tr><td>Attempts</td><td>8</td><td>bitchat's number, and now bitchat's <em>meaning</em>: an attempt is charged only when something actually went out over a route that could have acknowledged it. The courier branch, which sends nothing itself, does not charge, and neither does the expiry timer.</td></tr>
+                <tr><td>Retry floor</td><td>10 seconds</td><td>Retries are event-driven and events arrive in bursts. A single foreground round trip raises several.</td></tr>
+                <tr><td>Sweep</td><td>45 seconds</td><td>A safety net behind the event-driven flush, not the primary path, so it stays cheap and never spams relays.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre class="ascii">
+  WHAT TRIGGERS A FLUSH
+
+     an ANNOUNCE from that peer          they walked back into range
+     a Noise session completing          we can now encrypt to them
+     a link coming up                    a direct path exists
+     the 45 second sweep                 backstop
+     internet returning                  retryQueuedOverInternet()
+
+  WHAT CLEARS AN ENTRY
+
+     a DELIVERED receipt over the mesh
+     a DELIVERED receipt over Nostr
+     a READ receipt
+     ... on ANY transport. All three paths resolve the same entry.
+
+  WHAT HAPPENS AT THE END
+
+     expired or out of attempts -> reportDroppedMail(), surfaced
+     VISIBLY. A message that failed must never fail silently.
+</pre>
+          <div class="box bad">
+            <p class="box-title">The bug that made "always enqueue" the rule</p>
+            <p>
+              A DM over an established session with a direct link returned "sent"
+              and was never queued. If the peer had restarted and discarded its
+              session, they received nothing while the sender saw a tick. Now
+              every mesh send is enqueued, matching bitchat's rule that nothing
+              counts as delivered without an authenticated acknowledgement. The
+              cost is a queue entry that lives for a few seconds, because a receipt
+              arrives well inside the flush interval.
+            </p>
+          </div>
+          <p>
+            One further re-keying detail: when an announce reveals that a Nostr
+            pubkey belongs to a known peer ID, anything queued against the
+            <code>nostr_&lt;pubkey&gt;</code> identifier is
+            <strong>resolved and re-enqueued</strong> under the peer ID, so it now
+            takes the cheaper offline-capable mesh route. The chat store merges the
+            two threads at the same moment, so the user sees one conversation
+            instead of the same person twice.
+          </p>
+
+          <h2 id="queues">Every queue in the app</h2>
+          <p>
+            Six distinct queues exist, and they are frequently confused with each
+            other.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Queue</th><th>Holds</th><th>Bound</th><th>Persisted</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Outbox</strong></td><td>Our own undelivered DMs, in <strong>plaintext</strong></td><td>100 per peer, 8 attempts, 7 days</td><td>Yes. Wiped on panic.</td></tr>
+                <tr><td><strong>Courier bag</strong></td><td><strong>Other people's</strong> sealed envelopes</td><td>40 total, 20 verified, 2 to 5 per depositor, 24 hours</td><td>Yes. Wiped on panic.</td></tr>
+                <tr><td><strong>Paced fragment queue</strong></td><td>Attachment fragments awaiting the radio</td><td>25 ms directed, 30 ms broadcast, 250 refusals</td><td>No. In flight only.</td></tr>
+                <tr><td><strong>Pending handshake text</strong></td><td>DMs typed while a handshake completes</td><td>Per handshake, 30 second timeout</td><td>No</td></tr>
+                <tr><td><strong>Group invite outbox</strong></td><td>Signed group states owed to unreachable members</td><td>Expiring</td><td>Yes. Wiped on panic.</td></tr>
+                <tr><td><strong>Gateway uplink queue</strong></td><td>Others' events awaiting relay connectivity</td><td>20 total, 5 per depositor</td><td>No</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Outbox against courier, the distinction that matters</p>
+            <p>
+              The <strong>outbox is ours</strong>: our messages, in plaintext, on
+              our device, retried by us when a route appears. Nothing about it
+              goes on the wire, which is why its TTL can diverge from bitchat's
+              freely.
+            </p>
+            <p>
+              The <strong>courier bag is theirs</strong>: somebody else's
+              ciphertext, sealed to a key this device does not hold, carried on
+              their behalf. Its every constant is fixed by the wire protocol,
+              because a carrier applies its own limits to envelopes it did not
+              write. Anything Airhop exceeds is dropped by the other side, and
+              anything it fails to enforce is a slot someone else can take.
+            </p>
+          </div>
+
+          <h2 id="stores">Every store, and what it holds</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Store</th><th>Holds</th><th>Persisted</th><th>Wiped on panic</th></tr></thead>
+              <tbody>
+                <tr><td><code>chat-store</code></td><td>Every channel and message. The largest.</td><td>Yes, id <code>airhop-chat</code></td><td>Yes</td></tr>
+                <tr><td><code>wallet-store</code></td><td>Cashu proofs, mints, history</td><td>Yes, <strong>AES-256 encrypted</strong></td><td>Yes, by deleting the file</td></tr>
+                <tr><td><code>contacts-store</code></td><td>Saved contacts, their keys, verification state, local nicknames</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>outbox-store</code></td><td>Undelivered DMs, plaintext</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>group-store</code>, <code>group-invite-outbox-store</code></td><td>Rosters, epoch keys, owed states</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>board-store</code></td><td>Signed bulletin posts and tombstones</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>blocked-store</code></td><td>Blocked peer IDs and Nostr pubkeys</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>activity-store</code></td><td>The notification feed, with previews</td><td>Yes, id <code>activity</code></td><td>Yes</td></tr>
+                <tr><td><code>settings-store</code></td><td>Every toggle</td><td>Yes</td><td>Yes, reset to defaults</td></tr>
+                <tr><td><code>transfer-store</code></td><td>In-flight attachment progress</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>geohash-bookmarks-store</code></td><td>Saved cells</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>place-names-store</code></td><td>Reverse-geocoded cell names, keyed by language</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>location-notes-store</code></td><td>Board notice activity per cell</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>channel-members-store</code></td><td>Who has been seen in a channel</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><code>permission-primer-store</code></td><td>Whether the primer has been shown</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td><strong><code>peer-store</code></strong></td><td>The Mesh radar</td><td><strong>No.</strong> In memory only.</td><td>Reset, nothing to wipe</td></tr>
+                <tr><td><strong><code>mesh-state-store</code></strong></td><td>Live transport health, banners, Tor phase</td><td><strong>No</strong></td><td>Reset</td></tr>
+                <tr><td><code>alert-store</code></td><td>Modal state</td><td>No</td><td>Reset</td></tr>
+                <tr><td colspan="4"><em>Not zustand, but persisted the same way:</em> <code>courier-store</code> and <code>prekey-store</code>, both owned by <code>core/mesh/</code>, both in the wipe list.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The two unpersisted stores are unpersisted on purpose. The radar is
+            rebuilt from live discovery within seconds, so persisting it would
+            only mean showing peers who are not there. Transport health is a
+            statement about right now, and a stale one is worse than none: a
+            persisted <code>torActive</code> would promise onion routing that is
+            not running.
+          </p>
+
+          <h2 id="peerstore">The registry against the radar</h2>
+          <p>
+            Two peer lists exist, and knowing which is which prevents a lot of
+            confusion.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th><code>PeerRegistry</code> (core)</th><th><code>peer-store</code> (UI)</th></tr></thead>
+              <tbody>
+                <tr><td>Layer</td><td><code>core/router/</code></td><td><code>store/</code></td></tr>
+                <tr><td>Purpose</td><td><strong>Transport decisions.</strong> Can I reach them, with what keys, over what session?</td><td><strong>Drawing the Mesh tab.</strong></td></tr>
+                <tr><td>Holds</td><td>Both public keys, capabilities, the live session</td><td>Nickname, RSSI, direct flag, infrastructure flag</td></tr>
+                <tr><td>Cap</td><td>200, direct never evicted</td><td>200, direct never evicted</td></tr>
+                <tr><td>Blocked peers</td><td><strong>Present.</strong> Still needed for relay topology, so blocking someone does not degrade the mesh for third parties routing through us.</td><td><strong>Absent.</strong> They never appear in the list or the radar.</td></tr>
+                <tr><td>Sees a relay node</td><td>As an ordinary peer</td><td>As <strong>equipment</strong>: an aerial rather than an avatar, with Message and Send ecash removed</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Two rules the radar enforces that look like UI details and are not</p>
+            <p>
+              <strong>RSSI is not liveness.</strong>
+              <code>updateRssi</code> is a no-op for an unknown peer, and a signal
+              reading never refreshes <code>lastSeenMs</code>. A locally polled
+              RSSI says a radio is nearby, not that a peer is present and running
+              the app. Only a packet that arrived proves that, which is why
+              <code>noteHeard()</code> exists separately and is called only when a
+              packet successfully <em>decrypts</em>: that cannot be replayed or
+              forged, so it is stronger evidence than the announce it stands in
+              for.
+            </p>
+            <p>
+              <strong>Direct standing follows the link, not the announce.</strong>
+              <code>setDirect</code> is driven by the link lifecycle. A link is
+              physical: it cannot be claimed, only held.
+            </p>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why are there two different accessors for a peer's signing key?</span>
+              <span class="a">Because identity and reachability are different questions with different lifetimes. <code>get()</code> applies a 45 to 60 second TTL and answers "can I route to them". <code>pinnedSigningKey()</code> ignores the TTL and answers "do I know who they are". A <code>LEAVE</code> arrives precisely when a peer has stopped announcing, so verifying it through the reachability window would refuse the genuine ones. The same split governs inbound decryption: <code>sessionFor()</code> ignores the TTL because the packet having arrived is the presence the window only estimates.</span>
+            </li>
+            <li>
+              <span class="q">Why is a direct peer never evicted, and how is "direct" established?</span>
+              <span class="a">Because a direct peer holds an actual GATT link, which is physical and cannot be claimed by announcing, so it is the one entry worth protecting when the list is trimmed. It is established by the link lifecycle rather than by packet contents: a link binds to the first peer that announces directly on it, and a later claim from a different peer ID on that link is downgraded to relayed. Inferring it from <code>ttl === 7</code> alone was a real Sybil vector, because TTL is a plaintext field an attacker sets freely, and five hundred invented peers survived a flood the caps existed to bound.</span>
+            </li>
+            <li>
+              <span class="q">Why does an ordinary link drop keep the Noise session, but a verified LEAVE retire it?</span>
+              <span class="a">A link drop is meaningless: radios drop links constantly, and resuming a session is far cheaper than a fresh three-message handshake. A verified LEAVE is a deliberate shutdown, so the peer has torn their own session down; keeping ours would mean sealing the next DM under a session that no longer exists on the far side, where it is silently discarded while being reported as sent. Only an explicit, signature-verified leave does this.</span>
+            </li>
+            <li>
+              <span class="q">Why is every mesh send enqueued even when it appears to succeed?</span>
+              <span class="a">Because "the write left the radio" is not delivery. A DM over an established session with a direct link used to return sent and never queue, so a peer that had restarted and discarded its session received nothing while the sender saw a tick. Nothing counts as delivered without an authenticated acknowledgement, which is bitchat's rule too. All three receipt paths clear the entry, and a receipt arrives well inside the flush interval, so the cost is a queue entry lasting a few seconds.</span>
+            </li>
+            <li>
+              <span class="q">Distinguish the outbox from the courier bag.</span>
+              <span class="a">The outbox holds our own messages, in plaintext, on our own device, retried by us when a route appears; nothing about it goes on the wire, which is why its TTL can be seven days where bitchat uses one. The courier bag holds other people's ciphertext, sealed to keys this device does not hold, carried on their behalf; every one of its constants is fixed by the wire protocol, because a carrier applies its own limits to envelopes it did not write, so anything we exceed is dropped by the other side and anything we fail to enforce is a slot someone else can take.</span>
+            </li>
+            <li>
+              <span class="q">Why is the outbox cap per recipient rather than global?</span>
+              <span class="a">Because a global cap evicts the oldest entry whatever it is, so one chatty unreachable peer silently deletes queued mail for a different conversation, and the sender is never told because eviction is invisible. A per-recipient cap makes the cost of an unreachable conversation land on that conversation. It also matches bitchat's <code>maxMessagesPerPeer</code>.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

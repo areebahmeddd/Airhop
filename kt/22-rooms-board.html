@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 22: Rooms and the board. Four kinds of room, and signed notices that outlive the conversation." />
+    <title>22 Rooms and the board · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 22 · Rooms and places</p>
+          <h1>Rooms and the board</h1>
+          <p class="kt-lede">
+            Four different kinds of many-person conversation exist in this app,
+            each with its own packet type, its own encryption, and its own answer
+            to "who can read this". Plus a fifth thing that is not a conversation
+            at all: signed notices that outlive it.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#four">The four rooms, side by side</a></li>
+              <li><a href="#public">The public mesh room</a></li>
+              <li><a href="#private">Private channels</a></li>
+              <li><a href="#groups">Private groups</a></li>
+              <li><a href="#location">Location channels</a></li>
+              <li><a href="#choosing">Choosing between them</a></li>
+              <li><a href="#board">The bulletin board</a></li>
+              <li><a href="#moderation">Moderation, such as it is</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              There are four ways to talk to more than one person. Shouting in the
+              street, where anyone nearby hears. A club with a secret password
+              written on the invitation, where anyone who gets the invitation can
+              join. A small named list of friends the organiser wrote down, where
+              nobody can sneak in. And a room named after a place, so everyone in
+              that part of town is in it. There is also a noticeboard, which is not
+              talking at all: you pin something up, it stays for a few days after
+              you have gone, and everyone can see who wrote it.
+            </p>
+          </div>
+
+          <h2 id="four">The four rooms, side by side</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Public mesh</th><th>Private channel</th><th>Private group</th><th>Location channel</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>Name</strong></td><td><code>#bluetooth</code></td><td><code>#anything</code></td><td><code>group:&lt;id&gt;</code></td><td><code>#city</code>, <code>geohash:&lt;gh&gt;</code></td></tr>
+                <tr><td><strong>Packet type</strong></td><td><code>0x02</code></td><td><code>0x50</code></td><td><code>0x25</code></td><td><code>0x51</code> on BLE, kind 20000 on Nostr</td></tr>
+                <tr><td><strong>Encryption</strong></td><td><strong>None.</strong> Signed only.</td><td>XChaCha20-Poly1305, one shared key</td><td>ChaCha20-Poly1305, epoch key</td><td><strong>None.</strong> Signed only.</td></tr>
+                <tr><td><strong>Who can read</strong></td><td>Everyone in range</td><td>Anyone holding the key</td><td>Only the signed roster</td><td>Everyone in the cell</td></tr>
+                <tr><td><strong>Joining</strong></td><td>Just listen</td><td>An invite link carrying the key</td><td><strong>The creator adds you</strong></td><td>Be there, or teleport</td></tr>
+                <tr><td><strong>Member cap</strong></td><td>None</td><td><strong>None</strong></td><td><strong>16</strong></td><td>None</td></tr>
+                <tr><td><strong>Roster exists</strong></td><td>No</td><td><strong>No</strong></td><td>Yes, creator-signed</td><td>No</td></tr>
+                <tr><td><strong>Removal possible</strong></td><td>n/a</td><td><span class="pill bad">No</span></td><td>Yes, rotate the epoch</td><td>n/a</td></tr>
+                <tr><td><strong>Reaches the internet</strong></td><td>Only via the mesh bridge</td><td>Optional, creator's choice</td><td><strong>Never</strong></td><td>Yes, that is the point</td></tr>
+                <tr><td><strong>Media allowed</strong></td><td><strong>Yes</strong></td><td>No</td><td>No</td><td>No</td></tr>
+                <tr><td><strong>Live voice</strong></td><td><strong>Yes</strong></td><td>No</td><td>No</td><td>No</td></tr>
+                <tr><td><strong>Gossip backfill</strong></td><td>Bit 1, 15 min</td><td>No</td><td>Bit 10, 15 min</td><td>Bit 24, 15 min</td></tr>
+                <tr><td><strong>bitchat sees it</strong></td><td><strong>Yes, it is their room</strong></td><td>Relays, does not read</td><td><strong>iOS yes, Android no</strong></td><td>Via Nostr, not via BLE</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="public">The public mesh room</h2>
+          <p>
+            <code>#bluetooth</code> is not really a channel. It is
+            <strong>bitchat's single public room</strong>, which Airhop names as a
+            channel so it lists beside the location cells.
+          </p>
+          <pre class="code">
+  packet type 0x02
+  payload:  the message text as bare UTF-8 AND NOTHING ELSE
+  flags:    SIGNED
+  ttl:      randomly 5, 6 or 7
+</pre>
+          <div class="box bad">
+            <p class="box-title">Why the payload has no framing at all</p>
+            <p>
+              bitchat's <code>BLEPublicMessageHandler</code> reads
+              <code>String(data: packet.payload, encoding: .utf8)</code> and takes
+              the <strong>whole payload</strong> as the body. Anything wrapped
+              around the text, a length prefix, a message ID, a JSON envelope, is
+              displayed to their users as part of the message.
+            </p>
+            <p>
+              So the framing has to live entirely in the packet header. It works
+              because both implementations derive the same content-stable
+              identifier from sender, timestamp and content
+              (<code>bridgeStableID</code> here,
+              <code>MeshMessageIdentity.stableID</code> there), which is what the
+              bridge keys on and what the Nostr copy dedupes against. The payload
+              is also decoded <strong>strictly</strong>, matching bitchat-iOS:
+              invalid UTF-8 is dropped rather than rendered as replacement
+              characters.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td>Confidentiality</td><td><strong>None, by design.</strong> It is a public room. The signature stops forgery, not reading.</td></tr>
+                <tr><td>Authorship</td><td>Ed25519 signature, verified against the key pinned to the claimed sender. A missing key is a <em>failed</em> check, never a skipped one.</td></tr>
+                <tr><td>Display name</td><td>Always suffixed <code>#last4</code> of the peer ID, because a bitchat peer chooses its own nickname freely and Airhop renders what it announces.</td></tr>
+                <tr><td>Origin TTL</td><td>Drawn from 5 to 7 rather than fixed at the maximum, so a passive listener cannot always tell "this radio authored it" from "this radio relayed it". Weakens the marker rather than removing it.</td></tr>
+                <tr><td>History</td><td>A 15 minute gossip window, so someone arriving late catches up on the recent room.</td></tr>
+                <tr><td>The bridge</td><td>Off by default. Turning it on republishes messages to a geohash-6 rendezvous cell on Nostr, so two out-of-range crowds share one room. Chapter <a href="27-gateway-bridge.html">27</a>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            This is the only room that carries <strong>media and live
+            voice</strong>, and the reason is coherence rather than favouritism:
+            attachments ride a signed-but-unencrypted path and never reach Nostr,
+            so they only make sense where the content is public anyway and everyone
+            present is reachable over Bluetooth.
+          </p>
+
+          <h2 id="private">Private channels</h2>
+          <p>
+            Airhop's own invention, and the room type designed for
+            <strong>scale rather than secrecy of membership</strong>.
+          </p>
+          <pre class="ascii">
+  CREATION
+
+     generate 32 random bytes = the channel key
+     the key IS the channel's identity AND its read/write credential
+     whoever holds it is a member
+
+  INVITE
+
+     airhop://channel/protest-medics?k=&lt;base64url key&gt;
+
+     put that on a flyer as a QR code and a few hundred people
+     join over the course of a day. No roster, no approval, no cap.
+
+  SENDING
+
+     seal( key, { msgId, senderID, senderNickname, text } )
+       -> [nonce 24][ciphertext + tag]
+     broadcast as packet type 0x50, ALSO signed at the packet layer
+
+  RECEIVING
+
+     THERE IS NO CHANNEL TAG ON THE WIRE.
+     A receiver TRIAL-DECRYPTS with every key it holds.
+     A non-member's attempt simply fails the auth tag.
+</pre>
+          <div class="box ok">
+            <p class="box-title">Why there is no channel identifier in the packet</p>
+            <p>
+              A sniffer cannot even tell <em>which</em> private channel a blob
+              belongs to, or that two blobs belong to the same one. Trial
+              decryption costs a few AEAD attempts per message, which is nothing,
+              and it removes a metadata field that would otherwise let an observer
+              map out which rooms exist and how busy each is.
+            </p>
+          </div>
+          <h3>Attribution inside the ciphertext</h3>
+          <p>
+            The sealed payload carries the sender's ID and nickname. Over BLE the
+            packet is individually signed as well, so the sender is attributable at
+            the packet layer. Over Nostr every member publishes under a
+            <strong>shared</strong> channel-derived key, so the relay cannot tell
+            members apart, which means attribution has to live inside the
+            ciphertext. It is self-asserted among members, which is the same trust
+            level as a nickname in any group chat.
+          </p>
+          <pre class="code">
+  deriveChannelNostrIdentity(key):
+    HMAC-SHA256(key, "airhop-channel-nostr-v1" || counter)
+    retry until it is a valid secp256k1 scalar
+
+  Every member derives the SAME keypair, so they all publish under
+  and subscribe to one author pubkey that is unguessable without the
+  channel key and unlinkable to anyone's real identity.
+</pre>
+          <div class="box bad">
+            <p class="box-title">The trade, stated plainly</p>
+            <p>
+              One symmetric key, travelling in a link, that
+              <strong>never rotates and cannot be revoked</strong>. Anyone who ever
+              obtains it can read everything they can get hold of, forever, and
+              there is no way to remove a member. There is no forward secrecy at
+              all.
+            </p>
+            <p>
+              That is the price of unbounded membership with no roster and no
+              approval step, and it is the right trade for the use case it exists
+              for: a QR on a flyer that a few hundred strangers join through the
+              day, where a roster would be impossible and an approval queue absurd.
+              It is the <em>wrong</em> tool for four friends, and that is what
+              groups are for.
+            </p>
+            <p>
+              It is listed as a gap in chapter
+              <a href="49-review.html">49</a>, because it is stated less plainly in
+              the product than the courier tag flaw is.
+            </p>
+          </div>
+          <p>
+            Reach is the creator's choice: Bluetooth only, or Bluetooth plus
+            Nostr, where the same sealed blob is published so out-of-range members
+            receive it. bitchat relays <code>0x50</code> without interpreting it,
+            so the two coexist with no cost to either.
+          </p>
+
+          <h2 id="groups">Private groups</h2>
+          <p>
+            bitchat compatible, and the opposite design: <strong>a fixed set of
+            people rather than a place or a link</strong>.
+          </p>
+          <pre class="ascii">
+  CREATION
+
+     groupID     16 random bytes
+     epoch       starts at 0
+     key         32 random bytes, the epoch key
+     roster      up to 16 members, each:
+                    fingerprint  = SHA-256(their Noise static pub key)
+                    signingKey   = their Ed25519 public key
+                    nickname
+     creatorFingerprint = the creator's own fingerprint
+
+     THE CREATOR SIGNS ALL OF IT:
+
+       Ed25519 over  "bitchat-group-v1"
+                     || groupID || epoch
+                     || SHA256(key) || SHA256(roster) || SHA256(name)
+
+  DELIVERY OF THE KEY
+
+     the signed group state travels to EACH MEMBER INDIVIDUALLY,
+     inside their existing NOISE SESSION, as payload type
+     0x06 (invite) or 0x07 (key update).
+
+     THERE IS NO LINK. Nobody can forward their way in.
+     A member who is not reachable yet is owed the state, which is
+     held in the group-invite outbox until they appear.
+
+  A MESSAGE
+
+     [groupID 16][epoch u32][nonce 12][ChaCha20-Poly1305 ciphertext]
+     AAD = groupID || epoch
+
+     group ID and epoch are IN THE CLEAR so relays can carry it.
+     The inner payload is Ed25519-signed by the AUTHOR, so one member
+     cannot forge another member's message.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Bluetooth only</strong></td><td>Group messages never bridge to Nostr, so a member who walks out of range stops receiving until they return.</td></tr>
+                <tr><td><strong>Rotating the key bumps the epoch</strong></td><td>Older epochs are refused. This is how removal works: a new epoch key is delivered to everyone except the removed member.</td></tr>
+                <tr><td><strong>The creator is pinned</strong></td><td>A group keeps the <code>creatorFingerprint</code> it was created with, and a state naming a different creator is refused <strong>even at a higher epoch</strong>.</td></tr>
+                <tr><td><strong>The epoch in the AAD</strong></td><td>Prevents a message from one epoch being replayed into another: the tag would not verify.</td></tr>
+                <tr><td><strong>No delivery receipts</strong></td><td>Neither client has them for groups, so <code>GroupSendResult</code> reports whether the message was sealed and how many links it went out on, and that is the only honest signal the UI can give.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The eviction attack, and why check order is the fix</p>
+            <p>
+              A group ID travels <strong>in the clear</strong> on every group
+              message, so relays can carry it. Without the creator pin, anyone who
+              saw one could craft a self-signed group state naming
+              <em>themselves</em> creator, at a higher epoch, with a roster
+              omitting the victim. The victim's client would treat it as a
+              legitimate removal, <strong>destroy its own epoch key</strong>, and
+              drop the room.
+            </p>
+            <p>
+              The defence is enforced in <strong>two</strong> places, because a
+              group state can either update or delete a group. The store pins the
+              creator for every write, and <code>groupStateAction</code> pins it
+              <em>before</em> the removal branch, which never reaches the store at
+              all. This is a case where the <em>order</em> of a check is the
+              security property.
+            </p>
+          </div>
+          <p>
+            The 16 member cap is bitchat's, and it is what makes pairwise key
+            delivery over Noise sessions simpler and cheaper than a tree-based
+            scheme. Chapter <a href="19-protocol-comparison.html">19</a> explains
+            why MLS, which would be better at scale, cannot run on a mesh with no
+            total order.
+          </p>
+
+          <h2 id="location">Location channels</h2>
+          <p>
+            Covered fully in chapter <a href="23-location.html">23</a>. In room
+            terms:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Named by a place</strong></td><td>Membership is being in a geohash cell, or teleporting into one.</td></tr>
+                <tr><td><strong>Two transports at once</strong></td><td>Packet type <code>0x51</code> over Bluetooth for anyone nearby with no internet, and Nostr kind 20000 for everyone else in the cell.</td></tr>
+                <tr><td><strong>Its own packet type</strong></td><td>Because bitchat has the same channels but publishes them only to Nostr. Under <code>0x02</code> an Airhop location message would render in their mesh room, addressed to an audience its author never chose, on top of the Nostr copy they already receive.</td></tr>
+                <tr><td><strong>Pseudonymous</strong></td><td>Each cell gets its own derived secp256k1 identity, so posting in two cells is not linkable and neither is linkable to your durable identity.</td></tr>
+                <tr><td><strong>No media, no voice</strong></td><td>Media cannot ride Nostr, so remote participants would never receive it.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="choosing">Choosing between them</h2>
+          <pre class="ascii">
+  WHO SHOULD BE ABLE TO READ THIS?
+
+    anyone standing near me
+        └─▶ #bluetooth            no encryption, media and voice work
+
+    anyone I hand a link to, possibly hundreds
+        └─▶ PRIVATE CHANNEL       one key, no cap, no removal, no FS
+
+    exactly these named people, and nobody who was not invited
+        └─▶ PRIVATE GROUP         signed roster, max 16, removable
+
+    anyone in this part of the world
+        └─▶ LOCATION CHANNEL      bridged to the internet, pseudonymous
+
+    one person
+        └─▶ DM                    Noise XX, plus the Double Ratchet
+</pre>
+          <div class="box">
+            <p class="box-title">The distinction people get wrong</p>
+            <p>
+              A private channel and a private group are both "private" and are
+              almost opposites. A channel is <strong>a place with a
+              password</strong>: the key spreads faster than anyone could add
+              people by hand, which is a feature at a march and a liability among
+              four friends. A group is <strong>a list of people</strong>: nobody
+              joins by accident, and it caps at 16.
+            </p>
+            <p>
+              The right one-line test is: do you care <em>who</em> is in it, or
+              only that outsiders are not? If who, use a group.
+            </p>
+          </div>
+
+          <h2 id="board">The bulletin board</h2>
+          <p>
+            The one feature that is not a conversation. Signed public notices
+            designed to <strong>outlive chat</strong>: pin something to your mesh
+            or your area for one to seven days, and it stays for whoever walks past
+            an hour later.
+          </p>
+          <div class="eli5">
+            <p class="box-title">What it is for</p>
+            <p>
+              "Water station at the south entrance." "Medic tent moved to the car
+              park." "Road closed, go around the back." These are not messages to a
+              person, they are facts about a place that should still be there when
+              the person who posted them has gone home.
+            </p>
+          </div>
+          <pre class="code">
+  PACKET TYPE 0x23, byte-identical to bitchat's BoardPackets.swift
+
+  TLV, type u8, length u16 BE:
+
+    0x01  kind              u8    0x01 post, 0x02 tombstone
+    0x02  postID            16B   random
+    0x03  geohash           UTF-8, "" = mesh-local board, max 12
+    0x04  content           UTF-8, 1 to 512 bytes
+    0x05  authorSigningKey  32B   Ed25519 public key
+    0x06  authorNickname    UTF-8, max 64 bytes
+    0x07  createdAt         u64 BE ms
+    0x08  expiresAt         u64 BE ms, MAX 7 DAYS after createdAt
+    0x09  flags             u8, bit 0 = URGENT
+    0x0A  signature         64B   Ed25519
+    0x0B  deletedAt         u64 BE ms          [tombstone only]
+
+  THE SIGNATURE COVERS A CANONICAL, LENGTH-PREFIXED ENCODING,
+  NOT THE TLV. So field reordering or padding cannot change what
+  was signed.
+
+  domains:  "bitchat-board-v1"      for posts
+            "bitchat-board-del-v1"  for tombstones
+</pre>
+          <h3>Tombstones</h3>
+          <p>
+            Deleting a post is not deleting it, because copies are already on other
+            people's phones. Instead the author publishes a
+            <strong>tombstone</strong>: a signed deletion marker that only their
+            key can produce.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Only the author's key produces a valid tombstone</td><td>Otherwise anyone could delete anyone's notice, which is a censorship primitive.</td></tr>
+                <tr><td><strong>A tombstone is retained until the deleted post's original expiry</strong></td><td>So the delete keeps outrunning stale copies of the post as they propagate through gossip. Retiring the tombstone early would let the post reappear.</td></tr>
+                <tr><td>An <em>orphan</em> tombstone, for a post never seen, is capped at the maximum post lifetime</td><td>We cannot know the original expiry, so seven days is the safe bound.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Quotas</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Limit</th><th>Value</th><th>Prevents</th></tr></thead>
+              <tbody>
+                <tr><td>Posts stored</td><td>200</td><td>Unbounded growth from gossiped, attacker-supplied content.</td></tr>
+                <tr><td><strong>Posts per author</strong></td><td><strong>5</strong></td><td>One author filling the board. This is the important one.</td></tr>
+                <tr><td>Orphan tombstones</td><td>100 total, 5 per author</td><td>The same, for deletion markers.</td></tr>
+                <tr><td>Content</td><td>512 bytes</td><td>A notice, not an essay.</td></tr>
+                <tr><td>Lifetime</td><td>Author's choice, <strong>max 7 days</strong></td><td>A notice that outlives its truth is worse than no notice.</td></tr>
+                <tr><td>Clock skew allowance</td><td>1 hour</td><td>Judging received timestamps between phones whose clocks differ.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>How a post actually travels</h3>
+          <pre class="ascii">
+  createBoardPost(content, geohash, expiry, urgent)
+      │  sign over the canonical encoding
+      ▼
+  broadcast as packet type 0x23, ttl 7
+      │
+      ├─▶ every peer in range verifies the signature FIRST
+      │      the store's ingest REQUIRES the caller to have verified
+      │
+      ├─▶ quota, expiry and dedup are checked in the STORE, which is
+      │   the single chokepoint for radio, local echo and disk restore
+      │
+      └─▶ tracked by GOSSIP SYNC, bit 8, with a 7 DAY candidate window
+             so a phone arriving tomorrow still gets it
+
+  ON DISK: the raw signed wire bytes, re-verified and re-ingested
+  on launch. Not a parsed object, so a corrupted row cannot smuggle
+  an unverified post past the signature check.
+</pre>
+          <div class="box ok">
+            <p class="box-title">Why the board is the best-designed small feature in the app</p>
+            <p>
+              It is the only content type that is <strong>persistent, public,
+              attributable, deletable by its author only, quota-bounded per author,
+              and gossip-reconciled</strong> all at once. The signature covers a
+              canonical encoding rather than the TLV, so reordering cannot change
+              meaning. The store is the single chokepoint for every ingest path.
+              The on-disk form is the signed bytes, so a restore re-verifies rather
+              than trusting the file. And the tombstone retention rule shows
+              somebody thought about propagation races rather than just about the
+              happy path.
+            </p>
+          </div>
+          <p>
+            Two scopes exist. An empty geohash means the <strong>mesh-local
+            board</strong>, visible to whoever is in Bluetooth range. A geohash
+            scopes it to a place, so it appears for people in that cell. Urgent
+            posts are flagged with bit 0 and surfaced differently. A notice only
+            counts as "new" for the notification bell if it was created within the
+            last five minutes, which keeps a channel's history replay and a gossip
+            backfill of old-but-unexpired posts from flooding the bell.
+          </p>
+          <p>
+            Support is <strong>bitchat-iOS only</strong>. Android's
+            <code>MessageType</code> registry does not include <code>0x23</code>,
+            so a bitchat-Android phone relays board posts without displaying them.
+            That is the correct behaviour for an unknown type and costs nothing.
+          </p>
+
+          <h2 id="moderation">Moderation, such as it is</h2>
+          <div class="box bad">
+            <p class="box-title">There is no protocol-level moderation, and there never will be</p>
+            <p>
+              <code>VISION.md</code> states it directly: moderation is strictly
+              client-side, and the project cannot and will not moderate content at
+              the protocol level. The reason is structural rather than
+              philosophical. A mechanism that removes content from other people's
+              devices <em>is</em> a censorship mechanism, and building one into a
+              censorship-resistant tool would defeat the tool.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Control</th><th>Effect</th><th>Limit</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Block</strong></td><td>Enforced at <em>one chokepoint</em> in <code>routePacket</code>, so a blocked peer cannot post in channels, DM, send files or resurrect a deleted conversation. Also enforced separately on the Nostr side, keyed on <code>nostr_&lt;pubkey&gt;</code>, which covers channel messages, presence and geo DMs in one lookup.</td><td>Local only. They are still relayed for third parties, and they can reappear under a new identity.</td></tr>
+                <tr><td><strong>Mute</strong></td><td>Suppresses notifications from a peer.</td><td>Local.</td></tr>
+                <tr><td><strong>Author tombstone</strong></td><td>Removes a board post from anyone who receives the tombstone.</td><td><strong>Only the author can.</strong></td></tr>
+                <tr><td><strong>Expiry</strong></td><td>Everything ages out: messages, board posts, gossip candidates, courier envelopes, media.</td><td>Time-based, not judgement-based.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            One deliberate asymmetry worth understanding: <strong>ANNOUNCE is
+            exempt from the block chokepoint.</strong> A blocked peer's announces
+            still resolve transport-level routing, because blocking someone must
+            not degrade the mesh for everyone else routing through them.
+            <code>onAnnounce</code> keeps them out of the peer store instead, so
+            they never appear in the list or the radar. Blocking says what you
+            read, not who the mesh serves.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">A private channel and a private group are both private. What is the actual difference?</span>
+              <span class="a">A channel is a place with a password: a single symmetric key travels inside the invite link, so anyone who receives the link can read, there is no roster, no member cap and no way to remove anybody. A group is a list of people: the creator signs a roster of up to 16 and delivers the epoch key to each member individually inside their Noise session, so there is no link to forward and nobody joins by accident. The test is whether you care <em>who</em> is in it or only that outsiders are not. Channels scale to hundreds and give up membership control; groups control membership and cap at 16.</span>
+            </li>
+            <li>
+              <span class="q">Why does the <code>#bluetooth</code> payload contain nothing but the message text?</span>
+              <span class="a">Because bitchat's public message handler decodes the entire payload as the body, so any wrapper is displayed to their users as part of the message. The framing therefore has to live entirely in the packet header. It works because both implementations independently derive the same content-stable identifier from sender, timestamp and content, which is what the bridge keys on and what collapses the Bluetooth and Nostr copies of one message into a single bubble.</span>
+            </li>
+            <li>
+              <span class="q">Explain the group eviction attack and its fix.</span>
+              <span class="a">A group ID travels in the clear on every group message so relays can carry it. Anyone who observed one could craft a self-signed group state naming themselves as creator, at a higher epoch, with a roster omitting the victim. The victim's client would read it as a legitimate removal, destroy its own epoch key and drop the room. The fix is pinning the creator fingerprint the group was created with and refusing any state naming a different creator even at a higher epoch, enforced in two places because a state can either update or delete: the store pins it for every write, and <code>groupStateAction</code> pins it before the removal branch, which never reaches the store.</span>
+            </li>
+            <li>
+              <span class="q">Why is there no channel identifier in a private channel packet?</span>
+              <span class="a">So an observer cannot tell which channel a blob belongs to, or that two blobs belong to the same one. That removes a metadata field which would otherwise let somebody map out how many private rooms exist locally and how busy each is. The cost is that a receiver must trial-decrypt with every key it holds, which is a handful of AEAD attempts per message and effectively free, and a non-member's attempt simply fails the authentication tag.</span>
+            </li>
+            <li>
+              <span class="q">How does deleting a bulletin board post work when copies are already on other phones?</span>
+              <span class="a">It does not delete, it publishes a tombstone: a signed deletion marker that only the author's key can produce, so nobody can delete anyone else's notice. Receiving devices remove the post and <strong>retain the tombstone until the deleted post's original expiry</strong>, so the delete keeps outrunning stale copies still propagating through gossip. A tombstone for a post never seen is an orphan, capped at the maximum seven day lifetime because the original expiry is unknowable, and orphans have their own quota so they cannot be used to fill the store.</span>
+            </li>
+            <li>
+              <span class="q">Why is ANNOUNCE exempt from the block chokepoint?</span>
+              <span class="a">Because announces maintain relay topology, and blocking one person must not degrade the mesh for everyone else routing through them. Their announces still resolve links and peer state, so third-party delivery keeps working, but <code>onAnnounce</code> keeps a blocked peer out of the peer store entirely, so they never appear in the Mesh list or the radar. Everything carrying peer content drops at the single chokepoint in <code>routePacket</code>. Blocking says what you read, not who the mesh serves.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 47: LoRa and hardware. Meshtastic, Bitle, ESP32, chirp spread spectrum, antennas, law." />
+    <title>47 LoRa and hardware · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 47 · The wider world</p>
+          <h1>LoRa, relay hardware, and the radio domain</h1>
+          <p class="kt-lede">
+            A phone mesh dies where nobody stands. Relay hardware puts a node
+            there. This chapter is the whole domain: sub-GHz radio, chirp spread
+            spectrum, ESP32 boards, antennas, regulation, Meshtastic, Bitle, and
+            exactly how a box on a wall joins an Airhop mesh.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#problem">The problem hardware solves</a></li>
+              <li><a href="#subghz">Sub-GHz radio</a></li>
+              <li><a href="#lora">LoRa and chirp spread spectrum</a></li>
+              <li><a href="#airtime">Spreading factor, airtime and the law</a></li>
+              <li><a href="#meshtastic">Meshtastic</a></li>
+              <li><a href="#esp32">ESP32 and the boards</a></li>
+              <li><a href="#antennas">Antennas for fixed nodes</a></li>
+              <li><a href="#power">Power and enclosures</a></li>
+              <li><a href="#airhop">How a relay joins an Airhop mesh</a></li>
+              <li><a href="#bitle">Bitle</a></li>
+              <li><a href="#deploy">Deploying one</a></li>
+              <li><a href="#status">Honest status</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Passing a message phone to phone only works if there is a person
+              standing every thirty metres. Across an empty car park there is
+              nobody, so the chain breaks. A relay is a small box with a battery
+              and a radio that you stick on a wall. It does not talk, it just
+              listens and repeats, so it is the person standing in the gap. Some of
+              these boxes also have a second, much slower radio that reaches
+              kilometres, so two boxes far apart can pass messages to each other
+              when no phone could.
+            </p>
+          </div>
+
+          <h2 id="problem">The problem hardware solves</h2>
+          <pre class="ascii">
+  WITHOUT A RELAY
+
+    Building A                car park, 120 m                 Building B
+    ┌────────────┐            ┌──────────────┐               ┌────────────┐
+    │ A ─ B ─ C  │            │   (nobody)   │               │  X ─ Y ─ Z │
+    └────────────┘            └──────────────┘               └────────────┘
+         island 1                                                 island 2
+
+    TTL 7 is irrelevant. There is no hop 4. Two islands, no path.
+
+  WITH ONE RELAY
+
+    ┌────────────┐            ┌──────────────┐               ┌────────────┐
+    │ A ─ B ─ C ─┼── 40 m ───▶│  ▣  RELAY    │◀── 40 m ──────┼─ X ─ Y ─ Z │
+    └────────────┘            └──────────────┘               └────────────┘
+
+    One box, mains or solar, and the two islands are one mesh.
+
+  WITH A LoRa TRUNK
+
+    ┌───────┐                                              ┌───────┐
+    │ ▣ BLE │◀════════ 915 MHz LoRa, 2 to 10 km ══════════▶│ ▣ BLE │
+    └───┬───┘                                              └───┬───┘
+        │ 40 m of Bluetooth                                    │
+     phones                                                 phones
+
+    Two neighbourhoods joined with no internet and no phone in between.
+</pre>
+          <p>
+            This is the answer to the honest criticism of any phone mesh: reach
+            scales with user density, and in a sparse area there is no mesh at all.
+            Hardware converts "we need more users" into "we need one box".
+          </p>
+
+          <h2 id="subghz">Sub-GHz radio</h2>
+          <p>
+            Chapter <a href="07-radio.html">07</a> established the link budget.
+            Sub-GHz changes two of its terms dramatically.
+          </p>
+          <pre class="code">
+  FREE SPACE PATH LOSS = 20 log10(d) + 20 log10(f) - 147.55
+
+  The frequency term is what changes:
+
+     2400 MHz  ->  20 log10(2.4e9)  = 187.6
+      915 MHz  ->  20 log10(915e6)  = 179.2
+      868 MHz  ->  20 log10(868e6)  = 178.8
+      433 MHz  ->  20 log10(433e6)  = 172.7
+
+  915 MHz is ~8.4 dB better than 2.4 GHz at the same distance.
+  8.4 dB is roughly 2.6x the range for the same power.
+  433 MHz is ~15 dB better, roughly 5.6x.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>2.4 GHz (BLE)</th><th>Sub-GHz (LoRa)</th></tr></thead>
+              <tbody>
+                <tr><td>Wavelength</td><td>12.5 cm</td><td>~33 cm (915 MHz)</td></tr>
+                <tr><td>Free space loss</td><td>Baseline</td><td>~8 dB better</td></tr>
+                <tr><td>Wall penetration</td><td>Poor</td><td><strong>Much better.</strong> Longer waves diffract around and through obstacles.</td></tr>
+                <tr><td>Antenna size</td><td>~3 cm quarter-wave</td><td>~8 cm quarter-wave. Fits a box, not a phone.</td></tr>
+                <tr><td>Available bandwidth</td><td>83.5 MHz</td><td>A few MHz. <strong>Tiny.</strong></td></tr>
+                <tr><td>Data rate</td><td>~18 KiB/s in practice</td><td><strong>0.3 to 50 kbps</strong>, often under 1 kbps</td></tr>
+                <tr><td>In phones</td><td>Universal</td><td><strong>Never.</strong> No phone has this radio.</td></tr>
+                <tr><td>Duty cycle limits</td><td>None in practice</td><td><strong>Legally enforced</strong> in Europe</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The trade is stark: kilometres of range for kilobits of bandwidth. That
+            is the right trade for a backbone between fixed relays carrying text,
+            and completely wrong for anything a phone does.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Region</th><th>Band</th><th>Note</th></tr></thead>
+              <tbody>
+                <tr><td>Europe</td><td>868 MHz</td><td>Duty cycle limited, typically 1 percent per sub-band</td></tr>
+                <tr><td>North America</td><td>915 MHz</td><td>Frequency hopping required above certain dwell times</td></tr>
+                <tr><td>Asia, varies</td><td>433, 470, 923 MHz</td><td>Highly region specific</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <strong>The band is not a preference, it is a legal fact of where the
+            hardware is.</strong> A node bought for one region and used in another
+            can be illegal to operate.
+          </p>
+
+          <h2 id="lora">LoRa and chirp spread spectrum</h2>
+          <p>
+            LoRa is a proprietary physical layer from Semtech. Its trick is
+            <strong>chirp spread spectrum</strong>, and it is genuinely elegant.
+          </p>
+          <pre class="ascii">
+  ORDINARY MODULATION
+     encode a bit by making the signal louder, or shifting frequency
+     a little. To read it, you need the signal ABOVE the noise floor.
+
+  CHIRP SPREAD SPECTRUM
+     encode a symbol as a CHIRP: a tone sweeping from one frequency to
+     another over a fixed time. The starting point of the sweep is the
+     data.
+
+        freq                        freq
+         ▲   ╱                       ▲       ╱
+         │  ╱                        │      ╱
+         │ ╱                         │   ╱
+         │╱                          │  ╱
+         └────────▶ time             └────────▶ time
+          symbol A                    symbol B
+        (starts low)              (starts mid, wraps)
+
+     The receiver correlates against a known reference chirp. Because
+     the energy is spread across the whole bandwidth and across time,
+     correlation gain lets it recover a signal
+     BELOW THE NOISE FLOOR: down to about -20 dB SNR.
+</pre>
+          <div class="box">
+            <p class="box-title">Why "below the noise floor" is not magic</p>
+            <p>
+              Processing gain. Spreading one symbol over many chip periods means
+              the correlator integrates the signal coherently and the noise
+              incoherently, so the signal-to-noise ratio improves by the spreading
+              factor. You pay for it in time: a symbol takes far longer to
+              transmit, which is exactly why LoRa is slow. Sensitivity and data
+              rate are the same dial.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Parameter</th><th>Range</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Spreading factor (SF)</strong></td><td>SF7 to SF12</td><td>Each step doubles airtime, adds ~2.5 dB sensitivity, and roughly doubles range in open terrain.</td></tr>
+                <tr><td>Bandwidth</td><td>125, 250, 500 kHz</td><td>Wider is faster and less sensitive.</td></tr>
+                <tr><td>Coding rate</td><td>4/5 to 4/8</td><td>Forward error correction. More redundancy, more airtime.</td></tr>
+                <tr><td>TX power</td><td>Up to +20 dBm typically</td><td>Region-capped.</td></tr>
+                <tr><td>Sensitivity</td><td>-123 dBm at SF7 to <strong>-137 dBm at SF12</strong></td><td>Compare BLE at about -90 to -95 dBm. That is 40 dB better, which is a factor of 10,000 in power.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="airtime">Spreading factor, airtime and the law</h2>
+          <p>
+            This is where deployments go wrong, so it is worth the arithmetic.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>SF</th><th>Bitrate at 125 kHz</th><th>Airtime for a 50 byte packet</th><th>Typical range</th><th>Packets/hour at 1% duty cycle</th></tr></thead>
+              <tbody>
+                <tr><td>SF7</td><td>~5.5 kbps</td><td>~100 ms</td><td>2 km</td><td>~360</td></tr>
+                <tr><td>SF9</td><td>~1.8 kbps</td><td>~330 ms</td><td>5 km</td><td>~109</td></tr>
+                <tr><td>SF10</td><td>~1.0 kbps</td><td>~700 ms</td><td>8 km</td><td>~51</td></tr>
+                <tr><td>SF12</td><td>~0.25 kbps</td><td><strong>~2.5 seconds</strong></td><td>15 km+</td><td><strong>~14</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The trap</p>
+            <p>
+              At SF12, a single 50 byte message occupies the channel for two and a
+              half seconds. In Europe, a 1 percent duty cycle means a node may
+              transmit for 36 seconds per hour <em>in total</em>, which is
+              <strong>about fourteen messages an hour</strong>. In a mesh where
+              every node repeats what it hears, that budget is consumed by
+              forwarding other people's traffic long before your own message gets
+              out.
+            </p>
+            <p>
+              "Maximum range" settings are therefore usually the wrong choice. The
+              correct spreading factor is the lowest one that reliably closes your
+              specific link, not the highest one the radio offers.
+            </p>
+          </div>
+          <p>
+            Duty cycle is also why LoRa meshes are fundamentally
+            <strong>text and telemetry</strong> networks. A 50 KB photo at SF9 is
+            about 4.5 minutes of continuous airtime, which is more than an hour of
+            legal budget in Europe. There is no version of this that carries media.
+          </p>
+
+          <h2 id="meshtastic">Meshtastic</h2>
+          <p>
+            The reference open-source LoRa mesh, and the thing most people will
+            compare Airhop's relay story to. It is worth being precise about the
+            difference, because they are complementary rather than competing.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Meshtastic</th><th>Airhop</th></tr></thead>
+              <tbody>
+                <tr><td>Radio</td><td>LoRa, sub-GHz</td><td>Bluetooth LE, 2.4 GHz</td></tr>
+                <tr><td>Range per hop</td><td><strong>2 to 15 km</strong></td><td>10 to 100 m</td></tr>
+                <tr><td>Bandwidth</td><td>0.3 to 50 kbps</td><td>~18 KiB/s</td></tr>
+                <tr><td>Hardware</td><td><strong>Required.</strong> A dedicated node per person.</td><td><strong>None.</strong> The phone is the node.</td></tr>
+                <tr><td>Phone's role</td><td>A screen, connected to the node over BLE</td><td>The node itself</td></tr>
+                <tr><td>Encryption</td><td>AES-256 with a <strong>shared channel key</strong>, plus Curve25519 PKI for DMs</td><td>Noise XX per pair, Double Ratchet, no shared secret anywhere</td></tr>
+                <tr><td>Carries</td><td>Text, position, telemetry</td><td>Text, photos, video, files, live voice, money</td></tr>
+                <tr><td>Battery</td><td>Days to weeks on a node</td><td>A phone day</td></tr>
+                <tr><td>Barrier</td><td>Buy and carry hardware</td><td>Install an app</td></tr>
+                <tr><td>Best at</td><td><strong>Sparse, wide, outdoors.</strong> Hiking, sailing, rural, disaster response with prepared kit.</td><td><strong>Dense, local.</strong> Crowds, venues, cities, protests.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">The right framing</p>
+            <p>
+              They are not alternatives, they solve opposite failure cases.
+              Meshtastic is excellent exactly where a phone mesh has nobody to hop
+              through, and useless in a crowd where everyone would need a device.
+              Airhop is excellent exactly where the people are, and non-existent in
+              an empty valley. A relay node with both radios is the bridge between
+              the two regimes, and that is precisely what Bitle is.
+            </p>
+          </div>
+          <p>
+            One security difference worth naming: Meshtastic's default channel
+            encryption is a <strong>shared symmetric key</strong>, so everyone on a
+            channel can read everything and anyone who obtains the key can too.
+            That is a reasonable design for a hiking group and the wrong one for
+            strangers in a protest. Its DM path uses per-key encryption and is
+            stronger.
+          </p>
+
+          <h2 id="esp32">ESP32 and the boards</h2>
+          <p>
+            The ESP32 family from Espressif is the microcontroller almost every
+            open relay is built on, and the reason is that it has both radios on
+            one chip.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Feature</th><th>Detail</th><th>Why it matters here</th></tr></thead>
+              <tbody>
+                <tr><td>Dual core, 240 MHz, Xtensa or RISC-V</td><td>Enough for Noise XX and Ed25519 in software</td><td>A relay that holds a Noise identity needs real crypto.</td></tr>
+                <tr><td><strong>Bluetooth LE built in</strong></td><td>Including the peripheral role</td><td>This is the whole reason. An ESP32 can be a GATT server on the same UUID Airhop uses.</td></tr>
+                <tr><td>WiFi built in</td><td></td><td>Optional uplink for a gateway-style node.</td></tr>
+                <tr><td>Deep sleep, microamps</td><td></td><td>Solar operation is realistic.</td></tr>
+                <tr><td>Cost</td><td>A few dollars a chip, ten to thirty for a board</td><td>A relay is affordable enough to leave somewhere and lose.</td></tr>
+                <tr><td>Toolchain</td><td>ESP-IDF, Arduino, PlatformIO</td><td>Low barrier for contributors.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Board</th><th>What it is</th><th>Suits</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Heltec WiFi LoRa 32</strong></td><td>ESP32 plus an SX1262 LoRa radio, a small OLED, and a battery connector</td><td>The standard starting point. Everything in one board.</td></tr>
+                <tr><td><strong>LILYGO T-Beam</strong></td><td>ESP32, LoRa, GPS, 18650 battery holder</td><td>Mobile or field nodes where position matters.</td></tr>
+                <tr><td><strong>RAK WisBlock</strong></td><td>Modular: pick a core, a LoRa module, sensors, solar</td><td>Permanent installations. Better enclosures and connectors.</td></tr>
+                <tr><td><strong>Bare ESP32 dev board</strong></td><td>No LoRa</td><td>A pure BLE repeater filling a gap between two crowds. Cheapest possible node.</td></tr>
+                <tr><td><strong>ESP32-C3 / C6</strong></td><td>RISC-V, cheaper, lower power</td><td>Dense deployments where cost per node dominates.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="antennas">Antennas for fixed nodes</h2>
+          <p>
+            On a phone the antenna is whatever the manufacturer chose and the app
+            cannot influence it. On a relay it is the single biggest lever, and it
+            is cheap.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Antenna</th><th>Gain</th><th>Pattern</th><th>Use</th></tr></thead>
+              <tbody>
+                <tr><td>PCB trace or chip</td><td>0 to 2 dBi</td><td>Lumpy</td><td>What ships on a dev board. Adequate indoors, poor outdoors.</td></tr>
+                <tr><td>Quarter-wave whip</td><td>~2 dBi</td><td>Doughnut around the wire</td><td>The default upgrade. At 915 MHz it is about 8 cm.</td></tr>
+                <tr><td>Half-wave dipole</td><td>2.15 dBi</td><td>Doughnut</td><td>The reference. Good general purpose.</td></tr>
+                <tr><td><strong>Collinear</strong></td><td>5 to 8 dBi</td><td>Flattened doughnut</td><td><strong>The right choice for most fixed nodes.</strong> Squashes energy toward the horizon, where the other nodes are.</td></tr>
+                <tr><td>Yagi</td><td>10 to 15 dBi</td><td>Narrow beam</td><td>A dedicated point-to-point trunk between two known sites. Needs aiming.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Three rules that beat any antenna upgrade</p>
+            <ol>
+              <li>
+                <strong>Height beats gain.</strong> Getting a node two metres
+                higher usually does more than adding 3 dBi, because it clears the
+                Fresnel zone and reduces ground reflection.
+              </li>
+              <li>
+                <strong>Match the polarisation.</strong> Two antennas at 90 degrees
+                lose 20 dB or more. Vertical at both ends, by convention.
+              </li>
+              <li>
+                <strong>Never transmit without an antenna connected.</strong> The
+                reflected power destroys the transmitter. This is the most common
+                way a first LoRa board dies.
+              </li>
+            </ol>
+          </div>
+          <p>
+            And a note on gain that people get wrong: an antenna is passive. Gain
+            does not amplify, it concentrates. A 12 dBi antenna makes a beam by
+            giving up the directions it no longer covers, which is exactly wrong if
+            your node sits in a valley and the others are above it.
+          </p>
+
+          <h2 id="power">Power and enclosures</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Source</th><th>Runtime</th><th>Suits</th></tr></thead>
+              <tbody>
+                <tr><td>USB mains</td><td>Indefinite</td><td>Indoor, a venue, a shop window.</td></tr>
+                <tr><td>18650 cell, 3000 mAh</td><td>Days with duty cycling</td><td>An event, a march, a temporary deployment.</td></tr>
+                <tr><td><strong>Solar plus LiPo</strong></td><td><strong>Indefinite outdoors</strong></td><td>Permanent infrastructure. A small panel and a 2000 mAh cell is enough for a duty-cycled node.</td></tr>
+                <tr><td>Power bank</td><td>Days</td><td>The zero-effort option.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            An outdoor node needs an IP65 enclosure with a gland for the antenna
+            cable, and a note about temperature: LiPo cells do not charge below
+            freezing, and a black box in direct sun can exceed the cell's safe
+            range. Both are common causes of a node that worked for a season and
+            then stopped.
+          </p>
+          <p>
+            A relay that holds no keys and never announces uses almost no CPU, so
+            the power budget is dominated by radio duty cycle: how often it scans
+            and how often it advertises. That maps directly onto the same trade
+            Airhop's power policy makes on a phone.
+          </p>
+
+          <h2 id="airhop">How a relay joins an Airhop mesh</h2>
+          <div class="box ok">
+            <p class="box-title">The property that makes this possible</p>
+            <p>
+              Forwarding consults <strong>no peer registry and verifies no
+              signature</strong>. So a relay needs no standing with anyone: it is
+              handed bytes, reads the header, and puts them back on the air.
+              <strong>A bare relay extends an Airhop mesh with no change to this
+              repository and nothing on either phone knowing it is there.</strong>
+            </p>
+          </div>
+          <pre class="code">
+  THE ENTIRE CONTRACT FOR A BARE REPEATER
+
+    Forward          every unseen packet, on every link but the arrival one
+    TTL              decrement before forwarding; drop at ttl <= 1
+    Dedup            on packet ID, so a ring forwards each packet once
+    Malformed frame  DROP, never fail
+
+  A relay MUST NOT decrypt and MUST NOT reassemble fragments.
+  Fragments are forwarded individually; only the addressee reassembles.
+</pre>
+          <h3>Two kinds of relay</h3>
+          <div class="grid two">
+            <div class="box">
+              <p class="box-title">A bare repeater</p>
+              <p>
+                Holds no keys and announces nothing. It stays out of every roster,
+                which costs it nothing, because forwarding never required standing.
+                Invisible to users, which is exactly right for infrastructure.
+              </p>
+              <p><strong>Cheapest to build, and the weakest thing Airhop has to work with, which is why the tests target it.</strong></p>
+            </div>
+            <div class="box">
+              <p class="box-title">A peer relay</p>
+              <p>
+                Holds a Noise identity and announces like anybody else, which lets
+                it take part in gossip sync and carry courier mail rather than only
+                repeating what it hears.
+              </p>
+              <p>
+                The cost is that it lands in every phone's peer list looking like a
+                person nobody can message. Which is what the <code>0xB1</code> flag
+                below exists to fix.
+              </p>
+            </div>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Announces travel first</p>
+            <p>
+              A relay does not make two strangers reachable. It makes their
+              <strong>announces</strong> reachable, and delivery follows. A public
+              message is verified against a signing key learned from an announce,
+              so one sent before that announce has propagated is dropped at the far
+              end. <strong>This is correct behaviour and it reads as a delivery bug
+              in the field.</strong> Expect it during the first seconds after a
+              relay comes up.
+            </p>
+          </div>
+
+          <h2 id="bitle">Bitle</h2>
+          <p>
+            <a href="https://bitle.org">Bitle</a> is the most complete third-party
+            relay: an ESP32 node that is a <em>full peer</em>, not a repeater.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Capability</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td>Noise XX</td><td>It can hold sessions, so it is a real participant rather than a wire.</td></tr>
+                <tr><td>Courier mailbox</td><td>A node on a wall becomes a store-and-forward drop that never walks away. This is genuinely powerful: it turns "wait for someone to carry it" into "leave it at the corner shop".</td></tr>
+                <tr><td>Gossip sync</td><td>It can backfill a phone that arrives after a conversation.</td></tr>
+                <tr><td><strong>915 MHz LoRa backbone</strong></td><td>Node-to-node trunk, so two Bluetooth islands kilometres apart become one mesh with no phone and no internet between them.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>The <code>0xB1</code> announce TLV</h3>
+          <p>
+            A peer relay announces like a person, so without a marker it sits in
+            every phone's Mesh tab as somebody who never replies. Bitle marks itself
+            with a TLV outside the range either client assigns.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>TLV</th><th>Length</th><th>Meaning</th><th>Airhop</th></tr></thead>
+              <tbody>
+                <tr><td><code>0xB0</code></td><td>4</td><td>Firmware version, big endian</td><td>Skipped</td></tr>
+                <tr><td><code>0xB1</code></td><td>1</td><td>Flags. <strong>Bit 0: dedicated relay.</strong> Bit 1: clock authority.</td><td><strong>Bit 0 is read.</strong> Bit-tested rather than compared, so the clock-authority bit and any future bit leave it alone.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop draws those peers as equipment: an aerial in place of the avatar,
+            and an explanation in place of the Message and Send ecash actions.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The rule that keeps this safe</p>
+            <p>
+              <strong>The flag decides presentation and nothing else.</strong> It
+              sits inside the signed payload, but a node signs its own announce, so
+              <em>any device can claim to be infrastructure</em>. Since the claim
+              only removes actions from its own row, there is nothing to gain by
+              making it falsely. Bitle states the same contract where it writes the
+              byte.
+            </p>
+            <p>
+              Never let this flag gate a capability, a trust decision, or a routing
+              choice. Airhop reads it and never writes it, because a phone that
+              claimed to be infrastructure would hide its own Message button on
+              every other device.
+            </p>
+          </div>
+          <p>
+            Two other third-party nodes exist and are listed as evidence that the
+            case is real rather than as endorsement:
+            <strong>bitchat-esp32</strong> and <strong>bitchat-relay</strong>.
+            None has been tested against Airhop on hardware.
+          </p>
+
+          <h2 id="deploy">Deploying one</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Where?</strong></td><td>In the gap, and high. A relay is useful exactly where the chain breaks and nobody stands. Height clears the Fresnel zone and the ground bounce.</td></tr>
+                <tr><td><strong>How many?</strong></td><td>One per gap. A ring of relays with no person between them works (scenario R04 proves each packet is forwarded once), and each still costs airtime, so more is not automatically better.</td></tr>
+                <tr><td><strong>Bare or peer?</strong></td><td>Bare for a pure gap-filler. Peer if you want a permanent courier mailbox or gossip backfill on that corner.</td></tr>
+                <tr><td><strong>Which band for the trunk?</strong></td><td>Whatever is legal where the node lives. 868 in Europe, 915 in North America. This is not a preference.</td></tr>
+                <tr><td><strong>Which spreading factor?</strong></td><td>The <em>lowest</em> that reliably closes the link. Not the highest the radio offers.</td></tr>
+                <tr><td><strong>Does it need internet?</strong></td><td>No. A relay is pure radio. A node with WiFi could additionally act as an internet gateway, which is a different feature.</td></tr>
+                <tr><td><strong>Is it legal?</strong></td><td>BLE at 2.4 GHz, yes, on certified hardware. LoRa depends on band and duty cycle, which are region specific and enforced.</td></tr>
+                <tr><td><strong>Can it read the traffic?</strong></td><td>No. Private messages are Noise-encrypted end to end, and a relay carries opaque ciphertext. Scenario R05 pins it: a private message survives a relay it cannot read.</td></tr>
+                <tr><td><strong>Can it be seized?</strong></td><td>Yes, and a bare one holds nothing worth taking. A peer relay holds a Noise identity and possibly a courier bag of sealed envelopes, which is a real consideration for where you leave it.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="status">Honest status</h2>
+          <div class="box warn">
+            <p class="box-title">Simulated, never run against hardware</p>
+            <p>
+              <code>simulation/scenarios/relay.test.ts</code> pins the forwarding
+              rules against a relay that holds no keys and never announces: delivery
+              through one relay (R01), discovery without the relay entering the
+              roster (R02), a two-relay chain with no person between (R03), a
+              three-relay ring forwarding each packet once (R04), and a private
+              message crossing a node that cannot read it (R05). The
+              <code>0xB1</code> handling is covered in the announce tests.
+            </p>
+            <p>
+              <strong>Neither has been run against hardware.</strong> A Bitle node
+              in the room is the first thing worth checking when one is available,
+              and it is a v1.3.0 roadmap item: Bitle firmware on the mesh with Noise
+              XX, the courier mailbox, gossip sync and the <code>0xB1</code> flag
+              read off a real announce; the LoRa trunk carrying traffic between two
+              nodes with no phone bridging the gap; and the same runs against
+              bitchat, so one deployed node serves both clients.
+            </p>
+          </div>
+          <p>
+            My assessment: the software side of this is in good shape, because the
+            contract is so small. Forwarding requires no keys, no registry and no
+            protocol knowledge beyond the header, which is why a third party could
+            build a working relay from <code>PROTOCOLS.md</code> section 10 without
+            reading Airhop's source. The risk is not in the protocol, it is in the
+            hundred practical details of hardware that only appear when a box has
+            been on a wall through a winter.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does a relay need no keys and no standing?</span>
+              <span class="a">Because forwarding consults no peer registry and verifies no signature. A relay is handed bytes, reads the header for the type and the TTL, decrements, dedupes on the packet ID, and puts them back on the air. Verification happens at the endpoints, and it must, because a relay routinely carries traffic for peers whose signing keys it has never seen. That is what lets a bare repeater extend the mesh with no change to the app and nothing on either phone knowing it is there.</span>
+            </li>
+            <li>
+              <span class="q">Why is LoRa the right radio for a trunk and the wrong one for a phone?</span>
+              <span class="a">Its sensitivity is about -137 dBm at SF12 against BLE's -90 to -95, which is 40 dB, a factor of ten thousand in power, and sub-GHz free space loss is another 8 dB better. That buys kilometres. It costs bandwidth: 0.25 to 50 kbps, and airtime so long that European duty cycle rules allow roughly fourteen 50 byte messages an hour at SF12. That is fine for text between fixed nodes and useless for anything a phone does. And no phone has the radio.</span>
+            </li>
+            <li>
+              <span class="q">Someone sets every node to SF12 for maximum range. What happens?</span>
+              <span class="a">The mesh chokes. A 50 byte packet occupies the channel for two and a half seconds, and in a mesh where every node repeats what it hears, the legal duty cycle budget is consumed forwarding other people's traffic before your own message goes out. The correct setting is the lowest spreading factor that reliably closes the specific link, not the highest the radio offers. Range and capacity are the same dial turned in opposite directions.</span>
+            </li>
+            <li>
+              <span class="q">Is Meshtastic a competitor?</span>
+              <span class="a">No, it solves the opposite failure case. Meshtastic gives 2 to 15 km per hop and needs a dedicated device per person, so it is excellent in sparse outdoor terrain and impractical in a crowd where everyone would need hardware. Airhop needs no hardware and dies where nobody stands. A relay node carrying both radios is the bridge between the two regimes, which is exactly what Bitle is. Worth also noting the security difference: Meshtastic's default channel encryption is a shared symmetric key, which suits a hiking group and not strangers in a protest.</span>
+            </li>
+            <li>
+              <span class="q">Why can the <code>0xB1</code> infrastructure flag never gate anything?</span>
+              <span class="a">Because a node signs its own announce, so the flag is inside signed bytes but is still a self-assertion any device can make. It is safe only because claiming it removes actions from your own row, which nobody gains from. The moment it gated a capability, a trust decision or a routing choice, it would become worth forging. Airhop reads bit 0 and never writes it, because a phone claiming to be infrastructure would hide its own Message button on every other device.</span>
+            </li>
+            <li>
+              <span class="q">A relay is installed and messages seem to be dropped for the first few seconds. Is that a bug?</span>
+              <span class="a">No, and it is worth recognising because it reads exactly like one. A relay makes announces reachable, and delivery follows. A public message is verified against a signing key learned from an announce, so a message sent before that announce has propagated is dropped at the far end for being unverifiable. Once announces have crossed, everything works. The fix is patience, not code.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

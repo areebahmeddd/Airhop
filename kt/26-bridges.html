@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 26: Bridges and pluggable transports. obfs4, Snowflake, why iOS forces them in-process, and how a bridge line is parsed." />
+    <title>26 Bridges and pluggable transports · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 26 · The internet layer</p>
+          <h1>Bridges and pluggable transports</h1>
+          <p class="kt-lede">
+            Chapter 25 hid <em>who you are talking to</em>. This hides
+            <em>that you are using Tor at all</em>. They are different problems
+            with different answers, and in the places where Airhop is most
+            useful, the second one is the harder of the two.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#problem">How a network blocks Tor</a></li>
+              <li><a href="#bridge">What a bridge is</a></li>
+              <li><a href="#pt">What a pluggable transport is</a></li>
+              <li><a href="#obfs4">obfs4</a></li>
+              <li><a href="#snowflake">Snowflake</a></li>
+              <li><a href="#inprocess">Why they run in-process</a></li>
+              <li><a href="#lines">Bridge lines, and who parses them</a></li>
+              <li><a href="#modes">Four modes</a></li>
+              <li><a href="#directory">The built-in directory, and Moat</a></li>
+              <li><a href="#failclosed">Failing closed with a bridge</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Suppose the only way out of your town is a road, and there is a
+              guard on it with a list of people he is not allowed to let through.
+              A <strong>bridge</strong> is a friend whose name is not on the
+              list, who will take you the first part of the way. A
+              <strong>pluggable transport</strong> is a disguise, so that even if
+              the guard does not have your friend's name, he cannot tell from
+              looking at you that you are going where you are going. You usually
+              need both, because a good guard checks the list <em>and</em> looks
+              at you.
+            </p>
+          </div>
+
+          <h2 id="problem">How a network blocks Tor</h2>
+          <p>
+            Three mechanisms, in increasing order of effort. Knowing which one
+            you are facing determines which answer works.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Mechanism</th><th>How it works</th><th>What defeats it</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Address blocklist</strong></td>
+                  <td>The relay consensus is public. Download it, block every IP in it.</td>
+                  <td>A bridge, which is an <em>unlisted</em> entry relay.</td>
+                </tr>
+                <tr>
+                  <td><strong>Protocol fingerprinting (DPI)</strong></td>
+                  <td>Tor's TLS handshake has recognisable shape. Deep packet inspection matches it regardless of address.</td>
+                  <td>A pluggable transport, which changes what the traffic looks like on the wire.</td>
+                </tr>
+                <tr>
+                  <td><strong>Active probing</strong></td>
+                  <td>The censor sees a suspicious connection, then connects to that address itself to check whether it speaks Tor. If it does, block it.</td>
+                  <td>A transport that refuses to respond correctly without a secret the client already holds. obfs4's certificate is that secret.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Two goals that are easy to conflate</p>
+            <p>
+              <strong>Reachability</strong> is "can I connect at all".
+              <strong>Unobservability</strong> is "can the network tell I am
+              using Tor". A plain bridge with no transport gives you the first
+              and not the second: it is unlisted, so you get through an address
+              blocklist, but the traffic still looks like Tor to DPI. Most people
+              who need one need both, which is why the built-in directory ships
+              transport-bearing lines only.
+            </p>
+          </div>
+
+          <h2 id="bridge">What a bridge is</h2>
+          <pre class="ascii">
+  ORDINARY TOR                       WITH A BRIDGE
+
+  you                                you
+   │                                  │
+   │  guard, from a PUBLIC list       │  bridge, from a list the
+   ▼                                  ▼  censor does not have
+  ┌────────┐                        ┌────────┐
+  │ GUARD  │  ◀── blockable by      │ BRIDGE │  ◀── not in the
+  └────────┘      address           └────────┘      consensus
+   │                                  │
+   ▼                                  ▼
+  MIDDLE ──▶ EXIT ──▶ dest          MIDDLE ──▶ EXIT ──▶ dest
+
+  From the second hop onward NOTHING CHANGES. A bridge is an entry
+  relay that chose not to be listed; the rest of the circuit is an
+  ordinary Tor circuit with the ordinary properties.
+</pre>
+          <p>
+            Bridges are distributed deliberately slowly and in small batches,
+            precisely so that a censor enumerating them is expensive. The
+            built-in set Airhop ships is the exception: it is public by
+            construction, which matters and is stated below.
+          </p>
+
+          <h2 id="pt">What a pluggable transport is</h2>
+          <p>
+            A small program that sits between the Tor client and the bridge and
+            rewrites the traffic so it does not look like Tor. It is
+            <em>pluggable</em> because Tor speaks to it over a documented
+            interface rather than knowing anything about how it works, so a new
+            transport can be written without changing Tor.
+          </p>
+          <pre class="ascii">
+  Tor client ──SOCKS5──▶ transport ──obfuscated──▶ bridge ──▶ Tor network
+                            │
+                            └─ the ONLY thing the network operator sees
+                               is this leg, and it is designed to look
+                               like something uninteresting
+
+  the interface is a SOCKS5 proxy. that is the whole contract:
+  Tor dials a local port and asks it to reach an address, and the
+  transport decides what goes on the wire.
+</pre>
+          <p>
+            Airhop ships two, both from
+            <a href="https://github.com/tladesignz/IPtProxy">IPtProxy</a>, which
+            packages the Tor Project's own implementations as a mobile library:
+            <strong>Lyrebird</strong> (which provides obfs4) and
+            <strong>Snowflake</strong>.
+          </p>
+
+          <h2 id="obfs4">obfs4</h2>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Looks like</strong></td><td>Nothing. Uniformly random bytes, with no header, no handshake shape and no fixed length anywhere for a fingerprint to match.</td></tr>
+                <tr><td><strong>Defeats probing by</strong></td><td>Requiring a certificate the client already holds. A prober connecting without it gets no usable response, so the bridge cannot be confirmed as a bridge.</td></tr>
+                <tr><td><strong>Also does</strong></td><td>Traffic shaping: <code>iat-mode</code> in the bridge line controls whether packet timing is randomised, which costs throughput and defeats timing fingerprints.</td></tr>
+                <tr><td><strong>Costs</strong></td><td>Little. It is fast, and it is the right first choice.</td></tr>
+                <tr><td><strong>Weakness</strong></td><td>It needs a bridge address, and an address can be blocked once it is known. Public lines like the ones Airhop ships are enumerable by a determined censor.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="snowflake">Snowflake</h2>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr><td><strong>Looks like</strong></td><td>A WebRTC video call. Ordinary consumer traffic that a censor cannot block without also breaking video conferencing.</td></tr>
+                <tr><td><strong>Defeats address blocking by</strong></td><td>Not having a fixed address to block. A broker matches you to a volunteer proxy, and the volunteers are ordinary people running a browser extension, so the set turns over constantly and there is no list to enumerate.</td></tr>
+                <tr><td><strong>Reaches the broker via</strong></td><td>Domain fronting: the connection appears to be to a large CDN that the censor is unwilling to block wholesale. That is what the <code>fronts=</code> and <code>url=</code> fields in the bridge line are.</td></tr>
+                <tr><td><strong>Costs</strong></td><td>Speed. It finds a volunteer through a broker before any Tor traffic moves, and the volunteer is somebody's home connection. This is why its bootstrap deadline is three times the direct one.</td></tr>
+                <tr><td><strong>Works where</strong></td><td>obfs4 does not, because there is nothing to put on a blocklist.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The two are complements, not a ranking</p>
+            <p>
+              obfs4 is fast and enumerable. Snowflake is slow and
+              unenumerable. Which is right depends entirely on what the network
+              is doing, and neither is a strict upgrade on the other, which is
+              why both ship and the user chooses.
+            </p>
+          </div>
+
+          <h2 id="inprocess">Why they run in-process</h2>
+          <p>
+            This is the single most consequential engineering decision in the
+            chapter, and it is forced by iOS.
+          </p>
+          <pre class="ascii">
+  HOW TOR NORMALLY DOES IT          WHAT AIRHOP DOES
+
+  tor                                the app process
+   │                                  ├── Arti          (Rust)
+   │ spawn                            ├── obfs4         (Go, in-process)
+   ▼                                  └── Snowflake     (Go, in-process)
+  obfs4 process                             │
+   │ SOCKS5 on a port                       │ SOCKS5 on a loopback port
+   ▼                                        ▼
+  bridge                              Arti dials 127.0.0.1:&lt;port&gt;
+                                      as an UNMANAGED transport
+
+  iOS FORBIDS AN APP SPAWNING AN EXECUTABLE.
+  So the "managed" mode Arti would normally use is simply
+  unavailable on a phone, and the transports have to be compiled
+  in and reached over loopback instead.
+
+  TransportConfigBuilder::proxy_addr is the Arti setting for it.
+</pre>
+          <p>
+            Android could have spawned processes, but does not: one model on both
+            platforms means one lifecycle to reason about, and the Kotlin and
+            Swift wrappers mirror each other deliberately.
+          </p>
+          <div class="box warn">
+            <p class="box-title">The consequence for the build</p>
+            <p>
+              Compiling Go code into a mobile app is not a dependency you add,
+              it is a build pipeline. <code>native/iptproxy</code> exists for
+              that: pinned checkouts, gomobile, an <code>.aar</code> for Android
+              and an <code>.xcframework</code> for iOS, both built from source in
+              a pinned container rather than downloaded. Chapter
+              <a href="39-build-system.html">39</a> covers the pipeline and why
+              nothing is vendored prebuilt.
+            </p>
+          </div>
+
+          <h2 id="lines">Bridge lines, and who parses them</h2>
+          <p>
+            A bridge line is the standard Tor format: a transport name, an
+            address, a fingerprint, and transport-specific settings.
+          </p>
+          <pre class="ascii">
+  obfs4 146.57.248.225:22 10A6CD36A537FCE513A322361547444B393989F0 \
+        cert=K1gDtDAIcUfeLqbstggjIw2rtgIKqdIhUlHp82XRqNSq/... iat-mode=0
+  └───┘ └───────────────┘ └──────────────────────────────┘ └──────────┘
+  name    address:port          relay fingerprint            settings
+
+
+  snowflake 192.0.2.3:80 2B280B23E110... \
+        url=https://1098762253.rsc.cdn77.org/ \
+        fronts=app.datapacket.com,www.datapacket.com \
+        ice=stun:...,stun:... utls-imitate=hellorandomizedalpn
+                              └── the address is a PLACEHOLDER.
+                                  Snowflake has no fixed bridge;
+                                  the broker at `url` finds one.
+</pre>
+          <div class="box ok">
+            <p class="box-title">Arti owns the grammar, so there is exactly one parser</p>
+            <p>
+              Parsing lives in <code>native/arti/src/bridges.rs</code>, not in
+              TypeScript. Arti owns the grammar, and a second parser above the
+              FFI could only ever disagree with it. Custom lines the user pastes
+              are passed through <strong>unvalidated</strong> by the TypeScript
+              layer for exactly that reason: Arti refuses a bad line at start,
+              with <code>AIRHOP_TOR_ERR_BRIDGE_LINE</code>.
+            </p>
+            <p>
+              The Kotlin and Swift sides do read the first word of each line to
+              decide which transports to start, but that is explicitly
+              <em>not</em> a parser: a line it misreads is refused by Arti anyway,
+              because that transport's port will be zero.
+            </p>
+          </div>
+          <p>Three checks are worth naming, because each closes a real hole:</p>
+          <ul>
+            <li>
+              <strong>Only transports we ship.</strong> A line naming anything
+              other than <code>obfs4</code> or <code>snowflake</code> is refused
+              rather than passed through, because nothing would be listening for
+              it. A bridge with no transport at all is accepted: that is an
+              unlisted relay, which Arti spells as the empty name.
+            </li>
+            <li>
+              <strong>Only the transports the lines name are configured.</strong>
+              Configuring one nothing references would hide a typo in a transport
+              name behind a working build.
+            </li>
+            <li>
+              <strong>A settings length cap of 510 bytes.</strong> Arti packs a
+              transport's settings into the SOCKS5 username and password, 255
+              bytes each. A longer line parses and configures cleanly, then fails
+              <em>per connection</em> with an error about SOCKS rather than about
+              what the user pasted. Published Snowflake lines sit close enough to
+              this to matter, so it is checked up front. The length calculation
+              mirrors <code>tor_chanmgr</code>'s encoding exactly, including
+              which characters are escaped in which half.
+            </li>
+          </ul>
+
+          <h2 id="modes">Four modes</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th><code>TorBridgeMode</code></th><th>Uses</th><th>Bootstrap deadline</th><th>When</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>off</code></td><td>A direct connection to a public relay</td><td>60 s</td><td>The network does not block Tor. Fastest.</td></tr>
+                <tr><td><code>obfs4</code></td><td>The built-in obfs4 lines</td><td>120 s</td><td>Tor is blocked by address or fingerprint. Fast.</td></tr>
+                <tr><td><code>snowflake</code></td><td>The built-in Snowflake lines</td><td>180 s</td><td>obfs4 is blocked too, or the bridge addresses are known.</td></tr>
+                <tr><td><code>custom</code></td><td>Lines the user pastes</td><td>120 s</td><td>Bridges obtained privately, which is the only kind a determined censor has not enumerated.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">Why the deadlines differ, and why that is not a detail</p>
+            <p>
+              A bridge is slower than a direct connection by construction, and
+              Snowflake slowest of all: it finds a volunteer proxy through a
+              broker before any Tor traffic moves. Holding every mode to the
+              direct deadline would report a working Snowflake connection as
+              <strong>blocked</strong>, which is exactly the wrong thing to tell
+              a user who is being censored, because it points them away from the
+              mode that was working.
+            </p>
+          </div>
+          <p>
+            One reader, <code>bridgeLinesForStart()</code>, resolves the mode to
+            lines, so a startup and a toggle cannot disagree about how the client
+            came up. Changing mode restarts the client through the same path.
+          </p>
+
+          <h2 id="directory">The built-in directory, and Moat</h2>
+          <p>
+            <code>src/data/bridges.ts</code> holds seven obfs4 lines and two
+            Snowflake lines. It is generated by
+            <code>scripts/sync-bridges.js</code> from
+            <strong>Moat</strong>, the Tor Project's built-in bridge endpoint,
+            which is the same source Tor Browser uses.
+          </p>
+          <pre class="ascii">
+  .github/workflows/sync-bridges.yml
+
+    schedule: weekly, Sunday 07:30 UTC
+    source:   https://bridges.torproject.org/moat/circumvention/builtin
+    writes:   src/data/bridges.ts
+    opens:    a pull request on branch automation/bridges
+
+  A PR rather than a push: a bridge directory is security-relevant
+  input, and a scheduled job that can commit to main without review
+  is a supply-chain hole shaped like a convenience.
+</pre>
+          <div class="box bad">
+            <p class="box-title">Be honest about what a built-in bridge is worth</p>
+            <p>
+              These lines are <strong>public</strong>. They are in Tor Browser,
+              they are in this repository, and a determined censor blocks them.
+              They are the right default because they work in most places most of
+              the time and require nothing of the user, but anyone facing a
+              serious censor needs bridges obtained privately, which is what
+              <code>custom</code> mode is for. The Settings copy should say that
+              rather than implying the built-ins are a solution to state-level
+              blocking.
+            </p>
+          </div>
+
+          <h2 id="failclosed">Failing closed with a bridge</h2>
+          <p>
+            The interesting failure is not "the bridge is blocked". It is "the
+            transport did not start". That case is handled deliberately, in two
+            places, and the reasoning is the same in both.
+          </p>
+          <pre class="ascii">
+  startTor(bridgeLines)
+        │
+        ├─ native reads the first word of each line
+        │     -> which transports are needed
+        │
+        ├─ start them.  ANY failure to start -> the whole start fails
+        │     "a user who asked for a bridge is likely somewhere a
+        │      direct connection is unsafe"
+        │
+        ├─ collect the loopback ports the library chose
+        │     a port outside 1..65535, or a zero, is a failure
+        │
+        ▼
+  bridges.rs, inside Arti
+        │
+        ├─ push_transport(name, port)
+        │     port == 0  ->  Err(BRIDGE_TRANSPORT)
+        │     "starting anyway would take a direct route for a user
+        │      who asked not to have one"
+        │
+        └─ bridges().enabled(Explicit(true))
+              EXPLICIT, not Auto. Auto infers from whether the list
+              is empty, so an empty list would silently become a
+              direct connection. Explicit makes it an error.
+</pre>
+          <div class="box ok">
+            <p class="box-title">Bridges are an argument to <code>start</code>, not a setter</p>
+            <p>
+              They are fixed when the client is constructed. A setter beside
+              <code>start</code> could be called afterwards and silently do
+              nothing, and anything that cleared it would let a later start take
+              a direct route for a user who asked not to have one. Passing them
+              per start makes it impossible for a client to come up without
+              stating which kind it is.
+            </p>
+          </div>
+          <p>
+            The same reasoning covers the TypeScript layer: enabling a mode that
+            needs lines and has none returns
+            <code>reason: "no-bridges"</code> rather than starting a direct
+            client.
+          </p>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>2</td><td>Transports shipped</td><td>obfs4 (via Lyrebird) and Snowflake. A line naming anything else is refused.</td></tr>
+                <tr><td>7 + 2</td><td>Built-in obfs4 and Snowflake lines</td><td>From Moat, the same source Tor Browser uses.</td></tr>
+                <tr><td>510 bytes</td><td><code>MAX_PT_SETTINGS_BYTES</code></td><td>255 for the SOCKS5 username plus 255 for the password, which is where Arti packs transport settings. Published Snowflake lines sit close to it.</td></tr>
+                <tr><td>60 / 120 / 180 s</td><td>Bootstrap deadlines, per mode</td><td>Direct, bridged, Snowflake. Holding all three to 60 would report a working Snowflake as blocked.</td></tr>
+                <tr><td>4</td><td><code>TorBridgeMode</code> values</td><td>off, obfs4, snowflake, custom.</td></tr>
+                <tr><td>Weekly</td><td>Bridge directory sync</td><td>Sunday 07:30 UTC, as a pull request rather than a push.</td></tr>
+                <tr><td>5.5.1</td><td><code>IPTPROXY_VERSION</code></td><td>Pinned by version <em>and</em> commit, so the source cannot change behind a tag.</td></tr>
+                <tr><td>3</td><td>Android ABIs built</td><td>arm64-v8a, armeabi-v7a, x86_64. Upstream also builds android/386 and a macOS slice; Airhop packages neither.</td></tr>
+                <tr><td>1</td><td>Transports built but unused</td><td>dnstt. It is compiled in with no build tag to leave it out, and excluding it would mean forking, which costs more than the bytes do.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>A censor who has enumerated the built-in lines.</strong>
+              The expected failure, not a defect. The answer is
+              <code>custom</code> with privately obtained bridges.
+            </li>
+            <li>
+              <strong>A transport that fails to start.</strong> Fatal on purpose.
+              Starting Arti anyway would give a direct connection to somebody who
+              explicitly asked not to have one, which is the worst possible
+              outcome for this user.
+            </li>
+            <li>
+              <strong><code>enabled(Auto)</code> instead of
+              <code>Explicit(true)</code>.</strong> Auto infers bridge use from
+              whether the list is empty, so an empty list silently becomes a
+              direct connection. Explicit turns it into an error.
+            </li>
+            <li>
+              <strong>A settings string over 510 bytes.</strong> Configures
+              cleanly and then fails per connection with a SOCKS error that says
+              nothing about the pasted line. Checked up front for that reason.
+            </li>
+            <li>
+              <strong>A second parser above the FFI.</strong> It could only
+              disagree with Arti's. The transport-name read in Kotlin and Swift
+              is deliberately not one: a misread costs a zero port and a clean
+              refusal.
+            </li>
+            <li>
+              <strong>Holding every mode to one deadline.</strong> Reports a
+              working Snowflake as blocked and points a censored user away from
+              the only mode that was working.
+            </li>
+            <li>
+              <strong>A scheduled sync that pushes to main.</strong> A bridge
+              directory is security-relevant input. The workflow opens a pull
+              request.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            Tor would still work everywhere Tor is not blocked, which is most
+            places. What would go is the entire population this feature exists
+            for: users on a network that filters Tor by address or by
+            fingerprint. For them, removing bridges does not degrade the app to a
+            slower internet layer, it removes the internet layer completely and
+            leaves them with the Bluetooth mesh alone. That is a coherent product
+            and a much smaller build, and it is the wrong trade for an app whose
+            stated purpose includes working where the network is hostile.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Approach</th><th>How it works</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>meek</td>
+                  <td>Domain fronting for the whole circuit, not just broker discovery</td>
+                  <td>Very expensive in bandwidth and money, since every byte crosses a commercial CDN. Largely superseded by Snowflake, which fronts only the broker lookup.</td>
+                </tr>
+                <tr>
+                  <td>WebTunnel</td>
+                  <td>Traffic that looks like ordinary HTTPS to a website</td>
+                  <td>Newer, promising, and not in the IPtProxy build. A real candidate for a future addition rather than a rejected one.</td>
+                </tr>
+                <tr>
+                  <td>Ship the transports as executables</td>
+                  <td>The way desktop Tor does it: Arti spawns a managed child process</td>
+                  <td>iOS forbids an app spawning an executable, so this mode does not exist on a phone. It is the reason for the whole in-process design.</td>
+                </tr>
+                <tr>
+                  <td>Vendor upstream's prebuilt binaries</td>
+                  <td>IPtProxy commits an xcframework and publishes an aar on Maven</td>
+                  <td>Puts a large binary nobody here compiled into the app. <code>fetch-sources.sh</code> deletes the committed xcframework so that shortcut cannot ship it, and <code>verify-vendored.js</code> exists to catch the general case.</td>
+                </tr>
+                <tr>
+                  <td>Fetch bridges at runtime from Moat</td>
+                  <td>What Tor Browser's "request a bridge" does</td>
+                  <td>Needs a working connection to Moat, which is the thing a censored user does not have, and it adds a live dependency on a service the app cannot verify. The weekly build-time sync gets most of the benefit with none of that.</td>
+                </tr>
+                <tr>
+                  <td>No built-in bridges, custom only</td>
+                  <td>Every user brings their own</td>
+                  <td>Honest about the enumeration problem and useless to almost everybody. Most users blocked by a mid-tier filter are served fine by public lines.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Distinguish a bridge from a pluggable transport, and say when you need each.</span>
+              <span class="a">A bridge is an unlisted entry relay; a pluggable transport disguises the connection to it. They answer different attacks. A censor blocking by address is defeated by the bridge, because it is not in the public consensus. A censor doing deep packet inspection is defeated by the transport, because the traffic no longer looks like Tor. A censor doing active probing needs a transport that will not respond correctly without a secret the client already has, which is what obfs4's certificate is for. A plain bridge with no transport gets you reachability and not unobservability, which is why the built-in directory ships transport-bearing lines only.</span>
+            </li>
+            <li>
+              <span class="q">Why are obfs4 and Snowflake compiled into the app rather than run as processes?</span>
+              <span class="a">Because iOS forbids an app spawning an executable, so Arti's normal managed-transport mode simply does not exist on a phone. Both transports are therefore compiled in as Go code through gomobile and run in-process behind a SOCKS5 listener each, and Arti dials those loopback ports as an unmanaged transport via <code>TransportConfigBuilder::proxy_addr</code>. Android could have spawned processes and deliberately does not: one model on both platforms means one lifecycle to reason about, and the Kotlin and Swift wrappers mirror each other. The cost is a real build pipeline, which is why <code>native/iptproxy</code> exists.</span>
+            </li>
+            <li>
+              <span class="q">A pluggable transport fails to start. Why does the whole Tor start fail rather than falling back to a direct connection?</span>
+              <span class="a">Because a user who asked for a bridge is likely somewhere a direct connection is unsafe, and silently giving them one is worse than giving them nothing. The rule is enforced twice: native returns null if any needed transport does not come up, and inside Arti <code>push_transport</code> refuses a zero port. The related decision is <code>bridges().enabled(BoolOrAuto::Explicit(true))</code> rather than <code>Auto</code>, because Auto infers bridge use from whether the list is empty, so an empty list would become a silent direct connection instead of an error.</span>
+            </li>
+            <li>
+              <span class="q">Why does Snowflake get a 180 second bootstrap deadline when a direct connection gets 60?</span>
+              <span class="a">Because Snowflake finds a volunteer proxy through a broker before any Tor traffic moves, and the volunteer is somebody's home connection, so it is slower than a bridge by construction and a bridge is slower than direct by construction. Holding all three modes to the direct deadline would report a working Snowflake connection as blocked. That is not merely a cosmetic error: it tells a user who is actually being censored that the one mode that got through did not, which points them away from the answer.</span>
+            </li>
+            <li>
+              <span class="q">Where are bridge lines parsed, and why not in TypeScript?</span>
+              <span class="a">In <code>native/arti/src/bridges.rs</code>, because Arti owns the grammar and a second parser above the FFI could only ever disagree with it. Custom lines the user pastes are passed straight through unvalidated for that reason: a bad line is refused at start with a dedicated error code rather than pre-judged by a parser that might be wrong. The Kotlin and Swift sides do read the first word of each line to decide which transports to start, and that is explicitly not a parser, because a line either of them misreads leaves that transport's port at zero and Arti refuses it anyway.</span>
+            </li>
+            <li>
+              <span class="q">How much protection do the built-in bridges actually give?</span>
+              <span class="a">Enough for a mid-tier filter and not enough for a determined censor. They come from Moat, the same endpoint Tor Browser uses, so they are public by construction: in Tor Browser, in this repository, and available to anyone who wants to block them. That is still the right default because they work in most places, require nothing of the user, and are refreshed weekly by a scheduled workflow that opens a pull request rather than pushing. Anyone facing a state-level censor needs bridges obtained privately, which is what custom mode is for, and the Settings copy should say so rather than implying the built-ins solve that case.</span>
+            </li>
+            <li>
+              <span class="q">Why is there a 510 byte cap on a bridge line's settings?</span>
+              <span class="a">Because Arti packs a transport's settings into the SOCKS5 username and password fields, which are 255 bytes each. A longer line parses and configures perfectly cleanly, and then fails on every connection with an error about SOCKS rather than about the line the user pasted, which is close to undiagnosable from the outside. Published Snowflake lines, with their STUN server lists and front domains, sit close enough to the limit for this to be a real case rather than a theoretical one. The check mirrors <code>tor_chanmgr</code>'s encoding exactly, including escaping <code>=</code> in keys but not in values, because overcounting would reject lines that actually fit.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

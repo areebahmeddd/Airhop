@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 45: Scale and chaos. Airtime maths, crowd density, capacity curves, failure behaviour." />
+    <title>45 Scale and chaos · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 45 · Adversaries and proof</p>
+          <h1>Scale and chaos</h1>
+          <p class="kt-lede">
+            "How does it scale?" has a different answer here than in any server
+            system. There is no capacity to add. The scarce resource is airtime in
+            a shared band, and it does not grow when more people arrive.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#different">Why this is not backend scaling</a></li>
+              <li><a href="#density">Density is the variable</a></li>
+              <li><a href="#airtime">The airtime budget</a></li>
+              <li><a href="#curves">The three regimes</a></li>
+              <li><a href="#fanout">The fanout problem</a></li>
+              <li><a href="#nostr">Scaling the internet half</a></li>
+              <li><a href="#chaos">Chaos scenarios</a></li>
+              <li><a href="#numbers">Capacity numbers</a></li>
+              <li><a href="#recommendations">What I would change</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine a room where everyone can only talk by shouting, and only one
+              person can be heard at a time. Two people is easy. Twenty is fine if
+              they take turns. Two hundred and the room is just noise, no matter how
+              polite everyone is, because there is only so much air. More people
+              means the message can travel further, and it also means everyone has
+              less time to speak.
+            </p>
+          </div>
+
+          <h2 id="different">Why this is not backend scaling</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>A server system</th><th>Airhop's mesh</th></tr></thead>
+              <tbody>
+                <tr><td>Bottleneck</td><td>CPU, memory, database, bandwidth at a known point</td><td><strong>Airtime in a shared 2.4 GHz band</strong></td></tr>
+                <tr><td>Adding capacity</td><td>Add machines</td><td><strong>Impossible.</strong> The band is fixed and shared with every WiFi network and microwave in the building.</td></tr>
+                <tr><td>More users</td><td>More load, more capacity needed</td><td>More load <em>and</em> more relays. Reach improves while per-node airtime shrinks.</td></tr>
+                <tr><td>Observability</td><td>Central metrics</td><td>None. No node can see the graph. There is no dashboard, by design.</td></tr>
+                <tr><td>Failure</td><td>A tier saturates and errors</td><td>Delivery probability degrades gradually and silently.</td></tr>
+                <tr><td>The right question</td><td>"How many requests per second?"</td><td><strong>"At what density does delivery probability fall below useful?"</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A backend engineer's instinct is to look for the tier that saturates.
+            Here the answer is that <em>the medium</em> saturates, everywhere at
+            once, and the only levers are how many transmissions each message
+            causes and how far it travels.
+          </p>
+
+          <h2 id="density">Density is the variable</h2>
+          <pre class="ascii">
+  REACH = HOPS x DISTANCE PER HOP, and both depend on who is standing where.
+
+  SPARSE                     one person per 100 m
+  ┌───────────────────────────────────────────────────────┐
+  │  A         B                    C                     │
+  │  ↔30-50m   ✕ too far            ✕                     │
+  └───────────────────────────────────────────────────────┘
+  The mesh does not exist. TTL 7 is irrelevant when hop 2 has nobody.
+
+  MODERATE                   a party, an office, a small march
+  ┌───────────────────────────────────────────────────────┐
+  │  A ── B ── C ── D ── E ── F ── G                       │
+  └───────────────────────────────────────────────────────┘
+  IDEAL. 7 hops x 30-50 m = 210-350 m of real reach, little contention.
+
+  DENSE                      a stadium, a large protest
+  ┌───────────────────────────────────────────────────────┐
+  │  A══B══C══D══E══F══G══H══I══J══K══L══M══N══O══P══Q     │
+  │  ║╳ ║╳ ║╳ ║╳ ║╳ ║╳ ║╳ ║  every node hears many others   │
+  └───────────────────────────────────────────────────────┘
+  Reach is excellent. CONTENTION IS THE PROBLEM. Bodies also absorb,
+  so per-hop distance FALLS at exactly the moment node count rises.
+</pre>
+          <div class="box">
+            <p class="box-title">The counter-intuitive part</p>
+            <p>
+              A crowd helps and hurts at the same time. More phones means more
+              relays and better reach, and it also means more bodies absorbing 2.4
+              GHz, more devices contending for the band, and more transmissions per
+              message. The two effects fight, and which wins depends entirely on
+              how many transmissions each message causes.
+            </p>
+          </div>
+
+          <h2 id="airtime">The airtime budget</h2>
+          <p>
+            Here is the arithmetic a reviewer will want, done explicitly.
+          </p>
+          <pre class="code">
+  ONE BLE LINK    ~18 KiB/s
+  ONE TEXT PACKET ~100 to 300 bytes encoded
+  ONE WRITE       ~5 to 15 ms of link time in practice
+
+  A MESSAGE'S TOTAL COST = (number of nodes that relay it)
+                         x (links each writes to)
+
+  FULL FANOUT, which is what Airhop implements:
+     every node writes to every link except the ingress one
+
+     n nodes, average degree d
+     transmissions ≈ n x (d - 1), bounded by TTL and collapsed by dedup
+
+  DETERMINISTIC SUBSET, which is what bitchat implements:
+     every node writes to a message-ID-seeded subset
+
+     transmissions ≈ n x subset_size,  where subset_size &lt;&lt; d
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Room</th><th>Nodes</th><th>Typical degree</th><th>Writes per message, full fanout</th><th>Assessment</th></tr></thead>
+              <tbody>
+                <tr><td>Two friends</td><td>2</td><td>1</td><td>1</td><td>Trivial</td></tr>
+                <tr><td>A dinner</td><td>6</td><td>4</td><td>~18</td><td>Fine</td></tr>
+                <tr><td>An office floor</td><td>25</td><td>6</td><td>~125</td><td><strong>Tested and converging (B06)</strong></td></tr>
+                <tr><td>A large meeting</td><td>50</td><td>6, capped</td><td>~250</td><td>Plausible, untested</td></tr>
+                <tr><td>A march</td><td>200</td><td>6, capped</td><td>~1,000</td><td><span class="pill warn">untested, and the number that worries me</span></td></tr>
+                <tr><td>A stadium</td><td>1,000+</td><td>6, capped</td><td>~5,000</td><td><span class="pill bad">unmodelled</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The degree cap helps a great deal: Airhop holds at most 6 central
+            links, so a node in a crowd of a thousand still writes to a handful of
+            neighbours rather than to everyone. That turns the growth from
+            quadratic in node count to roughly linear. Linear in a room of a
+            thousand is still a lot of writes per message on a shared band.
+          </p>
+          <p>
+            Three existing controls bound it further, and they are the reason the
+            system works at 25:
+          </p>
+          <ul>
+            <li><strong>Dedup</strong> means each node transmits a given message at most once.</li>
+            <li><strong>TTL 7</strong> bounds depth, and time-critical traffic is clamped to 5 in a dense graph.</li>
+            <li><strong>Jitter widening with degree</strong> means the denser the room, the longer each node waits, so somebody else's relay usually wins first and dedup does the work.</li>
+          </ul>
+
+          <h2 id="curves">The three regimes</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Regime</th><th>Symptom</th><th>What actually fails</th><th>Mitigation</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Too sparse</strong></td>
+                  <td>"Nobody is here."</td>
+                  <td>There is no path. TTL is irrelevant.</td>
+                  <td>The <strong>courier</strong>: a person carries the message. And relay hardware, which puts a node where nobody stands. This is the regime bitchat compatibility helps most, because it doubles the effective user base at zero cost.</td>
+                </tr>
+                <tr>
+                  <td><strong>Ideal</strong></td>
+                  <td>Everything works.</td>
+                  <td>Nothing.</td>
+                  <td>n/a</td>
+                </tr>
+                <tr>
+                  <td><strong>Too dense</strong></td>
+                  <td>"It is slow", then "some messages do not arrive."</td>
+                  <td>Contention. Writes are refused, fragments drop, transfers stall, and delivery probability falls <strong>silently and gradually</strong>.</td>
+                  <td>Degree cap, jitter widening, TTL clamping for streams. <strong>Fanout subsetting is the missing one.</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The dense failure is the dangerous one because it is graceful in the
+            worst sense: nothing errors, nothing logs, messages just become less
+            likely to arrive. A user experiences it as "this app is unreliable in
+            crowds", which is the exact situation it was built for.
+          </p>
+
+          <h2 id="fanout">The fanout problem</h2>
+          <div class="box warn">
+            <p class="box-title">The single most significant scaling item</p>
+            <p>
+              <code>PROTOCOLS.md</code> section 4 lists a fanout subset of roughly
+              <code>ceil(sqrt(n))</code> links, deterministic and excluding the
+              ingress peer, as a routing constant. <strong>There is no such code in
+              <code>src/</code>.</strong>
+              <code>MeshService.relayPacket</code> writes to every link except the
+              ingress one.
+            </p>
+          </div>
+          <pre class="ascii">
+  WHAT BITCHAT DOES
+
+    A node relaying a broadcast writes to a SUBSET of its links,
+    chosen deterministically from the MESSAGE ID. So different
+    messages take different subsets, and coverage is statistical
+    across many messages rather than guaranteed per message.
+
+    FULL fanout is kept for the types that must reach everybody:
+       announces, fragments, sync packets
+    Directed traffic keeps full targeted fanout.
+
+  THE TRADE
+
+    full fanout   guarantees that if a path exists within the TTL,
+                  the packet takes it. Costs the most airtime.
+
+    subsetting    accepts a small probability that one message misses
+                  one node, and leans on GOSSIP SYNC to repair the gap
+                  within 15 seconds. Costs far less airtime.
+</pre>
+          <p>
+            Airhop already has the repair mechanism: gossip sync reconciles public
+            messages, board posts and group messages every 15 seconds, and the
+            per-type candidate windows are 15 minutes for messages. So the safety
+            net that makes subsetting viable is in place and running. What is
+            missing is the thing it would be a safety net <em>for</em>.
+          </p>
+          <p>
+            The honest position: full fanout is defensible at the tested scale, it
+            is untested above the low tens, and the standard mitigation is
+            available, specified in this project's own protocol document, and not
+            implemented.
+          </p>
+          <p>
+            A second, cheaper item sits beside it.
+            <code>FloodRouter</code> keeps pending relay timers in a map keyed by
+            packet ID, so the machinery to <strong>cancel a scheduled relay when a
+            duplicate arrives first</strong> exists. But the receive path drops a
+            duplicate before reaching any cancellation, so the timer fires anyway
+            and its copy is deduplicated by everyone who already has it. bitchat
+            cancels. In a dense room where jitter is deliberately long precisely so
+            that somebody else's relay wins, this is real wasted airtime for a
+            small change.
+          </p>
+
+          <h2 id="nostr">Scaling the internet half</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Concern</th><th>Position</th></tr></thead>
+              <tbody>
+                <tr><td>Relay capacity</td><td>Not the project's problem in the usual sense: it operates none. 300+ independent relays, 5 per cell, no single one load bearing.</td></tr>
+                <tr><td>A relay disappearing</td><td>Invisible. Publishes go to all 5 and resolve on the first acknowledgement.</td></tr>
+                <tr><td>A relay rate limiting or requiring proof of work</td><td>Also invisible, for the same reason. The cost is that Airhop cannot publish to PoW-requiring relays at all.</td></tr>
+                <tr><td>A busy geohash cell</td><td>Join replays at most an hour and is capped at 200 events, so a crowded cell cannot flood a client on join. Kind 20000 is ephemeral, so relays do not accumulate it.</td></tr>
+                <tr><td>Gateway airtime</td><td>Capped at 30 downlink events per minute. A busy cell cannot saturate the local mesh through one gateway.</td></tr>
+                <tr><td>Bridge airtime</td><td>20 per minute, plus three loop caches of 512 entries each.</td></tr>
+                <tr><td>Relay selection convergence</td><td>By cell centre with URL tie-breaks, so every participant independently arrives at the same set. This is a correctness property, not a performance one, and getting it wrong splits the channel silently.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The internet half genuinely scales, because it is somebody else's
+            infrastructure and there is a lot of it. The interesting failure there
+            is not capacity, it is the relay set fragmenting: if two clients
+            disagree about which relays serve a cell, they are in different rooms
+            with the same name.
+          </p>
+
+          <h2 id="chaos">Chaos scenarios</h2>
+          <p>
+            The simulation runs the following deliberately hostile conditions.
+            Each is a named scenario rather than a claim.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Condition</th><th>Expected behaviour</th><th>Scenario</th></tr></thead>
+              <tbody>
+                <tr><td>A lossy, jittery, duplicating radio</td><td>Still converges.</td><td>B02</td></tr>
+                <tr><td>Corrupted packets on the wire</td><td>Rejected, no crash.</td><td>B03</td></tr>
+                <tr><td>Walking out of range mid-conversation</td><td>The message parks rather than being lost.</td><td>B04</td></tr>
+                <tr><td>25 phones in one room</td><td>Converge on one channel.</td><td>B06</td></tr>
+                <tr><td>A crowd forming</td><td>Does not drown itself in control traffic.</td><td>B07</td></tr>
+                <tr><td>Replay of captured packets</td><td>Deduplicated; nothing renders twice.</td><td>C03</td></tr>
+                <tr><td>A Sybil flood of fabricated peers</td><td>Real neighbours never evicted; caps hold.</td><td>C04</td></tr>
+                <tr><td>A phone killed mid-conversation</td><td>Returns consistent. No partial or duplicated state.</td><td>C05</td></tr>
+                <tr><td>A panic wipe</td><td>Nothing survives; the rest of the room carries on.</td><td>C06</td></tr>
+                <tr><td><strong>A seeded soak: eight phones, hundreds of random events</strong></td><td><strong>All invariants hold under arbitrary interleaving.</strong></td><td>C07</td></tr>
+                <tr><td>A hostile network with a moving crowd, gateway and bridge both live</td><td>Both features hold.</td><td>N09</td></tr>
+                <tr><td>Gateway and bridge on one phone, nine-seed sweep</td><td>The far island receives the message <em>and</em> the carrying phone keeps its own copy.</td><td>N08</td></tr>
+                <tr><td>Three phones sending photos to one receiver simultaneously</td><td>All arrive.</td><td>M02</td></tr>
+                <tr><td>Talking while a file is in flight</td><td>Neither starves.</td><td>M06</td></tr>
+                <tr><td>A mint dying mid-swap</td><td>Input proofs not destroyed.</td><td>W05</td></tr>
+                <tr><td>A swap response lost, then the process killed</td><td>Replayed from the persisted preview.</td><td>W17</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The soak (C07) is the one to cite when asked how the system behaves
+            under conditions nobody scripted: eight phones, hundreds of random
+            events from a seeded generator, and the invariants checked at the end.
+            Every run prints its seed, so a red run is reproducible byte for byte.
+          </p>
+
+          <h2 id="numbers">Capacity numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Dimension</th><th>Limit</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr><td>Concurrent BLE central links</td><td>6</td><td>Android controllers refuse around 7 with status 133.</td></tr>
+                <tr><td>Peers tracked</td><td>200</td><td>Registry and radar caps.</td></tr>
+                <tr><td>Hops</td><td>7</td><td>TTL, and 5 for streams in a dense graph.</td></tr>
+                <tr><td>Effective reach</td><td>210 to 350 m</td><td>7 hops at 30 to 50 m, when the nodes exist.</td></tr>
+                <tr><td>Throughput per link</td><td>~18 KiB/s</td><td>467 bytes per 25 ms.</td></tr>
+                <tr><td>Concurrent file assemblies</td><td>128</td><td>Fragment manager.</td></tr>
+                <tr><td>Concurrent voice bursts</td><td>8</td><td>Voice player, plus a 2x realtime flood guard.</td></tr>
+                <tr><td>Gossip candidates</td><td>1,000 packets</td><td>Ten times bitchat-Android's 100.</td></tr>
+                <tr><td>Gossip filter</td><td>400 bytes, ~355 elements</td><td>One BLE frame with room to spare.</td></tr>
+                <tr><td>Sync responses</td><td>8 per peer per 30 s</td><td>Amplification bound.</td></tr>
+                <tr><td>Courier envelopes carried</td><td>40, with 20 for the verified tier</td><td>Pool caps.</td></tr>
+                <tr><td>Outbox</td><td>100 per peer, 8 attempts, 7 days</td><td>The one deliberate divergence from bitchat's 24 hours.</td></tr>
+                <tr><td>Group members</td><td>16</td><td>Creator-signed roster, bitchat compatible.</td></tr>
+                <tr><td>Private channel members</td><td>Unbounded</td><td>No roster, the key rides the link.</td></tr>
+                <tr><td>Relays per cell</td><td>5, plus up to 5 custom</td><td>Convergence with bitchat.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="recommendations">What I would change</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Priority</th><th>Change</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>1</strong></td>
+                  <td>Implement message-ID-seeded fanout subsetting for broadcast relays, keeping full fanout for announces, fragments, sync and directed traffic.</td>
+                  <td>It is the specified behaviour, it is what bitchat does, gossip sync already provides the repair mechanism, and it is the difference between a room of 200 working and degrading silently.</td>
+                </tr>
+                <tr>
+                  <td><strong>2</strong></td>
+                  <td>Cancel a scheduled relay when a duplicate arrives first.</td>
+                  <td>The timer map already exists. It is a small change that directly reclaims airtime in exactly the dense case where jitter is deliberately long.</td>
+                </tr>
+                <tr>
+                  <td><strong>3</strong></td>
+                  <td>Add a 100 and a 200 node scenario to the simulation, asserting convergence and measuring writes per message.</td>
+                  <td>Right now the honest answer to "does it work in a crowd of 200" is "we do not know". Adding the scenario turns that into a number, and gives change 1 a before-and-after.</td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>Instrument writes per message and refused writes as local diagnostics.</td>
+                  <td>There is no telemetry and there should not be, but a local diagnostics screen showing airtime pressure would let a field tester report something more useful than "it felt slow".</td>
+                </tr>
+                <tr>
+                  <td>5</td>
+                  <td>Lift the 25 ms pacing on WiFi Aware links.</td>
+                  <td>The pacing is a Bluetooth requirement, not a protocol one. On a WiFi link it turns a 250 Mbps path into an 18 KiB/s one, which is the entire value of the fast path.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">"How does this scale?" Answer in three sentences.</span>
+              <span class="a">It does not scale the way a server does, because there is no capacity to add: the scarce resource is airtime in a shared 2.4 GHz band, and that is fixed. More users improves reach, because a message hops further, and simultaneously increases contention, because every relay costs airtime. So the real question is at what density delivery probability falls below useful, and the levers are how many transmissions each message causes and how far it travels.</span>
+            </li>
+            <li>
+              <span class="q">A room of 200 people. What breaks first?</span>
+              <span class="a">Airtime. Each node relays to every non-ingress link, and with the degree capped at 6 that is roughly 1,000 writes per message across the room. Dedup means each node transmits once, TTL bounds depth, and jitter widens with degree so somebody else's copy usually wins, but none of those reduce the <em>number</em> of transmissions the way subsetting would. The symptom is graceful in the worst sense: writes get refused, fragments drop, transfers stall, and delivery probability falls silently.</span>
+            </li>
+            <li>
+              <span class="q">Why does a crowd help and hurt at the same time?</span>
+              <span class="a">More phones means more relays, so a message can cross seven hops of real people rather than dying at hop two. It also means more bodies absorbing 2.4 GHz, which cuts per-hop distance at exactly the moment node count rises, and more devices contending for a band already shared with every WiFi network in the building. Which effect wins depends entirely on how many transmissions each message causes, which is why fanout is the lever that matters.</span>
+            </li>
+            <li>
+              <span class="q">What is the honest answer to "have you tested this at scale"?</span>
+              <span class="a">25 phones converge on one channel in the simulation, and a seeded soak of hundreds of random events across eight phones holds every invariant. Above the low tens is untested, and that matters specifically because the protocol document specifies fanout subsetting and the code implements full fanout, so the one mitigation for the dense case is documented and absent. Adding a 200-node scenario would turn "we do not know" into a number.</span>
+            </li>
+            <li>
+              <span class="q">Why is there no telemetry to answer these questions from the field?</span>
+              <span class="a">Because no analytics reach any server, deliberately: no crash reporting, no usage metrics, no tracking. That is a principle rather than an oversight, and it costs exactly this: there is no way to learn what happens in a real crowd except by being in one. The available compromise is local diagnostics a field tester can read and report themselves, which is strictly better than "it felt slow" and still sends nothing anywhere.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

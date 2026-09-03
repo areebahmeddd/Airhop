@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 16: Crypto primitives. Curves, AEAD, hashes, HKDF, nonces, and what each one buys." />
+    <title>16 Crypto primitives · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 16 · Cryptography</p>
+          <h1>Crypto primitives</h1>
+          <p class="kt-lede">
+            Six building blocks account for every cryptographic operation in
+            Airhop. This chapter is what each one does, what it does not do, and
+            the specific way it is used here. Chapters 17 to 20 assume all of it.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#inventory">The inventory</a></li>
+              <li><a href="#curve">Curve25519: X25519 and Ed25519</a></li>
+              <li><a href="#aead">AEAD: ChaCha20-Poly1305</a></li>
+              <li><a href="#nonces">Nonces, the most dangerous parameter</a></li>
+              <li><a href="#hash">SHA-256, HMAC, HKDF</a></li>
+              <li><a href="#secp">secp256k1, and why there are two curves</a></li>
+              <li><a href="#domain">Domain separation</a></li>
+              <li><a href="#random">Randomness</a></li>
+              <li><a href="#library">The library choice</a></li>
+              <li><a href="#pitfalls">Pitfalls this codebase actually hit</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              There are only a few kinds of tool here. A <strong>lock</strong>
+              that only one key opens. A <strong>signature</strong> that proves
+              you wrote something and that nobody changed it. A
+              <strong>handshake</strong> where two people who have never met end
+              up holding the same secret number without ever saying it out loud.
+              A <strong>fingerprint machine</strong> that turns anything into a
+              short unique smudge. And a way to turn one secret into many
+              different secrets so they cannot be mixed up. Everything else in
+              this app is those five things, arranged carefully.
+            </p>
+          </div>
+
+          <h2 id="inventory">The inventory</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Primitive</th><th>Job</th><th>Used for</th><th>Key or output size</th></tr></thead>
+              <tbody>
+                <tr><td><strong>X25519</strong></td><td>Key agreement (ECDH)</td><td>Noise XX sessions, Noise X courier sealing, Double Ratchet DH steps, one-time prekeys</td><td>32 byte keys, 32 byte shared secret</td></tr>
+                <tr><td><strong>Ed25519</strong></td><td>Digital signature</td><td>Every signed packet, group states, board posts, prekey bundles</td><td>32 byte keys, 64 byte signature</td></tr>
+                <tr><td><strong>ChaCha20-Poly1305</strong></td><td>AEAD encryption</td><td>Noise transport, group messages, Double Ratchet messages</td><td>32 byte key, 12 byte nonce, 16 byte tag</td></tr>
+                <tr><td><strong>XChaCha20-Poly1305</strong></td><td>AEAD with a big nonce</td><td>Private channels, Nostr DM encryption</td><td>32 byte key, <strong>24 byte</strong> nonce, 16 byte tag</td></tr>
+                <tr><td><strong>SHA-256</strong></td><td>Hash</td><td>Peer IDs, packet IDs, GCS hashing, fingerprints, Noise internals</td><td>32 byte output</td></tr>
+                <tr><td><strong>HMAC-SHA256</strong></td><td>Keyed hash</td><td>Courier tags, geohash key derivation, HKDF internals, ratchet chain steps</td><td>32 byte output</td></tr>
+                <tr><td><strong>HKDF-SHA256</strong></td><td>Key derivation</td><td>Nostr key from signing key, Double Ratchet root, Noise key schedule</td><td>Arbitrary length output</td></tr>
+                <tr><td><strong>secp256k1</strong></td><td>Signature and ECDH, Bitcoin's curve</td><td>Nostr identity (Schnorr, BIP-340), geohash identities, Cashu P2PK</td><td>32 byte keys, 64 byte signature</td></tr>
+                <tr><td><strong>BIP-39</strong></td><td>Mnemonic encoding</td><td>The optional 12 word wallet recovery phrase</td><td>128 bits of entropy</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Notice what is <strong>not</strong> here: no RSA, no AES, no
+            NIST P-curves, no SHA-1, no MD5, no custom cipher. Every choice is a
+            modern, widely reviewed primitive with a constant-time reference
+            implementation.
+          </p>
+
+          <h2 id="curve">Curve25519: X25519 and Ed25519</h2>
+          <p>
+            One curve, two encodings, two uses. This confuses people constantly,
+            so it is worth being precise.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>X25519</th><th>Ed25519</th></tr></thead>
+              <tbody>
+                <tr><td>Curve form</td><td>Montgomery</td><td>Twisted Edwards</td></tr>
+                <tr><td>Operation</td><td>Diffie-Hellman key agreement</td><td>EdDSA signatures</td></tr>
+                <tr><td>Question it answers</td><td>"Can we agree on a secret nobody watching can learn?"</td><td>"Did this specific key holder produce these bytes, unaltered?"</td></tr>
+                <tr><td>Airhop calls it</td><td><code>noiseStaticPrivKey</code> / <code>noiseStaticPubKey</code></td><td><code>signingPrivKey</code> / <code>signingPubKey</code></td></tr>
+                <tr><td>Security level</td><td colspan="2">Roughly 128 bits, comparable to 3072 bit RSA</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            They are birationally equivalent (you can convert between the forms
+            mathematically) but Airhop keeps them as <strong>two independent key
+            pairs</strong>. That is deliberate. Reusing one key for both
+            agreement and signing is a known footgun: signature schemes and DH
+            schemes stress the key differently, and cross-protocol attacks
+            between them are a live research area. Two keys costs 32 extra bytes
+            in the keychain and removes the whole class.
+          </p>
+
+          <h3>X25519 in one picture</h3>
+          <pre class="ascii">
+  ALICE                                          BOB
+  ─────                                          ───
+  a  = 32 random bytes  (private)                b  = 32 random bytes
+  A  = a * G            (public)                 B  = b * G
+
+              ──────  A  ─────▶
+              ◀─────  B  ──────
+
+  shared = a * B                                 shared = b * A
+         = a * (b * G)                                  = b * (a * G)
+         = (a*b) * G                                    = (a*b) * G
+                        SAME 32 BYTES
+
+  An observer sees A and B. Recovering a from A means solving the
+  elliptic curve discrete logarithm problem, which is infeasible.
+</pre>
+          <p>
+            The output of <code>x25519.getSharedSecret</code> is the
+            x-coordinate of the shared point. It is <strong>not</strong> a key.
+            It has structure and it is not uniformly random, which is why every
+            protocol that uses it feeds it through a KDF before using it as key
+            material. Noise does this with <code>mixKey</code>; the Double
+            Ratchet does it with <code>kdfRk</code>.
+          </p>
+          <p>
+            Airhop uses X25519 in five distinct places: the three ephemeral DH
+            operations inside a Noise XX handshake, the two DH operations inside
+            Noise X, every ratchet step in the Double Ratchet, one-time prekeys,
+            and the sealing of courier envelopes.
+          </p>
+
+          <h3>Ed25519 in one picture</h3>
+          <pre class="ascii">
+  SIGN                                    VERIFY
+  ────                                    ──────
+  sig = Ed25519.sign(message, priv)       ok = Ed25519.verify(sig, message, pub)
+
+  64 byte signature = (R, s)              recomputes and checks the equation
+
+  Properties you get:
+    * unforgeable without the private key
+    * covers the EXACT bytes: one bit changes, verification fails
+    * DETERMINISTIC. The same message and key always give the same
+      signature, because the nonce is derived from a hash of the key
+      and the message rather than from randomness.
+</pre>
+          <p>
+            The determinism matters here for a subtle reason: it means signing is
+            safe on a device with a broken random number generator, which
+            historically destroyed ECDSA keys (the PlayStation 3 case, and
+            several Bitcoin wallets). It also means a packet signed twice
+            produces identical bytes, which keeps content-derived packet IDs
+            stable.
+          </p>
+          <p>
+            What Ed25519 does <strong>not</strong> give you: confidentiality (a
+            signature reveals the message), or non-repudiation in the social
+            sense that matters here. Airhop wants the opposite of non-repudiation
+            for private messages, which is why DMs inside a Noise session carry
+            no signature. See chapter <a href="17-noise.html">17</a>.
+          </p>
+
+          <h2 id="aead">AEAD: ChaCha20-Poly1305</h2>
+          <p>
+            AEAD means <strong>authenticated encryption with associated
+            data</strong>. It does two jobs at once, and you must never do only
+            one of them.
+          </p>
+          <pre class="ascii">
+  ENCRYPT(key, nonce, aad, plaintext) -> ciphertext || tag(16 bytes)
+
+     ChaCha20 turns (key, nonce, counter) into a keystream.
+     ciphertext = plaintext XOR keystream          ← confidentiality
+
+     Poly1305 computes a MAC over aad || ciphertext ← integrity
+     using a one-time key derived from ChaCha20 block 0.
+
+  DECRYPT(key, nonce, aad, ciphertext||tag) -> plaintext OR FAILURE
+
+     The tag is checked FIRST. If it fails, nothing is returned.
+     Not "returns garbage". Not "returns partial". Nothing.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Part</th><th>Guarantee</th><th>What breaks without it</th></tr></thead>
+              <tbody>
+                <tr><td>Encryption</td><td>An observer learns nothing about the content.</td><td>Everything is readable.</td></tr>
+                <tr><td>Authentication tag</td><td>Any modification is detected.</td><td>An attacker can flip bits in the ciphertext and flip the corresponding bits in the plaintext, because a stream cipher XORs. Undetected message tampering.</td></tr>
+                <tr><td>Associated data (AAD)</td><td>Extra bytes are authenticated but not encrypted.</td><td>Headers could be swapped between messages. Airhop uses this for the Double Ratchet header and for the group ID plus epoch on group messages.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            ChaCha20 rather than AES for a specific reason: it is a software
+            cipher with no table lookups, so a portable implementation is
+            naturally constant time. AES in software is vulnerable to cache
+            timing attacks unless the CPU has AES-NI instructions, and the
+            devices this app targets include cheap Android phones where that is
+            not guaranteed. ChaCha20 also runs faster in software on such
+            devices. This is the same reasoning that put ChaCha20 in TLS, in
+            WireGuard, and in the Noise protocol suites everyone actually
+            deploys.
+          </p>
+
+          <h3>The two variants</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>ChaCha20-Poly1305</th><th>XChaCha20-Poly1305</th></tr></thead>
+              <tbody>
+                <tr><td>Nonce</td><td>12 bytes (96 bits)</td><td>24 bytes (192 bits)</td></tr>
+                <tr><td>Safe with random nonces?</td><td><strong>No.</strong> Birthday collision after about 2^32 messages.</td><td><strong>Yes.</strong> Collision probability is negligible even after 2^80 messages.</td></tr>
+                <tr><td>Requires</td><td>A counter, managed carefully</td><td>Nothing. Just use random bytes.</td></tr>
+                <tr><td>Airhop uses it for</td><td>Noise transport (counter nonce), group messages (explicit nonce), Double Ratchet (zero nonce, single-use key)</td><td>Private channels, bitchat's Nostr DM cipher</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            XChaCha20 works by first running the HChaCha20 function over the key
+            and the first 16 bytes of the nonce to derive a subkey, then running
+            ordinary ChaCha20 with that subkey and the remaining 8 nonce bytes.
+            The practical effect is that you can generate nonces randomly and
+            stop thinking about it, which is exactly what you want when there is
+            no natural counter, as in a channel where any member may send at any
+            time with no shared sequence.
+          </p>
+
+          <h2 id="nonces">Nonces, the most dangerous parameter</h2>
+          <div class="box bad">
+            <p class="box-title">The rule</p>
+            <p>
+              <strong>Never use the same (key, nonce) pair twice.</strong> For a
+              stream cipher this is catastrophic, not degraded. Two messages
+              encrypted under the same keystream can be XORed together to cancel
+              the keystream entirely, leaving
+              <code>plaintext1 XOR plaintext2</code>, which is often enough to
+              recover both. Poly1305 is worse: nonce reuse can leak the
+              authentication key, which lets an attacker forge arbitrary
+              messages.
+            </p>
+          </div>
+          <p>
+            Airhop has four nonce strategies, one per context, and each is
+            correct for its context:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Context</th><th>Strategy</th><th>Why it is safe</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Noise transport</td>
+                  <td>A 4 byte big-endian counter, prepended to each message, expanded into the 12 byte nonce as <code>[0,0,0,0][counter LE][0,0,0,0]</code>.</td>
+                  <td>Each direction has its own key and its own counter, so no value repeats. The counter is prepended so the receiver can decrypt out of order using a sliding replay window. The session throws at 2^32 messages rather than wrapping.</td>
+                </tr>
+                <tr>
+                  <td>Double Ratchet</td>
+                  <td>An <strong>all-zero</strong> nonce.</td>
+                  <td>Legitimate, because every message key is used exactly once. The ratchet derives a fresh 32 byte key per message from the chain, so there is no second message under that key for the nonce to collide with. This looks alarming and is correct.</td>
+                </tr>
+                <tr>
+                  <td>Private channels, Nostr DMs</td>
+                  <td>24 random bytes, XChaCha20.</td>
+                  <td>The extended nonce makes random generation safe. There is no shared counter to maintain across members, and there could not be.</td>
+                </tr>
+                <tr>
+                  <td>Group messages</td>
+                  <td>An explicit 12 byte nonce carried in the envelope, with AAD = <code>groupID || epoch</code>.</td>
+                  <td>Matching CryptoKit's ChaChaPoly so bitchat interoperates. The epoch in the AAD is what prevents a message from one epoch being replayed into another.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="hash">SHA-256, HMAC, HKDF</h2>
+          <h3>SHA-256</h3>
+          <p>
+            A hash takes any input and produces a fixed 32 bytes. The properties
+            that matter:
+          </p>
+          <ul>
+            <li>
+              <strong>Preimage resistance.</strong> Given an output, you cannot
+              find an input that produces it. <em>This is what makes peer IDs
+              work</em>: an attacker cannot construct a Noise key that hashes to
+              someone else's peer ID.
+            </li>
+            <li>
+              <strong>Collision resistance.</strong> You cannot find two inputs
+              with the same output. This is what makes packet IDs meaningful for
+              deduplication.
+            </li>
+            <li>
+              <strong>Determinism.</strong> Same input, same output, on every
+              device and every platform. This is what makes safety numbers work.
+            </li>
+          </ul>
+          <p>Airhop uses SHA-256 in five places:</p>
+          <pre class="code">
+  peerID       = hex(SHA-256(noiseStaticPubKey)).slice(0, 16)     // 8 bytes
+  packetID     = SHA-256(type || sender || timestamp || payload)[0:16]
+  GCS h64      = SHA-256(packetID)[0:8] as u63 BE, sign bit cleared
+  fingerprint  = SHA-256(domain || noisePub || signingPub)
+  Noise        = mixHash, and inside HMAC and HKDF
+</pre>
+          <div class="box">
+            <p class="box-title">Why 8 bytes is enough for a peer ID</p>
+            <p>
+              64 bits of a preimage-resistant hash. To find a Noise key hashing
+              to a chosen peer ID takes about 2^64 operations, which is out of
+              reach. To find <em>any</em> two keys with the same peer ID takes
+              about 2^32 by the birthday bound, which is very reachable, but that
+              is a collision between two attacker-controlled identities and buys
+              nothing: both would be the attacker's own keys, and neither would
+              impersonate a real user. The security property needed is preimage
+              resistance, not collision resistance, and 64 bits delivers it.
+            </p>
+            <p>
+              The real limitation is different: a peer ID <strong>does not
+              rotate</strong>. It derives from the long-term Noise key, so the
+              same device is linkable across sessions until the identity is
+              regenerated. That is stated in the threat model as out of scope.
+              Only per-cell geohash identities are ephemeral.
+            </p>
+          </div>
+
+          <h3>HMAC-SHA256</h3>
+          <p>
+            A keyed hash. <code>HMAC(key, message)</code> proves that whoever
+            produced the output knew the key. Plain
+            <code>SHA-256(key || message)</code> is <strong>not</strong> a safe
+            substitute, because Merkle-Damgard hashes are vulnerable to length
+            extension: an attacker who sees the output can append data and
+            produce a valid output for the extended message without knowing the
+            key. HMAC's nested construction removes that.
+          </p>
+          <p>
+            Airhop uses HMAC for the courier recipient tag, geohash identity
+            derivation, private channel Nostr identity derivation, and inside
+            every ratchet chain step.
+          </p>
+
+          <h3>HKDF</h3>
+          <p>
+            Extract then expand. Takes non-uniform input keying material (like a
+            raw DH output, which has mathematical structure) and produces any
+            number of uniformly random independent keys.
+          </p>
+          <pre class="code">
+  PRK    = HMAC(salt, ikm)                    // extract: concentrate entropy
+  OKM[1] = HMAC(PRK, info || 0x01)            // expand: stretch to any length
+  OKM[2] = HMAC(PRK, OKM[1] || info || 0x02)
+  ...
+</pre>
+          <p>
+            Noise uses a variant with no <code>info</code> string and the
+            chaining key as the salt. That is why
+            <code>noiseHkdf(ck, ikm, count)</code> in
+            <code>noise-xx.ts</code> looks slightly different from the RFC 5869
+            shape: it is the Noise specification's version, and it must match
+            bitchat exactly.
+          </p>
+          <div class="box">
+            <p class="box-title">The three-output split</p>
+            <p>
+              Noise's <code>split()</code> normally derives two transport keys.
+              Airhop asks for three, and takes the third as the
+              <code>exporterSecret</code> that seeds the Double Ratchet. This
+              costs nothing in interoperability: HKDF derives each block from the
+              previous one, so k1 and k2 are <strong>bit identical</strong> to a
+              two-output split. bitchat negotiates exactly the same transport
+              keys and never knows a third value was computed. Chapter
+              <a href="18-forward-secrecy.html">18</a> explains why the exporter
+              secret and not the transcript hash.
+            </p>
+          </div>
+
+          <h2 id="secp">secp256k1, and why there are two curves</h2>
+          <p>
+            Airhop uses <strong>two different elliptic curves</strong>, and a
+            reasonable first reaction is that this is one too many.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Curve</th><th>Used for</th><th>Why it must be this one</th></tr></thead>
+              <tbody>
+                <tr><td>Curve25519</td><td>Everything on the mesh: sessions, signatures, ratchets, prekeys</td><td>It is what Noise specifies and what bitchat uses. Modern, fast, safe defaults.</td></tr>
+                <tr><td>secp256k1</td><td>Nostr identity, geohash identities, Cashu P2PK locks</td><td>Nostr is defined on secp256k1 with BIP-340 Schnorr signatures. Cashu is Bitcoin-adjacent and uses the same curve. Neither is negotiable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The bridge between them is HKDF. The Nostr private key is derived
+            from the Ed25519 signing private key:
+          </p>
+          <pre class="code">
+  nostrPrivKey = HKDF-SHA256(
+                   ikm  = ed25519 signing private key,
+                   salt = none,
+                   info = "airhop-nostr-key-v1",
+                   len  = 32
+                 )
+</pre>
+          <p>
+            One root identity therefore has one stable Nostr identity across
+            mesh, relays and payments, with no link to a phone number or email,
+            and with nothing extra to provision, back up or wipe. The derivation
+            is one-way, so the Nostr key cannot be walked back to the signing
+            key.
+          </p>
+          <div class="box warn">
+            <p class="box-title">A comment worth reading in the source</p>
+            <p>
+              <code>identity.ts</code> carries a long note explaining what is
+              deliberately absent: it once had a <code>nostrPubKey</code> field
+              set to the Ed25519 public key, with a comment claiming that was the
+              npub. Both were wrong. The Nostr identity is secp256k1 and it comes
+              from HKDF over the signing <em>private</em> key; the Ed25519 public
+              key bears no relation to it. Nothing read the field, so nothing was
+              broken, but it was a plausible-looking value that would have
+              published an address no relay could deliver to.
+            </p>
+          </div>
+
+          <h3>The even-Y normalisation</h3>
+          <p>
+            Nostr public keys are 32 byte <strong>x-only</strong> keys, following
+            BIP-340, which fixes the convention that the point has an even Y
+            coordinate. A raw random 32 byte scalar can land on odd Y, which
+            would make the x-only point used in ECDH the wrong (negated) point
+            and break interoperability silently.
+          </p>
+          <pre class="code">
+  normalizeSecretKeyEvenY(priv):
+    if getPublicKey(priv, compressed)[0] == 0x02  -> already even, return priv
+    else                                          -> return (n - priv) mod n
+</pre>
+          <p>
+            And on the decrypt side, the sender's x-only key is tried with both
+            parities (<code>0x02</code> then <code>0x03</code>), matching bitchat.
+            This is the sort of detail that is invisible until two
+            implementations fail to talk to each other for no visible reason.
+          </p>
+
+          <h2 id="domain">Domain separation</h2>
+          <p>
+            The same key derivation used for two purposes must not produce the
+            same output. Every derivation in Airhop carries a unique string.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Separator</th><th>Derives</th></tr></thead>
+              <tbody>
+                <tr><td><code>airhop-nostr-key-v1</code></td><td>The secp256k1 Nostr private key from the Ed25519 signing key.</td></tr>
+                <tr><td><code>airhop-geohash-seed-v1</code></td><td>The per-device seed all geohash identities derive from.</td></tr>
+                <tr><td><code>airhop-dr-seed-v1</code></td><td>The Double Ratchet root key from the Noise exporter secret.</td></tr>
+                <tr><td><code>airhop-dr-root-v1</code></td><td>The HKDF info inside every ratchet root step.</td></tr>
+                <tr><td><code>airhop-channel-nostr-v1</code></td><td>A private channel's shared Nostr identity from its symmetric key.</td></tr>
+                <tr><td><code>airhop-fingerprint-v1</code></td><td>One identity's fingerprint.</td></tr>
+                <tr><td><code>airhop-safety-number-v1</code></td><td>The pair fingerprint two people compare.</td></tr>
+                <tr><td><code>bitchat-courier-tag-v1</code></td><td>The courier recipient tag. bitchat's string, kept for interop.</td></tr>
+                <tr><td><code>bitchat-group-v1</code></td><td>The group state signature.</td></tr>
+                <tr><td><code>bitchat-group-msg-v1</code></td><td>The group message inner signature.</td></tr>
+                <tr><td><code>nip44-v2</code></td><td>bitchat's Nostr DM conversation key.</td></tr>
+                <tr><td><code>Noise_XX_25519_ChaChaPoly_SHA256</code></td><td>The Noise handshake initial state. The protocol name <em>is</em> the domain separator.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The safety number pair is the clearest example of why this matters:
+            the pair hash takes the individual fingerprint's output as its input,
+            so without different separators one could be substituted for the
+            other.
+          </p>
+          <p>
+            All of these end in <code>v1</code> for a reason. Changing a
+            separator changes every key derived from it, which means old and new
+            builds cannot decrypt each other. That is a deliberate migration
+            mechanism, and it is why they are listed in
+            <code>ARCHITECTURE.md</code> as one of the three families of name
+            that are addresses rather than labels.
+          </p>
+
+          <h2 id="random">Randomness</h2>
+          <p>
+            Every private key, ephemeral key, nonce, stream ID and message ID
+            comes from <code>crypto.getRandomValues</code>, which is the
+            platform CSPRNG: <code>SecRandomCopyBytes</code> on iOS,
+            <code>/dev/urandom</code> through the Android framework.
+          </p>
+          <div class="box warn">
+            <p class="box-title">The polyfill must be the first import</p>
+            <p>
+              Hermes, the JavaScript engine React Native uses, does not implement
+              <code>crypto.getRandomValues</code>.
+              <code>react-native-get-random-values</code> provides it, and its
+              import sits at the very top of <code>src/app/app.tsx</code> with a
+              comment saying it must be first. If any <code>@noble</code> module
+              is imported before the polyfill, key generation fails at runtime,
+              and in the worst case a library could fall back to a weak source.
+              This is one line that quietly holds up the entire security model.
+            </p>
+          </div>
+
+          <h2 id="library">The library choice</h2>
+          <p>
+            Airhop uses Paul Miller's <code>@noble</code> family:
+            <code>@noble/curves</code>, <code>@noble/ciphers</code>,
+            <code>@noble/hashes</code>. All MIT licensed, all audited by Cure53.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Alternative</th><th>Why not</th></tr></thead>
+              <tbody>
+                <tr><td><strong>libsodium</strong> (via a native binding)</td><td>The gold standard, but it is native code. That would mean a native dependency inside <code>src/core/</code>, which is the one rule that makes the entire protocol testable in CI without a phone. It would also mean two builds to keep in step.</td></tr>
+                <tr><td><strong>WebCrypto</strong></td><td>Hermes exposes almost none of it, and what exists does not cover Curve25519 or ChaCha20.</td></tr>
+                <tr><td><strong>tweetnacl-js</strong></td><td>Venerable and small, but unmaintained, no ChaCha20-Poly1305 AEAD in the shape Noise needs, and no secp256k1.</td></tr>
+                <tr><td><strong>Rolling your own</strong></td><td>No.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The honest caveat: <strong>JavaScript cannot guarantee constant
+            time.</strong> A JIT may branch on data, garbage collection timing
+            varies, and the engine offers no primitive for timing-invariant
+            comparison. <code>@noble</code> is written to be constant time as far
+            as the language allows, and it is careful about it, but a physical
+            side-channel attacker with sample access to the device is outside
+            what any pure-JS implementation can defend. For Airhop's threat model
+            (a remote or nearby network attacker, plus device seizure) this is
+            acceptable. For a threat model including a local timing adversary with
+            repeated measurements, it is not, and that should be stated rather
+            than assumed away.
+          </p>
+          <p>
+            The <code>@cashu/cashu-ts</code> library brings its own secp256k1
+            operations for blinding and DLEQ verification, which is a second
+            crypto implementation in the tree. It is scoped to the wallet.
+          </p>
+
+          <h2 id="pitfalls">Pitfalls this codebase actually hit</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pitfall</th><th>What happened</th><th>Fix</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Using a public value as key material</strong></td>
+                  <td>The Double Ratchet root key was seeded from the Noise handshake hash. Only wire bytes go through <code>mixHash</code>, so that value is public to anyone who captured the handshake, and handshakes flood at TTL 7. Anyone in the room could recompute the root key and forge or decrypt DR messages.</td>
+                  <td>Seeded from the exporter secret, a third HKDF output of the same split, descending from the chaining key that absorbed the ephemeral DH outputs.</td>
+                </tr>
+                <tr>
+                  <td><strong>A skipped hash step</strong></td>
+                  <td>Noise always runs <code>mixHash(prologue)</code> after initialisation, even when the prologue is empty. Skipping it left Airhop's handshake hash one hash behind bitchat's, which is used as AEAD associated data when the static key is sealed in message 2. Same key, different AAD, tag mismatch, and no bitchat to Airhop handshake could ever complete.</td>
+                  <td>Run it unconditionally.</td>
+                </tr>
+                <tr>
+                  <td><strong>Assuming an encoder is canonical</strong></td>
+                  <td>DEFLATE output is not canonical, so re-compressing during signature verification produced different bytes and rejected valid packets.</td>
+                  <td>Keep the received wire form and reuse it verbatim. Chapter <a href="09-wire-format.html">09</a>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Verifying only when asked to</strong></td>
+                  <td>Announces were signature-checked only when the sender set the SIGNED flag, which let the sender opt out of being checked.</td>
+                  <td><code>verifyPacket</code> returns false when SIGNED is clear, so one unconditional call covers both "no signature" and "bad signature".</td>
+                </tr>
+                <tr>
+                  <td><strong>Confusing "no key" with "no check"</strong></td>
+                  <td>Public messages from senders not yet in the registry were accepted unverified, so an unsigned packet claiming a known ID rendered as that peer.</td>
+                  <td>A missing key is a <em>failed</em> check, never a skipped one.</td>
+                </tr>
+                <tr>
+                  <td><strong>A decoder that throws</strong></td>
+                  <td>A malformed compressed frame raised <code>RangeError</code> out of the decoder into a native callback with no handler.</td>
+                  <td>A malformed frame must decode to null, never throw.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does Airhop keep two separate key pairs when X25519 and Ed25519 are the same curve?</span>
+              <span class="a">Because reusing one key across a key agreement scheme and a signature scheme is a known footgun with a live literature of cross-protocol attacks. The two schemes stress the key differently. Two key pairs costs 32 extra bytes in the keychain and eliminates the entire class. It also makes the roles legible in the code: <code>noiseStaticPrivKey</code> is for agreement, <code>signingPrivKey</code> is for authentication.</span>
+            </li>
+            <li>
+              <span class="q">The Double Ratchet uses an all-zero nonce. Is that a bug?</span>
+              <span class="a">No, and it is worth being able to say why confidently. The rule is never to reuse a (key, nonce) pair. The ratchet derives a fresh 32 byte message key for every single message from the chain key, so each key is used exactly once. With a single-use key there is no second message under it for the nonce to collide with, so any fixed nonce is safe. What would be a bug is a fixed nonce with a reused key, which is what the Noise transport avoids with its counter and what XChaCha20 avoids with a 24 byte random nonce.</span>
+            </li>
+            <li>
+              <span class="q">Why is 64 bits enough for a peer ID?</span>
+              <span class="a">Because the property needed is preimage resistance, not collision resistance. Finding a Noise key that hashes to a chosen peer ID takes about 2^64 operations. Finding any two colliding keys takes about 2^32 by the birthday bound, but both would be the attacker's own keys, so it impersonates nobody. The real weakness of the peer ID is not its length, it is that it never rotates, which makes a device linkable across sessions.</span>
+            </li>
+            <li>
+              <span class="q">Why HMAC rather than SHA-256 of the key concatenated with the message?</span>
+              <span class="a">Length extension. SHA-256 is a Merkle-Damgard construction, so from <code>SHA-256(key || m)</code> an attacker can compute <code>SHA-256(key || m || padding || extra)</code> without knowing the key. HMAC's nested double-hash structure removes that. This matters directly for the courier tag, which is an HMAC over a context string and an epoch day.</span>
+            </li>
+            <li>
+              <span class="q">Someone proposes swapping ChaCha20-Poly1305 for AES-256-GCM "because it is faster". Respond.</span>
+              <span class="a">It is faster only on hardware with AES-NI, and the devices this app targets include cheap Android phones where that is not guaranteed. In software, AES needs table lookups, which makes constant-time implementation hard and opens cache timing attacks; ChaCha20 has no lookups and is naturally constant time. And it would break the wire protocol entirely: the Noise suite name <code>Noise_XX_25519_ChaChaPoly_SHA256</code> is part of the handshake's initial state, so a different cipher is a different protocol that no bitchat node can speak.</span>
+            </li>
+            <li>
+              <span class="q">What is the strongest criticism of the crypto stack?</span>
+              <span class="a">That it is pure JavaScript, so constant-time behaviour is best effort rather than guaranteed, and that the composition of primitives has not been externally audited even though the primitives themselves have. The primitives are the right ones and the compositions follow published specifications, but "correct by inspection" is not the same as "audited", and the project says so.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

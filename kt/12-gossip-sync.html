@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 12: Gossip sync. Golomb coded sets, set reconciliation, and catching up after a gap." />
+    <title>12 Gossip sync · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 12 · The protocol</p>
+          <h1>Gossip sync</h1>
+          <p class="kt-lede">
+            You walk out of range for ten minutes and come back. The room has
+            moved on. Gossip sync is how your phone asks "what did I miss" using
+            a 400 byte summary instead of a list of everything it already has.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#problem">The set reconciliation problem</a></li>
+              <li><a href="#gcs">Golomb coded sets</a></li>
+              <li><a href="#maths">The maths, worked through</a></li>
+              <li><a href="#wire">The wire format</a></li>
+              <li><a href="#round">A round, step by step</a></li>
+              <li><a href="#types">Type bits</a></li>
+              <li><a href="#windows">Candidate windows</a></li>
+              <li><a href="#since">The since cursor, and the trap inside it</a></li>
+              <li><a href="#amplification">Amplification control</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Two friends each have a box of stickers and want to swap the ones
+              the other is missing. Reading out every sticker would take all day.
+              So instead each of them makes a tiny coded summary of their box,
+              small enough to fit on a scrap of paper, and hands it over. The
+              other one looks at their own stickers, checks which are not
+              mentioned in the summary, and hands over just those. Sometimes the
+              summary makes a mistake and says "I already have that" when they do
+              not, so occasionally one sticker is missed. That is fine, because
+              they do this again fifteen seconds later.
+            </p>
+          </div>
+
+          <h2 id="problem">The set reconciliation problem</h2>
+          <p>
+            Two devices each hold a set of recent packets. They want the union,
+            with the smallest possible amount of data on the wire.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Naive approach</th><th>Cost for 1000 packets</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr><td>Send every packet you hold</td><td>Megabytes</td><td>Absurd on an 18 KiB/s radio.</td></tr>
+                <tr><td>Send every packet ID you hold</td><td>1000 x 16 bytes = 16 KB</td><td>Thirty fragments per round, every fifteen seconds, per peer. Still absurd.</td></tr>
+                <tr><td>Send a Bloom filter</td><td>~1.2 KB at 1 percent false positive rate</td><td>Fits, but larger than needed and it does not fragment gracefully.</td></tr>
+                <tr><td><strong>Send a Golomb coded set</strong></td><td><strong>400 bytes, capped</strong></td><td><strong>Fits in one BLE frame with room to spare.</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The information-theoretic floor for a probabilistic set membership
+            structure at false positive rate <em>f</em> is
+            <code>n x log2(1/f)</code> bits. A Bloom filter is about 44 percent
+            above that floor. A Golomb coded set gets within a few percent, which
+            is why Bitcoin's compact block filters (BIP-158) use one, and why
+            bitchat does too.
+          </p>
+
+          <h2 id="gcs">Golomb coded sets</h2>
+          <p>
+            The idea in four steps. It is simpler than the name suggests.
+          </p>
+          <pre class="ascii">
+  1. HASH each item into a range [1, M)
+
+     packetID -> SHA-256(packetID) -> first 8 bytes as u63 BE (sign bit cleared)
+              -> h64 mod M
+
+  2. SORT the resulting values ascending, drop duplicates
+
+     [ 41, 178, 219, 900, 1502, ... ]
+
+  3. DELTA ENCODE: store the GAPS, not the values
+
+     [ 41, 137, 41, 681, 602, ... ]
+
+     If n values are spread evenly over M, the average gap is M/n.
+     That is the whole trick: gaps are small and clustered, values are not.
+
+  4. GOLOMB-RICE ENCODE each gap with parameter P
+
+     value x = gap - 1
+     q = x >> P          write q ones, then a zero      (unary)
+     r = x &amp; (2^P - 1)   write r as exactly P bits      (binary)
+
+     Small gaps cost about P+1 bits. Large gaps cost more, but they are rare.
+</pre>
+          <p>
+            Membership testing does not decode the whole structure in Airhop's
+            implementation: it decodes to a sorted list of the mapped values, then
+            binary searches it. That is a small memory cost (a few hundred
+            BigInts) in exchange for a much simpler and more auditable
+            implementation than streaming decode.
+          </p>
+          <p>
+            A GCS has <strong>false positives but never false negatives</strong>.
+            If the filter says "not present", the item is definitely absent. If it
+            says "present", it is probably present. For gossip sync that
+            asymmetry is exactly the right way round: the failure mode is
+            occasionally not sending something the peer actually lacked, which
+            the next round fixes, rather than flooding them with things they
+            already have.
+          </p>
+
+          <h2 id="maths">The maths, worked through</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Symbol</th><th>Meaning</th><th>Airhop value</th></tr></thead>
+              <tbody>
+                <tr><td><code>fpr</code></td><td>Target false positive rate</td><td>0.01 (1 percent)</td></tr>
+                <tr><td><code>P</code></td><td>Golomb-Rice parameter</td><td><code>ceil(log2(1/0.01))</code> = <strong>7</strong></td></tr>
+                <tr><td><code>M</code></td><td>Hash range</td><td><code>count x 2^P</code> = <code>count x 128</code></td></tr>
+                <tr><td>Actual FPR</td><td>Probability a random item maps inside</td><td><code>1/2^P</code> = 1/128 = 0.78 percent</td></tr>
+                <tr><td>Bits per element</td><td>Roughly <code>P + 2</code></td><td>~9 bits</td></tr>
+                <tr><td>Byte budget</td><td><code>gcsMaxBytes</code></td><td><strong>400 bytes</strong></td></tr>
+                <tr><td>Capacity estimate</td><td><code>floor(8 x size / (P + 2))</code></td><td><code>floor(3200 / 9)</code> = ~<strong>355 elements</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Setting <code>M = count x 2^P</code> rather than a fixed constant is
+            what keeps the false positive rate independent of set size. If M were
+            fixed and the set grew, collisions would rise. Tying M to the count
+            keeps the average gap at <code>2^P</code> regardless of how many
+            items there are, which is exactly the condition Golomb-Rice coding is
+            optimal under.
+          </p>
+
+          <h3>Trimming, and why it trims from the tail</h3>
+          <p>
+            The store holds up to 1000 packets but only about 355 fit in 400
+            bytes. So the encoder trims, and the direction matters.
+          </p>
+          <pre class="code">
+  candidates are sorted NEWEST FIRST
+  count = min(candidates.length, capacityEstimate)
+  encoded = encodeFirst(count)
+  while encoded.length > 400 and count > 1:
+      count = floor(count * 9 / 10)      // drop 10 percent per pass
+      encoded = encodeFirst(count)
+</pre>
+          <p>
+            The modulus <code>M</code> is <strong>fixed to the initial candidate
+            count</strong> and does not move as the tail is trimmed. If it moved
+            with each retry, every mapped value would change and the loop would
+            never converge on anything meaningful.
+          </p>
+          <p>
+            Trimming from the tail of a newest-first list means the covered set
+            is a contiguous newest prefix, which is what makes the
+            <code>since</code> cursor below exact. Trimming in hash order would
+            leave an arbitrary subset that no timestamp can describe.
+          </p>
+          <div class="box">
+            <p class="box-title">Why an overflow does not emit an empty filter</p>
+            <p>
+              If encoding a single element still overflows, the encoder returns
+              an empty filter with <code>includedCount: 0</code>. That is a
+              deliberate last resort, and it is worth understanding why it is
+              dangerous: <strong>an empty filter reads as "I have nothing"</strong>,
+              so the responder replies with its entire store. And overflow is
+              likeliest on the busiest mesh, which is precisely where you least
+              want a peer to draw down 1000 packets. The shrink loop exists so
+              that path is effectively unreachable.
+            </p>
+          </div>
+
+          <h2 id="wire">The wire format</h2>
+          <pre class="code">
+  REQUEST_SYNC (0x21) payload, TLV: type u8, length u16 BE, value
+
+    0x01  P       1 byte      Golomb-Rice parameter
+    0x02  M       4 bytes BE  hash range
+    0x03  data    variable    the Golomb-Rice bitstream
+    0x04  types   1-8 bytes   SyncTypeFlags bitmask, little endian,
+                              trailing zero bytes trimmed
+    0x05  since   8 bytes BE  coverage cursor, ms since epoch. OPTIONAL.
+    0x06  fragmentIdFilter    NOT IMPLEMENTED by Airhop, in either direction
+
+  Packet framing:
+    ttl        = 0            link-local, never relayed
+    flags      = SIGNED, plus HAS_RECIPIENT when unicast
+    recipient  = the peer being asked (unicast is the normal path)
+</pre>
+          <p>
+            The request is signed when possible but a signature is
+            <strong>not required</strong> on receipt. A <code>REQUEST_SYNC</code>
+            carries no content, and every packet it draws back is independently
+            verified by the requester, so a forged request cannot inject
+            anything. The risk is amplification, which the rate limiter bounds.
+            Requiring a signature would break first contact, where a peer's sync
+            round arrives before its announce and there is no key to check
+            against. bitchat does not gate on it either. A signature that is
+            present and wrong <em>is</em> refused.
+          </p>
+
+          <h2 id="round">A round, step by step</h2>
+          <pre class="ascii">
+  EVERY 15 SECONDS, ON DEVICE A
+
+  1. prune candidates past their per-type window
+  2. for each connected peer P:
+       build a filter over everything A holds, newest first
+       REGISTER the pending request against P   ◀── BEFORE the send
+       unicast REQUEST_SYNC to P, ttl 0
+
+  ON DEVICE B, RECEIVING IT
+
+  3. rate limit FIRST, before decoding
+       more than 8 answers to this peer in the last 30 s?  -> ignore
+  4. decode the filter, the type bits and the optional cursor
+  5. for every packet B holds:
+       not fresh by B's own window?             skip
+       type not in the requested bits?          skip
+       older than the cursor, if one was sent?  skip
+       already in A's filter?                   skip
+       otherwise -> add to the response, tagged { ttl: 0, isRSR: true }
+  6. write the response packets straight back down the SAME link
+
+  BACK ON DEVICE A
+
+  7. each response arrives with ttl 0 and IS_RSR
+  8. A checks: is there an outstanding request to the peer on this LINK,
+     within 30 seconds?
+       yes -> exempt from the freshness window, process normally
+       no  -> DROP. The flag alone is a claim anyone can make.
+</pre>
+          <div class="box">
+            <p class="box-title">Three rules that all three implementations enforce</p>
+            <ul>
+              <li>
+                <strong>The request is link-local (ttl 0).</strong> It asks what
+                the peer on the far end of <em>this link</em> is missing.
+                Relaying it asks the wrong node.
+              </li>
+              <li>
+                <strong>Every response is link-local (ttl 0) and tagged
+                IS_RSR.</strong> Without ttl 0, the requester's flood router
+                treats each replayed packet as new, which it is, and re-floods
+                it. One peer rejoining after a partition would push the entire
+                archive back across the mesh.
+              </li>
+              <li>
+                <strong>Requests are unicast.</strong> A broadcast request has no
+                peer to register against, so nothing it draws back can be
+                attributed, and nothing can be exempted from the freshness
+                window. Broadcast exists only as a discovery-phase fallback
+                before any peer is attributed.
+              </li>
+            </ul>
+          </div>
+          <p>
+            The registration happening <strong>before</strong> the send is not
+            fussiness: on a fast link the response can outrun the sender's own
+            continuation, and a response landing before its registration looks
+            exactly like an unsolicited one and is dropped.
+          </p>
+
+          <h2 id="types">Type bits</h2>
+          <p>
+            A request names the types it wants in a <code>SyncTypeFlags</code>
+            bitfield, and a responder answers only with those. A bit that maps to
+            no known type is ignored, which is what makes the set extensible in
+            both directions.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Bit</th><th>Type</th><th>Airhop</th><th>bitchat</th></tr></thead>
+              <tbody>
+                <tr><td>0</td><td>ANNOUNCE</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td>1</td><td>CHANNEL_MSG</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td>7</td><td>FILE_TRANSFER</td><td><strong>Deliberately no</strong></td><td>Yes</td></tr>
+                <tr><td>8</td><td>BOARD_POST</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td>9</td><td>PREKEY_BUNDLE</td><td><strong>No, and this is a real gap</strong></td><td>Yes</td></tr>
+                <tr><td>10</td><td>GROUP_MESSAGE</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td>24</td><td>CHANNEL_MSG_AIRHOP</td><td>Yes</td><td>n/a</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Bit 7, files, deliberately absent</h3>
+          <p>
+            An attachment is up to 1 MiB, so serving one from sync is ten to
+            forty-five seconds of exclusive radio time per asking peer, against a
+            filter sized at 400 bytes for items that are meant to be small and
+            numerous. bitchat's own reassembly also expires 30 seconds after the
+            first fragment, so a re-flooded file frequently fails on arrival
+            anyway and the airtime buys nothing.
+          </p>
+          <p>
+            The interop cost is bounded and symmetric: a bitchat peer may ask for
+            bit 7 and gets nothing, and Airhop never asks for it. Neither side
+            errors. What it means for a user is that a channel attachment missed
+            while out of range is not backfilled, where text, board posts and
+            group messages are. <strong>Media on the mesh is best effort at the
+            moment it is sent.</strong>
+          </p>
+          <h3>Bit 9, prekeys, the one real gap</h3>
+          <p>
+            Airhop distributes its own prekey bundle by flooding it to each new
+            link, and accepts and verifies bundles that reach it that way, but it
+            does not reconcile them through sync. The effect is narrow: a device
+            that arrives after a bundle has already flooded cannot pull one from a
+            peer that still holds it, so a courier message sealed to that owner
+            falls back to their long-lived static key instead of a one-time
+            prekey. The message is still delivered and still encrypted. What is
+            lost is <strong>forward secrecy for that envelope</strong>. Chapter
+            <a href="13-courier.html">13</a> explains why that matters.
+          </p>
+          <h3>Bit 24, not 11</h3>
+          <p>
+            Airhop's named public channels needed their own bit, because they no
+            longer ride bit 1 with the mesh room. bitchat's table ends at 10 and
+            it allocates forward, so 11 is the next value it would reach for. 24
+            leaves it thirteen values of room and stays under 31, which the
+            encoder needs: <code>1 &lt;&lt; 31</code> is negative in JavaScript,
+            and the byte-wise encoder would silently fold a higher bit onto a
+            lower one.
+          </p>
+          <h3>What is absent from both, and why</h3>
+          <ul>
+            <li><strong>Courier envelopes</strong> are directed deposits and must not spread by gossip. That would turn a targeted handoff into a broadcast.</li>
+            <li><strong>Ping, pong and gateway carriers</strong> are ephemeral and would replay as unanswerable echoes.</li>
+            <li><strong>Live voice</strong> is only useful in the moment, and receivers drop stale frames anyway.</li>
+            <li><strong>Rotating-ID presence</strong> is valid only inside its epoch, and syncing it would let a device that was never in radio range collect presence it could not otherwise observe.</li>
+          </ul>
+
+          <h2 id="windows">Candidate windows</h2>
+          <p>
+            One blanket window would be wrong in both directions: it would keep
+            presence alive after its sender left, and expire board posts meant to
+            outlive everyone carrying them.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Type</th><th>Window</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>ANNOUNCE</td><td>60 s</td><td>Presence that outlives its sender misreports who is in the room. This is a consensus rule in bitchat-android's sync spec and matches bitchat-iOS's stale-peer timeout.</td></tr>
+                <tr><td>CHANNEL_MSG and CHANNEL_MSG_AIRHOP</td><td>900 s (15 min)</td><td>Carrying the room's recent history across a partition is the point of gossip. bitchat-iOS <code>publicMessageMaxAgeSeconds</code>.</td></tr>
+                <tr><td>GROUP_MESSAGE</td><td>900 s</td><td>A group is a conversation, not a noticeboard, and a member away for a quarter of an hour is the case backfill exists for. Longer would be pointless: a roster change rotates the epoch key, and a message sealed under the old one can no longer be read.</td></tr>
+                <tr><td>BOARD_POST</td><td>7 days</td><td>A backstop only. Posts carry their own author-chosen expiry, which the board store enforces on receipt. This just stops an entry sitting in the LRU forever.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A packet stamped in the <strong>future</strong> is treated as expired
+            rather than fresh. A future timestamp is either a badly skewed device
+            or a sender trying to pin an entry at the head of everyone's candidate
+            set forever, and neither is something to carry on someone else's
+            behalf.
+          </p>
+          <p>
+            The store itself is a 1000-entry ordered map, newest at the end,
+            oldest evicted. bitchat-Android's equivalent holds only 100, which is
+            one of the divergences Airhop resolves toward iOS.
+          </p>
+
+          <h2 id="since">The since cursor, and the trap inside it</h2>
+          <p>
+            This is the most easily-inverted piece of logic in the whole
+            subsystem, and getting it backwards breaks catch-up silently.
+          </p>
+          <div class="grid two">
+            <div class="box bad">
+              <p class="box-title">The wrong reading</p>
+              <p>
+                "<code>since</code> is a request boundary: do not send me
+                anything older than my oldest packet."
+              </p>
+              <p>
+                Send it unconditionally and a device that just joined, holding
+                only recent packets <em>because it was not there</em>, tells every
+                peer to withhold precisely the history it turned up to collect.
+              </p>
+            </div>
+            <div class="box ok">
+              <p class="box-title">The correct reading</p>
+              <p>
+                "<code>since</code> is a coverage disclaimer: my filter was
+                truncated and it only reaches back this far."
+              </p>
+              <p>
+                It is sent <strong>only</strong> when the filter could not cover
+                everything held: the store exceeded the cap, or the encoder
+                trimmed the tail to fit 400 bytes. It names the oldest packet the
+                filter actually reaches.
+              </p>
+            </div>
+          </div>
+          <pre class="code">
+  since = (includedCount > 0 &amp;&amp; includedCount &lt; candidates.length)
+            ? candidates[includedCount - 1].timestamp
+            : undefined
+</pre>
+          <p>
+            Candidates are ordered newest first, so the covered set is a
+            contiguous newest prefix and the cursor is exact. A responder holding
+            something older than the cursor knows it is <em>outside</em> the
+            filter rather than <em>missing from</em> it, and skips it instead of
+            re-sending it every round.
+          </p>
+
+          <h2 id="amplification">Amplification control</h2>
+          <p>
+            One <code>REQUEST_SYNC</code> can replay a peer's whole store. A peer
+            asking in a tight loop is an amplifier pointed at both the responder
+            and the shared radio.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Control</th><th>Value</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td>Response rate limit</td><td>8 answers per 30 s per peer</td><td>A normal peer asks every 15 s and gets an answer every time. Anything faster is throttled. Matches bitchat.</td></tr>
+                <tr><td>Rate limit checked before decoding</td><td></td><td>The diff pass is the expensive part; a looping peer should not be able to make us pay for it.</td></tr>
+                <tr><td>Attribution by link, not by claimed sender</td><td></td><td>The budget must be per physical neighbour, or one peer minting sender IDs gets an unbounded number of budgets over a single link.</td></tr>
+                <tr><td>Responses ride ttl 0</td><td></td><td>They stop at the requester. A rejoining peer's catch-up cannot re-flood the mesh.</td></tr>
+                <tr><td>Budget cleared on link drop</td><td></td><td>A genuine reconnect is not throttled by the previous session's traffic.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The threat model calls this <strong>sync amplification</strong> and
+            it is one of the named countermeasures: <code>REQUEST_SYNC</code> and
+            every packet answering one ride at TTL 0, so a rejoining peer's
+            catch-up cannot re-flood the mesh, and responses to one peer are
+            capped at 8 per 30 seconds.
+          </p>
+
+          <h2 id="alternatives">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Structure</th><th>Trade</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Bloom filter</strong></td>
+                  <td>Simplest, most familiar. About 44 percent larger than the information-theoretic floor for the same false positive rate.</td>
+                  <td>Would need roughly 1.2 KB where GCS needs 400 bytes, which is three BLE frames instead of one. Not worth it.</td>
+                </tr>
+                <tr>
+                  <td><strong>Cuckoo filter</strong></td>
+                  <td>Similar size to GCS, and supports deletion.</td>
+                  <td>Deletion is not needed here (entries age out) and it is more complex to make byte-compatible across three implementations.</td>
+                </tr>
+                <tr>
+                  <td><strong>Invertible Bloom lookup table (IBLT)</strong></td>
+                  <td>Reconciles a set difference in one round trip with size proportional to the <em>difference</em>, not the set. Theoretically superior when the difference is small.</td>
+                  <td>Needs a good estimate of the difference size up front, and it fails catastrophically rather than gracefully if that estimate is wrong. GCS degrades to "sends a bit too much", which is the right failure shape for a radio.</td>
+                </tr>
+                <tr>
+                  <td><strong>Merkle tree / range sync</strong></td>
+                  <td>Logarithmic, exact, no false positives. What Scuttlebutt and several CRDT systems use.</td>
+                  <td>Needs multiple round trips over a link that may not survive them, and needs a total order on the set. Airhop's set is a bag of independent packets with no order.</td>
+                </tr>
+                <tr>
+                  <td><strong>Vector clocks / version vectors</strong></td>
+                  <td>The classic answer for replicated state.</td>
+                  <td>Requires per-peer state that grows with the number of peers ever seen, which is unbounded in a public mesh and is itself a privacy leak (it records everyone you have met).</td>
+                </tr>
+                <tr>
+                  <td><strong>Just re-flood everything periodically</strong></td>
+                  <td>No structure at all.</td>
+                  <td>This is what happens if you get the ttl 0 rule wrong, and it is exactly the failure gossip sync exists to prevent.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does a GCS have false positives but never false negatives, and why is that the right way round here?</span>
+              <span class="a">Because membership is tested by looking for the item's mapped value in the encoded set. If the item is present, its value is definitely there. If it is absent, its value may still collide with a different item's. So a "yes" can be wrong and a "no" cannot. For sync that means the failure is occasionally not sending something the peer actually lacked, which the next round fixes fifteen seconds later. The opposite failure, flooding a peer with things it already has, would be unbounded and would cost airtime every round.</span>
+            </li>
+            <li>
+              <span class="q">Why must a sync response carry both IS_RSR and ttl 0?</span>
+              <span class="a">Different jobs. <code>ttl = 0</code> keeps it link-local, so the requester's flood router does not treat each replayed packet as new and push the whole archive back across the mesh. <code>IS_RSR</code> tells the requester this is the answer to its own question, so it can exempt the packet from the plus or minus two minute freshness window, which sync responses are old by definition. Both fields are normalised out of the signing preimage, so retagging a stored packet leaves its original signature intact.</span>
+            </li>
+            <li>
+              <span class="q">Explain the since cursor to somebody who is about to send it on every request.</span>
+              <span class="a">Do not. It is a coverage disclaimer, not a request boundary. It means "my filter got truncated and only reaches back this far, so anything older than this is outside it rather than missing from it". Sent unconditionally, it tells peers to withhold anything older than your oldest packet. For a device that just joined and therefore holds only recent packets, that withholds exactly the history it turned up to collect, and the failure is completely silent.</span>
+            </li>
+            <li>
+              <span class="q">Why is bit 7 (files) excluded, and what does a user lose?</span>
+              <span class="a">Serving a 1 MiB attachment from sync is ten to forty-five seconds of exclusive radio time per asking peer, and bitchat's own reassembly expires 30 seconds after the first fragment, so a re-flooded file frequently fails on arrival anyway. The user loses backfill of channel attachments missed while out of range. Text, board posts and group messages are still backfilled. Media on the mesh is best effort at the moment it is sent, and that is the honest way to describe it.</span>
+            </li>
+            <li>
+              <span class="q">Why is the modulus M fixed during the trim loop?</span>
+              <span class="a">Because M determines every mapped value. If M moved with each retry, every value in the filter would change on every pass, so the encoded size would jump around unpredictably and the loop would never converge on a meaningful subset. Fixing M to the initial candidate count means trimming only removes elements, which monotonically shrinks the encoding.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

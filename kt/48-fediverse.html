@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 48: Fediverse and AT Protocol. How federation works, and what bridging Airhop into it means." />
+    <title>48 Fediverse and AT Protocol · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 48 · The wider world</p>
+          <h1>Fediverse and AT Protocol</h1>
+          <p class="kt-lede">
+            Two open social networks Airhop could bridge into, planned for v1.2.0
+            and not implemented. This chapter explains what they actually are, how
+            an integration would work, what it would cost in privacy, and my
+            honest view on whether it is worth doing.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#three">Three protocols, three shapes</a></li>
+              <li><a href="#activitypub">How ActivityPub works</a></li>
+              <li><a href="#atproto">How AT Protocol works</a></li>
+              <li><a href="#identity">The identity question</a></li>
+              <li><a href="#flows">What an integration would look like</a></li>
+              <li><a href="#privacy">The privacy analysis</a></li>
+              <li><a href="#breaks">Does it break the app</a></li>
+              <li><a href="#plugin">The plugin architecture</a></li>
+              <li><a href="#verdict">My verdict</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Instead of one giant website that everyone must join, imagine
+              thousands of small clubs that all know how to pass notes to each
+              other. You join one club, and you can still talk to people in all the
+              others. That is the Fediverse, and Mastodon is the most popular kind
+              of club. Bluesky works differently: there is one shared filing
+              cabinet everyone reads from, but you own your own drawer and can move
+              it. Airhop could post into either, but the moment it does, whatever it
+              posts is public and permanent in a way a Bluetooth message never is.
+            </p>
+          </div>
+
+          <h2 id="three">Three protocols, three shapes</h2>
+          <p>
+            Airhop already speaks one decentralised protocol. Understanding why
+            Nostr was chosen over these two explains most of the integration
+            question.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Nostr</th><th>ActivityPub</th><th>AT Protocol</th></tr></thead>
+              <tbody>
+                <tr><td>Shape</td><td><strong>Relays.</strong> Dumb servers that store and forward signed events.</td><td><strong>Federation.</strong> Servers deliver to each other's inboxes.</td><td><strong>Aggregation.</strong> Personal data servers plus large indexers.</td></tr>
+                <tr><td>Identity</td><td>A key pair. No account anywhere.</td><td><code>@user@server.social</code>. <strong>An account on a server.</strong></td><td>A DID, plus a handle. Portable between servers.</td></tr>
+                <tr><td>Where your data lives</td><td>On whatever relays you publish to</td><td><strong>On your home server</strong></td><td>On your PDS, which you can move or self-host</td></tr>
+                <tr><td>If your server disappears</td><td>n/a, there is no home server</td><td><strong>You lose your identity and history</strong></td><td>You keep your DID and move your repo</td></tr>
+                <tr><td>Signed content</td><td>Yes, always</td><td>HTTP signatures on delivery, not content signatures by default</td><td>Yes, a signed Merkle repository</td></tr>
+                <tr><td>Private messages</td><td>NIP-17 gift wrap</td><td><strong>"Direct" posts are just posts with limited addressing. The server operator reads them.</strong></td><td>DMs exist and are server-visible</td></tr>
+                <tr><td>Airhop uses it</td><td><strong>Yes</strong></td><td>Planned</td><td>Planned</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The decision log gives the reasoning directly: Matrix and XMPP were
+            rejected because they require an always-on server, which is a single
+            point of failure; Signal was rejected because it owns the infrastructure
+            and requires a phone number. ActivityPub has the same server dependency
+            as Matrix. Nostr was chosen for permissionless keypair identity, hundreds
+            of independent relays, and because bitchat had already validated it.
+          </p>
+
+          <h2 id="activitypub">How ActivityPub works</h2>
+          <p>
+            A W3C standard from 2018. The Fediverse is the network of servers
+            speaking it: Mastodon, Pleroma, Misskey, PeerTube, Pixelfed, Lemmy and
+            others.
+          </p>
+          <pre class="ascii">
+  THE FOUR CONCEPTS
+
+  ACTOR      A person or a bot, as a JSON-LD document at a URL.
+             Carries: inbox URL, outbox URL, a public key, a display name.
+
+  OBJECT     A thing. Note (a post), Image, Video, Article, Person.
+
+  ACTIVITY   A verb wrapping an object.
+             Create, Follow, Like, Announce (boost), Delete, Undo.
+
+  INBOX      An HTTP endpoint. Delivery is a POST to it.
+  OUTBOX     An HTTP endpoint listing what an actor has published.
+
+  ─────────────────────────────────────────────────────────────────
+
+  PUBLISHING A POST
+
+  1. Alice writes on mastodon.social
+  2. Her server wraps it:
+        { "type": "Create",
+          "actor": "https://mastodon.social/users/alice",
+          "object": { "type": "Note", "content": "hello" },
+          "to": ["https://www.w3.org/ns/activitystreams#Public"] }
+  3. Her server looks up every FOLLOWER's inbox
+  4. It POSTs the activity to each one, signed with an HTTP Signature
+     using her server-held key
+  5. Each receiving server stores it and shows it to its own users
+
+  DISCOVERY
+
+  WebFinger:  GET /.well-known/webfinger?resource=acct:alice@mastodon.social
+              -> the URL of Alice's actor document
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Consequence</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Push delivery</strong></td><td>Your server actively POSTs to thousands of follower inboxes. That is real infrastructure with real cost, which is why running a Mastodon instance is work.</td></tr>
+                <tr><td><strong>The server holds your key</strong></td><td>HTTP Signatures are made by the <em>server</em>, not by you. Your instance can post as you. This is the single most important fact for our purposes.</td></tr>
+                <tr><td><strong>Identity is server-bound</strong></td><td><code>@alice@mastodon.social</code>. If that server closes, the identity is gone. Migration exists and is partial: followers move, posts largely do not.</td></tr>
+                <tr><td><strong>"Direct" is not private</strong></td><td>A direct message is a Note addressed to specific actors. Both servers store it in plaintext and both operators can read it. There is no end-to-end encryption in ActivityPub.</td></tr>
+                <tr><td><strong>Deletion is a request</strong></td><td>A <code>Delete</code> activity asks other servers to remove a copy. Compliance is voluntary.</td></tr>
+                <tr><td>Moderation</td><td>Per-instance, by human admins, with instance-level blocks. Genuinely effective, and a completely different model from Airhop's client-side-only rule.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="atproto">How AT Protocol works</h2>
+          <p>
+            Bluesky's protocol. Deliberately different from ActivityPub, and the
+            differences are instructive.
+          </p>
+          <pre class="ascii">
+  THE FOUR COMPONENTS
+
+  PDS      Personal Data Server. Holds YOUR repository: a signed,
+           content-addressed Merkle tree of everything you have posted.
+           You can self-host it or move it.
+
+  DID      Decentralised Identifier. did:plc:... or did:web:...
+           Your PERMANENT identity, independent of any server.
+           A handle (alice.bsky.social) is just a human-readable
+           pointer that resolves to it.
+
+  RELAY    Crawls every PDS and produces one firehose of all events.
+           (Not a Nostr relay. Same word, opposite meaning: this one
+           aggregates, Nostr's forwards.)
+
+  APPVIEW  Consumes the firehose and builds the timelines, search,
+           notifications and counts that a client actually reads.
+
+  ─────────────────────────────────────────────────────────────────
+
+  POSTING
+
+  1. Alice's client signs a record and writes it to her PDS
+  2. The PDS appends it to her signed Merkle repository
+  3. The relay crawls it into the firehose
+  4. Every AppView sees it and indexes it
+  5. Followers' timelines are built by an AppView, not delivered by push
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>ActivityPub</th><th>AT Protocol</th></tr></thead>
+              <tbody>
+                <tr><td>Delivery</td><td>Push to inboxes</td><td>Pull from a firehose</td></tr>
+                <tr><td>Identity portability</td><td>Partial. Followers move, posts largely do not.</td><td><strong>Full.</strong> The DID and the whole repo move.</td></tr>
+                <tr><td>Who signs</td><td>The server</td><td><strong>You.</strong> Records are signed into your repo.</td></tr>
+                <tr><td>Scaling</td><td>Every server must deliver to every follower</td><td>Large indexers do the heavy work</td></tr>
+                <tr><td>Practical decentralisation</td><td><strong>Genuinely many servers</strong></td><td><strong>One dominant relay and AppView today.</strong> Self-hosting a PDS is easy; running a competitive AppView is not.</td></tr>
+                <tr><td>Moderation</td><td>Per instance</td><td>Composable labelling services, chosen by the user</td></tr>
+                <tr><td>Everything is public</td><td>Mostly</td><td><strong>Structurally.</strong> The firehose model means every post is crawled by design.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The relevant part for Airhop: <strong>records are signed by the user's
+            own key</strong>, and identity is a DID that survives a server. That is
+            much closer to Airhop's identity model than ActivityPub's
+            server-holds-your-key arrangement.
+          </p>
+
+          <h2 id="identity">The identity question</h2>
+          <p>
+            The roadmap's claim is that Airhop's identity model maps onto both, so
+            bridging is an integration rather than a redesign. That is true for AT
+            Protocol and only partly true for ActivityPub.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Requirement</th><th>Airhop has</th><th>ActivityPub needs</th><th>AT Protocol needs</th></tr></thead>
+              <tbody>
+                <tr><td>A signing key</td><td>Ed25519</td><td>An RSA or Ed25519 key, held by the <em>server</em></td><td>A key you hold. <code>did:key</code> can be derived from Ed25519 directly.</td></tr>
+                <tr><td>A stable identifier</td><td>Peer ID, Nostr pubkey</td><td><code>@user@host</code>, which requires a host</td><td>A DID, which does not</td></tr>
+                <tr><td>A place to publish</td><td>Nostr relays</td><td><strong>A home server</strong></td><td>A PDS, self-hostable</td></tr>
+                <tr><td>Discovery</td><td>Announce, QR, geohash</td><td>WebFinger</td><td>DID resolution</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The unavoidable answer to "is this account creation"</p>
+            <p>
+              <strong>Yes.</strong> ActivityPub requires a home server that hosts
+              your actor document and holds a key that posts as you. AT Protocol
+              requires a PDS, which you can self-host but which is still a server
+              that must exist and stay reachable.
+            </p>
+            <p>
+              Airhop's principle 3 is "no accounts, ever. There is no create-account
+              screen." A bridge cannot honour that. What it <em>can</em> honour is
+              principle 2, offline first, by being strictly optional and by leaving
+              the mesh untouched when it is off.
+            </p>
+            <p>
+              So the honest framing is not "no accounts". It is: the app itself
+              never requires an account, and a user who wants one for a specific
+              purpose can attach it, knowing what it costs.
+            </p>
+          </div>
+          <p>
+            One further wrinkle: an Ed25519 key can be turned into a
+            <code>did:key</code> directly, which is elegant. But
+            <code>did:plc</code>, the DID method Bluesky actually uses in practice,
+            is operated by Bluesky's own directory service. Using
+            <code>did:web</code> or <code>did:key</code> is possible and less well
+            supported. Deriving a DID from the Airhop identity is real, and it does
+            not by itself remove the server.
+          </p>
+
+          <h2 id="flows">What an integration would look like</h2>
+          <h3>Flow 1: cross-posting outward</h3>
+          <pre class="ascii">
+  user writes in #bluetooth
+        │
+        ├── ALWAYS: signed packet 0x02, flooded over BLE
+        │
+        └── IF the bridge is enabled AND this message is opted in:
+                 │
+                 ├── ActivityPub: POST a Create/Note to the user's
+                 │   outbox on their home server, which fans it out
+                 │
+                 └── AT Protocol: write a signed app.bsky.feed.post
+                     record into the user's PDS repo
+</pre>
+          <div class="box bad">
+            <p class="box-title">Why this must be per message, not per channel</p>
+            <p>
+              A mesh room is ephemeral, local and mostly among people you can see.
+              A Fediverse post is public, permanent, indexed and searchable.
+              Silently promoting one to the other is the single worst thing an
+              integration could do, and a channel-level toggle makes it inevitable
+              the first time someone forgets which room they are in.
+            </p>
+            <p>
+              An explicit per-message action, with a visibly different affordance,
+              is the only safe shape. It should look like publishing, not like
+              sending.
+            </p>
+          </div>
+
+          <h3>Flow 2: reading inward</h3>
+          <pre class="ascii">
+  a dedicated tab or section, NEVER mixed into mesh conversations
+
+  ActivityPub:  poll the user's home timeline via their server's API
+  AT Protocol:  fetch the timeline from an AppView
+
+  Needs INTERNET. Degrades to empty when offline, which is fine
+  because it is an extra, and disastrous if it were mixed into a
+  mesh room, where "empty" would read as "the mesh is broken".
+</pre>
+
+          <h3>Flow 3: contact discovery</h3>
+          <p>
+            The genuinely useful one, and the one with the sharpest privacy edge.
+            "Which of the people I follow on Bluesky also use Airhop?"
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Approach</th><th>How</th><th>Leak</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Publish a pointer</strong></td><td>Put your Airhop Nostr pubkey in your Bluesky profile or Mastodon bio. Others read it.</td><td><strong>Permanently and publicly links your social identity to your mesh identity.</strong> Irreversible: the link is archived, indexed and mirrored the moment it is published.</td></tr>
+                <tr><td>Cross-reference DIDs</td><td>Derive a DID from the Airhop identity and look for it in follow graphs.</td><td>Same link, same permanence.</td></tr>
+                <tr><td>Private set intersection</td><td>Cryptographic protocol to find the overlap without revealing either list.</td><td>Much better, and much harder. Needs a party to run it or a multi-round protocol between clients.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The trap in this feature</p>
+            <p>
+              The whole point of an Airhop identity is that it is not linked to a
+              real-world identity. Publishing your mesh key on a social profile
+              deletes that property permanently, for everyone who has ever seen the
+              profile, including archives. It also creates a
+              <strong>selector</strong>: an adversary who knows your Bluesky account
+              now knows your Nostr pubkey, and can watch for it on relays and in
+              geohash cells.
+            </p>
+            <p>
+              If it ships at all, it needs a confirmation that says exactly that,
+              in those words, and the default must be off.
+            </p>
+          </div>
+
+          <h2 id="privacy">The privacy analysis</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Concern</th><th>Severity</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Identity linkage</strong></td>
+                  <td><span class="pill bad">high</span></td>
+                  <td>Connecting an Airhop identity to a public social account is permanent and public. Nothing walks it back.</td>
+                </tr>
+                <tr>
+                  <td><strong>Server holds a key</strong></td>
+                  <td><span class="pill bad">high</span></td>
+                  <td>ActivityPub instances hold the key that signs your deliveries and can post as you. AT Protocol is better here: records are signed by your own key.</td>
+                </tr>
+                <tr>
+                  <td><strong>Content permanence</strong></td>
+                  <td><span class="pill warn">medium</span></td>
+                  <td>A mesh message is ephemeral, unindexed and local. A federated post is archived, indexed, searchable, and mirrored to servers you have never heard of. Deletion is a polite request.</td>
+                </tr>
+                <tr>
+                  <td><strong>Metadata to a server</strong></td>
+                  <td><span class="pill warn">medium</span></td>
+                  <td>Your IP, your posting times, your follow graph. Tor helps for the transport and not for the account.</td>
+                </tr>
+                <tr>
+                  <td><strong>Accidental promotion</strong></td>
+                  <td><span class="pill bad">high</span></td>
+                  <td>Posting to a mesh room and to the public internet must never be the same gesture.</td>
+                </tr>
+                <tr>
+                  <td><strong>Attack surface</strong></td>
+                  <td><span class="pill warn">medium</span></td>
+                  <td>New HTTP clients, new parsers, JSON-LD for ActivityPub (a notoriously complex format), OAuth flows. All new code reachable from remote input.</td>
+                </tr>
+                <tr>
+                  <td><strong>Dependency</strong></td>
+                  <td><span class="pill">low</span></td>
+                  <td>Only if it is optional and off by default, which the roadmap specifies.</td>
+                </tr>
+                <tr>
+                  <td><strong>Moderation model clash</strong></td>
+                  <td><span class="pill">low</span></td>
+                  <td>Airhop cannot moderate at the protocol level and says so. A Fediverse instance can and does. A user bridging content may be surprised that their instance removes it.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">Does it break the app</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Principle</th><th>Status under a bridge</th></tr></thead>
+              <tbody>
+                <tr><td>1. Security first</td><td><span class="pill ok">holds</span> if the plugin never touches private keys or mesh traffic, and every action needs confirmation.</td></tr>
+                <tr><td>2. Offline first</td><td><span class="pill ok">holds</span> The mesh is unaffected. The bridge is inert with no internet.</td></tr>
+                <tr><td>3. No accounts, ever</td><td><span class="pill bad">violated for the user who opts in</span> The app still never requires one, but the sentence in <code>VISION.md</code> is absolute and would need qualifying.</td></tr>
+                <tr><td>4. No central server</td><td><span class="pill warn">complicated</span> The <em>project</em> still operates none. The user's instance or PDS is a server they chose, like a Nostr relay or a mint.</td></tr>
+                <tr><td>5. Ephemerality by default</td><td><span class="pill warn">tension</span> Bridged content is permanent by nature. Mitigated by making it explicit and per message.</td></tr>
+                <tr><td>6. bitchat wire compatibility</td><td><span class="pill ok">holds</span> Nothing on the wire changes.</td></tr>
+                <tr><td>7. Protocol compliance</td><td><span class="pill ok">holds</span></td></tr>
+                <tr><td>"Not a centralized social network"</td><td><span class="pill ok">holds</span> No profiles are hosted, no search index is operated.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            So the architectural answer is: it does not break the app, provided it
+            is genuinely a plugin. The <em>positioning</em> answer is that principle
+            3 would need to be restated as "the app never requires an account" rather
+            than "no accounts, ever".
+          </p>
+
+          <h2 id="plugin">The plugin architecture</h2>
+          <p>
+            The roadmap specifies the constraints, and they are the right ones.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constraint</th><th>Why it is the right rule</th></tr></thead>
+              <tbody>
+                <tr><td>A generic <code>Plugin</code> interface in <code>src/core/</code>, with typed subtypes per category</td><td>Keeps integration code out of the mesh path entirely.</td></tr>
+                <tr><td>Per-plugin opt-in with explicit permission prompts</td><td>Nothing happens because a user updated the app.</td></tr>
+                <tr><td><strong>Strict data boundary: plugins see only what the user marks shareable, never mesh traffic</strong></td><td>This is the load-bearing rule. A plugin that could read the mesh would be a exfiltration path with a friendly name.</td></tr>
+                <tr><td><strong>Capability model: no key access or network call on the user's behalf without a per-action confirmation</strong></td><td>Prevents the classic failure where an integration quietly posts on your behalf.</td></tr>
+                <tr><td>Separately auditable</td><td>A reviewer can read the plugin without reading the mesh, and vice versa.</td></tr>
+                <tr><td>Users who enable none are unaffected</td><td>The mesh protocol and wire format are unchanged.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The same v1.2.0 milestone also lists a <strong>UPI payment
+            plugin</strong> for India, and it is a useful contrast because the
+            roadmap is unusually blunt about it: online only, opt in, disabled by
+            default, with a disclosure on enable that transactions are linked to a
+            verified identity and visible to NPCI. It is included as a convenience,
+            explicitly not as a private rail, and Cashu remains the offline payment
+            system. That is exactly the tone a Fediverse bridge should adopt.
+          </p>
+
+          <h2 id="verdict">My verdict</h2>
+          <div class="grid two">
+            <div class="box ok">
+              <p class="box-title">Arguments for</p>
+              <ul>
+                <li><strong>Distribution.</strong> The honest weakness of a phone mesh is that nobody else has the app. A bridge is a discovery channel into communities that already value decentralisation.</li>
+                <li><strong>Ideological fit.</strong> Both are open, both are federated, both are the audience most likely to install this.</li>
+                <li><strong>AT Protocol maps cleanly.</strong> Records signed by your own key and a portable DID are much closer to Airhop's model than anything else on offer.</li>
+                <li><strong>Genuinely useful in a disaster.</strong> "Post this to the internet from a phone that has signal, on behalf of a crowd that does not" is a real scenario, and the gateway already proves the shape.</li>
+                <li>It costs nothing to users who leave it off.</li>
+              </ul>
+            </div>
+            <div class="box bad">
+              <p class="box-title">Arguments against</p>
+              <ul>
+                <li><strong>Airhop already has an internet layer</strong>, and it is better: Nostr needs no account, no server, no key held by anyone else. This adds a second one that is strictly weaker on every privacy axis.</li>
+                <li><strong>Identity linkage is irreversible</strong> and is the exact opposite of what the product exists for.</li>
+                <li><strong>Accidental promotion</strong> from a local room to the public internet is the worst failure mode the app could have, and no UI is perfect.</li>
+                <li><strong>It is a large amount of new remote-facing code</strong>: HTTP clients, JSON-LD, OAuth, XRPC. In an app whose selling point is a small, auditable protocol core.</li>
+                <li><strong>The opportunity cost is high.</strong> Fanout subsetting, prekey sync, Arti on Android, Tor bridges and the LAN transport are all higher value for the mission.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="box warn">
+            <p class="box-title">What I would actually do</p>
+            <ol>
+              <li>
+                <strong>Do not build it before v1.9.0.</strong> The items in
+                chapter <a href="49-review.html">49</a> serve the mission
+                directly; this serves growth.
+              </li>
+              <li>
+                <strong>If it is built, do AT Protocol first.</strong> Records are
+                signed by the user's own key, the DID is portable, and the identity
+                mapping is real rather than aspirational. ActivityPub's
+                server-holds-your-key model is the weaker fit.
+              </li>
+              <li>
+                <strong>Outbound publishing only, at first.</strong> Per message,
+                explicit, with an affordance that looks like publishing rather than
+                sending. No inbound timeline, which is the largest surface for the
+                least benefit.
+              </li>
+              <li>
+                <strong>Never ship automatic contact discovery.</strong> If it
+                ships, it must require an explicit confirmation that states plainly
+                that the link between the two identities is public and permanent.
+              </li>
+              <li>
+                <strong>Restate principle 3 honestly</strong> as "the app never
+                requires an account" rather than quietly weakening "no accounts,
+                ever".
+              </li>
+              <li>
+                <strong>Treat it as a separate package.</strong> The plugin should
+                be independently auditable and, ideally, independently
+                installable, so a user who wants none of it ships none of it.
+              </li>
+            </ol>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">What is the Fediverse, in three sentences?</span>
+              <span class="a">A network of independent servers speaking ActivityPub, a W3C standard where a user is an Actor with an inbox and an outbox, and posts are Activities wrapping Objects. Publishing means your home server POSTs the activity to every follower's inbox, signed with a key the server holds. Identity is <code>@user@server</code>, so it is bound to that server, and if the server closes the identity goes with it.</span>
+            </li>
+            <li>
+              <span class="q">How does AT Protocol differ, and why does that matter to Airhop?</span>
+              <span class="a">It is aggregation rather than federation: you write signed records into your own personal data server, a relay crawls every PDS into one firehose, and AppViews build timelines from it. Two things matter here. Records are signed by <em>your</em> key rather than a server's, and identity is a portable DID that survives moving servers. That is much closer to Airhop's model than ActivityPub's, which is why it is the better first integration despite Bluesky's practical centralisation around one relay and one AppView.</span>
+            </li>
+            <li>
+              <span class="q">Does bridging require account creation, and does that break the app?</span>
+              <span class="a">Yes it requires an account: ActivityPub needs a home server that hosts your actor and holds a key, and AT Protocol needs a PDS even if you self-host it. It does not break the architecture, because a plugin that never touches mesh traffic or private keys leaves the offline-first and wire-compatibility principles intact. It does break the wording of principle 3, "no accounts, ever", which would have to be restated as "the app never requires an account". That is a positioning change, and it should be made openly rather than quietly.</span>
+            </li>
+            <li>
+              <span class="q">What is the single most dangerous part of this feature?</span>
+              <span class="a">Contact discovery by publishing your Airhop key on a social profile. It permanently and publicly links a mesh identity, whose entire value is being unlinked from a real-world identity, to an indexed and archived social account. It is irreversible, it creates a selector an adversary can watch for on relays and in geohash cells, and it is exactly the property the app exists to protect. Second most dangerous is accidental promotion: making "post to this room" and "publish to the internet" the same gesture.</span>
+            </li>
+            <li>
+              <span class="q">Airhop already has Nostr. Why add another internet layer at all?</span>
+              <span class="a">The only honest answer is distribution, not capability. Nostr is strictly better on every privacy axis: no account, no home server, no key held by anyone else, and gift wrap that hides sender and recipient from relays. What a Fediverse bridge buys is reach into communities that already value decentralisation and are the most likely people to install a mesh messenger. That is a real benefit, and it is a growth argument rather than a mission argument, which is why I would sequence it behind the items that serve the mission.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

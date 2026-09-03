@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 23: Location and geohash. Cells, precision, teleport, presence, place names, and the privacy line." />
+    <title>23 Location and geohash · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 23 · Rooms and places</p>
+          <h1>Location and geohash</h1>
+          <p class="kt-lede">
+            Turning "where you are" into a chat room, without a map server, an API
+            key, or your coordinates ever leaving the device. The whole feature is
+            arithmetic on a short string, and the privacy properties come from
+            choosing how much of that string to reveal.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#geohash">How a geohash works</a></li>
+              <li><a href="#precision">Precision, and the channel ladder</a></li>
+              <li><a href="#identity">One identity per cell</a></li>
+              <li><a href="#relays">Converging on the same relays</a></li>
+              <li><a href="#dual">One room, two transports</a></li>
+              <li><a href="#presence">Presence, and the precision floor</a></li>
+              <li><a href="#teleport">Teleport</a></li>
+              <li><a href="#neighbours">Neighbours, without a map</a></li>
+              <li><a href="#names">Place names</a></li>
+              <li><a href="#pin">The location pin</a></li>
+              <li><a href="#privacy">The privacy ledger</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine cutting the world in half, then cutting your half in half,
+              then again, over and over, writing down which side you were on each
+              time. After a few cuts you have a short code, and everyone standing
+              near you ends up with the same code. That code is the name of a chat
+              room. Say fewer letters and the room covers a whole country. Say more
+              letters and it covers your street, which is why the app refuses to
+              tell anyone the longer version.
+            </p>
+          </div>
+
+          <h2 id="geohash">How a geohash works</h2>
+          <p>
+            A geohash turns a latitude and longitude into a short string, by
+            repeatedly halving the world and recording which half you were in.
+          </p>
+          <pre class="ascii">
+  START WITH THE WHOLE WORLD
+
+     longitude  -180 ......................... +180
+     latitude    -90 ......................... +90
+
+  ALTERNATE between longitude and latitude, one bit each:
+
+     bit 1  longitude: is it in the upper half?     yes -> 1
+     bit 2  latitude:  is it in the upper half?     no  -> 0
+     bit 3  longitude: upper half of what remains?  yes -> 1
+     bit 4  latitude:  upper half?                  yes -> 1
+     bit 5  longitude:                              no  -> 0
+     ...
+
+  EVERY 5 BITS BECOME ONE CHARACTER, in base32:
+
+     0123456789bcdefghjkmnpqrstuvwxyz
+
+     note: no a, i, l or o. They are removed because they look
+     like 4, 1, 1 and 0 when a human reads a code aloud.
+
+  RESULT
+
+     "u4pruydqqvj"
+
+  THE KEY PROPERTY: a SHARED PREFIX means PHYSICAL PROXIMITY.
+
+     u4pruydqqvj   and   u4pruydqqvm    are metres apart
+     u4pru         is the cell containing both
+     u4            is the region containing that
+</pre>
+          <div class="box ok">
+            <p class="box-title">Why this is exactly right for a serverless app</p>
+            <p>
+              Truncating a geohash is <strong>zooming out</strong>. So "which room
+              am I in at city scale" is a string slice, not a lookup. No map tile
+              server, no geocoding API, no third party who learns which part of the
+              world is being looked at, and it works offline. The neighbour
+              calculation in <code>utils/geohash-grid.ts</code> is pure arithmetic
+              on the string for the same reason, and it is correct at the poles and
+              the date line, which the classic neighbour lookup tables famously are
+              not.
+            </p>
+          </div>
+
+          <h2 id="precision">Precision, and the channel ladder</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Chars</th><th>Cell size</th><th>Channel</th><th>Presence allowed</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>~5000 km</td><td></td><td></td></tr>
+                <tr><td><strong>2</strong></td><td>~1250 km</td><td><code>#region</code></td><td><span class="pill ok">yes</span></td></tr>
+                <tr><td>3</td><td>~156 km</td><td></td><td></td></tr>
+                <tr><td><strong>4</strong></td><td>~39 km</td><td><code>#province</code></td><td><span class="pill ok">yes</span></td></tr>
+                <tr><td><strong>5</strong></td><td>~4.9 km</td><td><code>#city</code></td><td><span class="pill ok">yes</span></td></tr>
+                <tr><td><strong>6</strong></td><td>~1.2 km</td><td><code>#neighborhood</code>, and the <strong>bridge rendezvous cell</strong></td><td><span class="pill bad">NO</span></td></tr>
+                <tr><td><strong>7</strong></td><td>~153 m</td><td><code>#block</code></td><td><span class="pill bad">NO</span></td></tr>
+                <tr><td>8</td><td>~38 m</td><td></td><td></td></tr>
+                <tr><td>9+</td><td>metres</td><td></td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>#bluetooth</code> is deliberately absent from this table. It is
+            the Bluetooth-only room and must never be bridged to the internet by
+            the location mechanism, though the separate mesh bridge can carry it
+            through a rendezvous cell if the user turns that on.
+          </p>
+          <div class="box">
+            <p class="box-title">Degradation, not failure</p>
+            <p>
+              With location permission denied, the named channels resolve to no
+              cell and <strong>keep working over Bluetooth exactly as before</strong>.
+              Location is an enhancement, never a requirement. A teleported cell
+              carries a fixed geohash, so it stays live over the internet even with
+              no fix at all.
+            </p>
+          </div>
+
+          <h2 id="identity">One identity per cell</h2>
+          <div class="box bad">
+            <p class="box-title">Why the main Nostr key must never sign a location message</p>
+            <p>
+              That key is published in every ANNOUNCE and used for DMs and
+              nutzaps. Reusing it here would let any relay operator, or anyone
+              watching a geohash, tie a <strong>movement history</strong> to a
+              durable identity, and correlate the block, city and region cells
+              somebody posts in as one person.
+            </p>
+          </div>
+          <pre class="code">
+  seed = HMAC-SHA256(signingPrivKey, "airhop-geohash-seed-v1")
+
+  privKey = HMAC-SHA256(seed, utf8(geohash) || u32_BE(i))
+            for i = 0, 1, 2 ... until it is a valid secp256k1 scalar
+
+  fallback: SHA-256(seed || label)   (essentially never reached)
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Consequence</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Deterministic</strong></td><td>You keep a <em>stable</em> pseudonym within a cell across restarts, so people recognise you in the room you are in.</td></tr>
+                <tr><td><strong>Per cell</strong></td><td>Posting in <code>#city</code> and <code>#region</code> are unlinkable to each other and to your durable identity.</td></tr>
+                <tr><td><strong>Derived, not stored</strong></td><td>Nothing extra to provision, back up or wipe. The seed is one-way from the signing key.</td></tr>
+                <tr><td><strong>Not on the wire</strong></td><td>Nothing depends on the derivation, only that each cell gets its own key, so bitchat and Airhop interoperate without sharing seeds. They could not anyway: the seed never leaves the device.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Display follows bitchat's convention: the self-asserted nickname with
+            the last four hex characters of the pubkey appended, or
+            <code>anon#abcd</code> with no nickname. Nicknames here are untrusted
+            decoration; the pubkey is the identity.
+          </p>
+          <p>
+            One implementation detail worth knowing about, because it is a latent
+            divergence on bitchat's side: the counter is
+            <strong>big-endian</strong> in bitchat-iOS and Airhop, and
+            little-endian in bitchat-Android. It only matters when
+            <code>i &gt; 0</code>, which essentially never happens, because a
+            random 32-byte HMAC output is a valid scalar with overwhelming
+            probability.
+          </p>
+
+          <h2 id="relays">Converging on the same relays</h2>
+          <div class="box bad">
+            <p class="box-title">The correctness rule that looks like an optimisation</p>
+            <p>
+              Relays are chosen by distance from the <strong>cell centre</strong>,
+              never from the user's own position. Every participant must
+              independently arrive at the <em>same</em> relay set, or two people in
+              opposite corners of one city cell publish to relays the other never
+              subscribed to and never see each other, despite being in the same
+              channel.
+            </p>
+            <p>
+              Ties break on <strong>URL</strong> rather than insertion order, for
+              the same reason: many relays in the bundled directory share identical
+              coordinates, so ties are common rather than exotic, and two clients
+              with differently ordered directories would otherwise pick different
+              sets.
+            </p>
+          </div>
+          <pre class="code">
+  closestRelaysToGeohash(gh, decodeCenter, count = 5):
+    centre = decodeCenter(gh)
+    sort every directory entry by haversine distance from centre,
+      breaking ties on the URL string
+    take the first `count`
+
+  count = 5, matching bitchat's nostrGeoRelayCount, so both
+  clients converge on the same rendezvous.
+</pre>
+          <p>
+            Custom relays merge on top: with geo-relay discovery on, the five
+            nearest stay intact (because converging on them is what makes location
+            channels interoperate with bitchat) and the user's up to five custom
+            relays are appended. With discovery off, the custom set replaces it,
+            trading interoperability for control. The client's per-call relay
+            ceiling is sized to hold <em>both</em> halves, because capping back to
+            the default five would trim from the tail and silently drop exactly the
+            custom entries the user added.
+          </p>
+
+          <h2 id="dual">One room, two transports</h2>
+          <pre class="ascii">
+  A PUBLIC LOCATION CHANNEL EXISTS ON BOTH TRANSPORTS AT ONCE
+
+  YOU POST IN #city
+        │
+        ├──▶ BLUETOOTH: packet type 0x51, flooded, ttl 5-7
+        │       [chLen][channel][idLen][msgId][text]
+        │       reaches anyone NEARBY, including people with NO INTERNET
+        │       backfilled by gossip sync, bit 24, 15 minute window
+        │
+        └──▶ NOSTR: kind 20000, tagged  g=<geohash>
+                signed by the PER-CELL identity
+                published to the 5 relays nearest the cell CENTRE
+                carries  mid=<msgId>  so the two copies COLLAPSE
+                reaches everyone in the cell WITH internet
+
+  A bitchat peer receives only the Nostr copy, because bitchat
+  publishes its location channels to relays and never over
+  Bluetooth. That is exactly why the Bluetooth copy needed its
+  own packet type: under 0x02 it would ALSO render in their
+  single mesh room, addressed to an audience its author never chose.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Situation</th><th>What reaches you</th></tr></thead>
+              <tbody>
+                <tr><td>In the cell, with internet</td><td>Both copies, collapsed into one bubble by the shared message ID.</td></tr>
+                <tr><td>In the cell, no internet</td><td>The Bluetooth copy from anyone nearby, plus anything a nearby <strong>gateway</strong> ferries in from relays.</td></tr>
+                <tr><td>Not in the cell, with internet</td><td>The Nostr copy only. You appear as <strong>teleported</strong>.</td></tr>
+                <tr><td>bitchat peer in the cell</td><td>The Nostr copy. The Bluetooth <code>0x51</code> is relayed by them and never displayed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Joining replays up to <strong>one hour</strong> of recent traffic,
+            capped at <strong>200 events</strong>, so the room is not empty on
+            arrival and a busy cell cannot flood a client on join. Kind 20000 is in
+            Nostr's <strong>ephemeral</strong> range (20000 to 29999), which means
+            relays forward to live subscribers and do not persist, so a location
+            channel leaves no durable record on any relay. The hour of history is
+            whatever a relay happens to be holding in a buffer, not a guarantee.
+          </p>
+
+          <h2 id="presence">Presence, and the precision floor</h2>
+          <p>
+            A presence heartbeat is a kind 20001 event whose content is the geohash
+            itself. Subscribers learn that a pubkey is in that cell, which is what
+            populates the participant list.
+          </p>
+          <div class="box bad">
+            <p class="box-title">The hard rule</p>
+            <p>
+              Presence is broadcast at precision <strong>2, 4 and 5 only</strong>.
+              Never 6, never 7.
+            </p>
+            <p>
+              A heartbeat at precision 7 would announce your position to within a
+              153 metre block, on a public relay, <strong>continuously, every 40 to
+              80 seconds</strong>. That is a live location feed. The refusal is
+              enforced in the presence module rather than left to callers, because
+              a rule that depends on every call site remembering it is a rule that
+              will be broken.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Constant</th><th>Value</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td>Heartbeat interval</td><td><strong>40 to 80 s, jittered</strong></td><td>Randomised so a fixed interval cannot fingerprint the sender. Matching bitchat-iOS.</td></tr>
+                <tr><td>Participant window</td><td>5 minutes</td><td>Covers several heartbeats, so one missed round does not drop somebody from the list.</td></tr>
+                <tr><td>Allowed precisions</td><td>2, 4, 5</td><td>Coarse enough that "somewhere in this city" is not a position.</td></tr>
+                <tr><td>Decorrelation delay</td><td>Applied on join</td><td>So opening a channel does not immediately emit a heartbeat that correlates with the join.</td></tr>
+                <tr><td>Event kind</td><td>20001, ephemeral</td><td>Relays do not persist it, so presence leaves no history.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Presence is also deliberately excluded from gossip sync. Rotating-ID
+            presence is valid only inside its epoch, and syncing it would let a
+            device that was never in radio range collect presence it could not
+            otherwise have observed.
+          </p>
+
+          <h2 id="teleport">Teleport</h2>
+          <p>
+            Open any cell by typing its geohash, without being there. Scout a spot
+            before you arrive, or follow an area from another country.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>A resolved channel</th><th>A teleported cell</th></tr></thead>
+              <tbody>
+                <tr><td>Key</td><td><code>#city</code>, resolved from a fix</td><td><code>geohash:&lt;gh&gt;</code>, fixed</td></tr>
+                <tr><td>Needs location permission</td><td>Yes, to resolve</td><td><strong>No</strong></td></tr>
+                <tr><td>Transport</td><td>Bluetooth <em>and</em> Nostr</td><td><strong>Nostr only.</strong> Nobody in Bluetooth range is in that cell.</td></tr>
+                <tr><td>Tag</td><td>none</td><td><code>t=teleport</code></td></tr>
+                <tr><td>Others see you as</td><td>Nearby</td><td><strong>Teleported</strong></td></tr>
+                <tr><td>Precision</td><td>2 to 7, from the channel</td><td>2 to 12, whatever was entered</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <code>t=teleport</code> tag is an honesty mechanism rather than a
+            restriction: bitchat lists the sender as teleported too, so a room can
+            distinguish "someone standing here" from "someone reading from
+            elsewhere". Without it, a remote participant would be indistinguishable
+            from a local one, which matters when the room is being used to
+            coordinate something physical.
+          </p>
+
+          <h2 id="neighbours">Neighbours, without a map</h2>
+          <p>
+            "The next neighbourhood over" is a tap rather than a geohash somebody
+            has to know, and it is computed entirely on the string.
+          </p>
+          <pre class="ascii">
+  A GEOHASH IS A GRID BY CONSTRUCTION
+
+     geohashBounds(gh) -> { minLat, maxLat, minLon, maxLon }
+
+     the cell's SIZE is (maxLat - minLat) and (maxLon - minLon),
+     so stepping one cell north is just adding that latitude span
+     to the centre and re-encoding.
+
+  ┌───────┬───────┬───────┐
+  │  NW   │   N   │  NE   │
+  ├───────┼───────┼───────┤
+  │   W   │  YOU  │   E   │
+  ├───────┼───────┼───────┤
+  │  SW   │   S   │  SE   │
+  └───────┴───────┴───────┘
+
+  NO MAP, NO TILE SERVER, NO API KEY, and nothing that tells a
+  third party which part of the world is being looked at.
+  Correct at the POLES and the DATE LINE, which the classic
+  neighbour lookup tables famously are not.
+</pre>
+          <p>
+            This is also the mechanism that would extend the mesh bridge, which
+            currently covers only the device's own geohash-6 cell. Subscribing to
+            the eight neighbours is a documented follow-up and would fix the case
+            where two islands a few hundred metres apart sit on opposite sides of a
+            cell boundary. Chapter <a href="27-gateway-bridge.html">27</a>.
+          </p>
+
+          <h2 id="names">Place names</h2>
+          <p>
+            <code>u4pruy</code> is precise and unreadable. The UI shows a
+            human-readable label beside it, matching how bitchat labels its
+            location channels.
+          </p>
+          <pre class="ascii">
+  place-names-store
+
+    1. take the geohash the app ALREADY KNOWS
+    2. decode its CENTRE
+    3. reverse-geocode that centre, once, best effort, device-side
+    4. cache it forever, keyed on (geohash, device language)
+
+  RAW COORDINATES NEVER LEAVE THE DEVICE. Only the cell's centre
+  is geocoded, and that centre is derived from the geohash, not
+  from the user's actual position.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td>Best effort</td><td>It needs a network round trip and a platform geocoder, and either can be unavailable. Every failure resolves to no name and the UI simply omits it.</td></tr>
+                <tr><td>Cached permanently</td><td>A geohash cell maps to the same place forever, so a cell is never geocoded twice.</td></tr>
+                <tr><td>Keyed on language</td><td>The OS geocoder answers in the <em>device's</em> language, not the app's. Both native APIs accept a locale and <code>expo-location</code> exposes neither, and a native shim for a room-header label is not worth it, so the cache keys on that language and re-resolves when it changes.</td></tr>
+                <tr><td>Wiped on panic</td><td>Cached names trace the places a user has been active in, so the store is in the wipe list.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The location cache in <code>location-service</code> has a
+            <strong>five minute TTL</strong> and is module state, so the panic wipe
+            clears it explicitly: the wipe does not restart the process, and the
+            next geohash channel would otherwise resolve from the position the old
+            identity observed.
+          </p>
+
+          <h2 id="pin">The location pin</h2>
+          <p>
+            Sharing a <em>point</em> rather than joining a room. Entirely separate
+            from geohash channels, and deliberately minimal.
+          </p>
+          <pre class="code">
+  NoisePayloadType 0x50, inside a Noise session. 19 BYTES, FIXED.
+
+    [0]        u8      version = 1
+    [1..4]     i32 BE  latitude,  MICRODEGREES (degrees x 1e6)
+    [5..8]     i32 BE  longitude, microdegrees
+    [9..10]    u16 BE  horizontal accuracy in metres, 0xFFFF unknown
+    [11..18]   u64 BE  WHEN THE FIX WAS TAKEN, unix ms
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Decision</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Microdegrees, not floats</strong></td><td>1e-6 degrees is about 11 cm, far finer than any phone fix, and an integer encodes identically everywhere a float's last bits do not.</td></tr>
+                <tr><td><strong>The timestamp is the FIX, not the send</strong></td><td>A pin that waited in a composer or crossed several hops is older than the message carrying it, and the receiver has to be able to say so.</td></tr>
+                <tr><td><strong>Never couriered, never gossiped</strong></td><td>A position delivered six hours later by a passing carrier points at where somebody <em>used to be</em>. A pin with no session to carry it is refused outright rather than queued.</td></tr>
+                <tr><td><strong>Coordinates are refused, not clamped</strong></td><td>A sender chooses these bytes, and clamping an out-of-range value would turn nonsense into a plausible point somebody would then walk towards.</td></tr>
+                <tr><td><strong>Sent once, on an explicit tap</strong></td><td>To one contact. Never automatic, never a reply in kind, and never forwarded onward by the app.</td></tr>
+                <tr><td><strong>19 bytes</strong></td><td>Never approaches a fragment boundary.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The threat model lists it as explicitly out of scope in one respect: a
+            pin carries real coordinates, and although it is encrypted inside the
+            recipient's Noise session so no relay can read it, the recipient holds
+            it and can do what they like with it, including screenshotting it.
+            There is no live sharing and no map, deliberately.
+          </p>
+
+          <h2 id="privacy">The privacy ledger</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>What could leak</th><th>Protection</th><th>Residual</th></tr></thead>
+              <tbody>
+                <tr><td>Raw coordinates</td><td><strong>Never transmitted.</strong> Only a truncated geohash.</td><td>None on this path. A location pin is a separate, explicit, one-off action.</td></tr>
+                <tr><td>Fine-grained position via presence</td><td>Presence restricted to precisions 2, 4 and 5, enforced in the module.</td><td>"Somewhere in this ~5 km cell", repeated every 40 to 80 seconds while the channel is open.</td></tr>
+                <tr><td>Correlating your cells into a movement trail</td><td>A separate derived identity per cell.</td><td>Broken across cells. A relay serving one cell still sees every pubkey posting in it.</td></tr>
+                <tr><td>Linking a cell identity to your real one</td><td>Nothing derives one from the other observably.</td><td>Only you can assert the link, via the <code>0x22</code> contact card, and only on an explicit action.</td></tr>
+                <tr><td>Your IP to the relay</td><td>Tor, when enabled.</td><td><strong>Off by default</strong>, so by default a relay sees your IP and can geolocate it roughly.</td></tr>
+                <tr><td>Which cell you are in, from your relay choice</td><td>Nothing.</td><td>The relay set is derived from the cell centre, so <em>which relays you connect to</em> narrows your location even before you post.</td></tr>
+                <tr><td>Message length</td><td>Nothing. bitchat's Nostr cipher does not pad.</td><td>Ciphertext length reveals plaintext length.</td></tr>
+                <tr><td>Presence timing</td><td>40 to 80 second jitter, plus a decorrelation delay on join.</td><td>Still a regular signal that somebody is in the cell.</td></tr>
+                <tr><td>Cached place names on the device</td><td>Wiped on panic.</td><td>Until then, they trace where the user has been active.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The honest summary</p>
+            <p>
+              Location channels are the feature that leaks the most, and they leak
+              it to <strong>relay operators</strong> rather than to peers. The
+              defences are real (coarse cells, per-cell identities, ephemeral
+              events, jittered heartbeats, no raw coordinates) and they do not add
+              up to anonymity. Someone running a relay serving a cell can see how
+              many pseudonyms are active there and roughly when.
+            </p>
+            <p>
+              Which is why the whole feature is <strong>opt in per channel</strong>,
+              why location permission is requested only when a location channel is
+              opened rather than at startup, and why the named channels degrade to
+              Bluetooth-only rather than demanding a fix.
+            </p>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does a geohash make a good channel name?</span>
+              <span class="a">Because a shared prefix means physical proximity, so truncating the string is zooming out. "Which room am I in at city scale" is a string slice rather than a lookup, which means no map server, no geocoding API, no API key, no third party learning which part of the world is being examined, and it works entirely offline. Neighbour calculation is arithmetic on the same string, correct at the poles and the date line where the classic lookup tables are not.</span>
+            </li>
+            <li>
+              <span class="q">Why must relays be chosen by cell centre rather than by the user's position?</span>
+              <span class="a">Because publisher and subscriber must independently arrive at the same relay set or the channel silently drops traffic. Two people in opposite corners of one city cell would pick different nearest relays if selection used their own positions, publish to relays the other never subscribed to, and never see each other despite being in the same room. Ties break on URL rather than insertion order for the same reason, since many directory entries share coordinates and ties are common.</span>
+            </li>
+            <li>
+              <span class="q">Why is presence forbidden at precision 6 and 7?</span>
+              <span class="a">Because a heartbeat at precision 7 announces your position to within a 153 metre block, on a public relay, every 40 to 80 seconds, for as long as the channel is open. That is a live location feed rather than a room membership signal. Precisions 2, 4 and 5 are coarse enough that "somewhere in this city" is not a position. The restriction is enforced inside the presence module rather than left to callers, because a rule depending on every call site remembering it will eventually be broken.</span>
+            </li>
+            <li>
+              <span class="q">Why does each cell get its own key?</span>
+              <span class="a">Because the main Nostr key is published in every announce and used for DMs and payments. Reusing it in location channels would let any relay operator, or anyone watching a geohash, tie a movement history to a durable identity and correlate the block, city and region cells someone posts in as the same person. A per-cell key derived by HMAC from a device seed is deterministic, so you keep a stable pseudonym within a room, and unlinkable, so two rooms cannot be joined up.</span>
+            </li>
+            <li>
+              <span class="q">A location pin arrives six hours late. What should happen, and why?</span>
+              <span class="a">It should not arrive at all. A pin is never couriered and never gossiped, because a position delivered hours later points at where somebody <em>used to be</em>, which is worse than no information because it looks current. A pin with no live session to carry it is refused outright rather than queued. The payload also carries the timestamp of the <em>fix</em> rather than the send, so even a pin delayed by a few hops can be shown with its real age.</span>
+            </li>
+            <li>
+              <span class="q">What does a relay operator learn about someone in a location channel?</span>
+              <span class="a">That a particular pseudonymous pubkey is active in a particular cell, roughly when, and how long each of their messages is, since bitchat's cipher does not pad. Without Tor they also see the IP, which geolocates roughly. What they cannot learn is the person's durable identity, or that two of their cell pseudonyms belong to one person, because the per-cell derivation breaks that link. One subtler leak: the relay set is derived from the cell centre, so which relays a client connects to narrows its location before it posts anything at all.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

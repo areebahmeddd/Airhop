@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 34: Custody and the nutzap flow. Custodial or not, answered precisely. NIP-60, NIP-61, traced." />
+    <title>34 Custody and the nutzap flow · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 34 · Money</p>
+          <h1>Custody and the nutzap flow</h1>
+          <p class="kt-lede">
+            "Is this a custodial wallet?" deserves a precise answer rather than a
+            slogan, because the honest one is neither yes nor no. This chapter
+            gives it, then traces a nutzap end to end and lists every NIP and NUT
+            in play.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#answer">The answer, precisely</a></li>
+              <li><a href="#spectrum">The custody spectrum</a></li>
+              <li><a href="#split">What is yours and what is theirs</a></li>
+              <li><a href="#compare">Against other wallet models</a></li>
+              <li><a href="#choosing">Choosing a mint</a></li>
+              <li><a href="#nutzap">The nutzap flow, traced</a></li>
+              <li><a href="#p2pk">P2PK, and the 33 byte trap</a></li>
+              <li><a href="#nips">Every NIP and NUT in play</a></li>
+              <li><a href="#nip60">Why NIP-60 is not published</a></li>
+              <li><a href="#failures">How money is actually lost</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Think of a fairground. You swap real money for tokens at a booth, and
+              then the tokens are yours: they live in your pocket, you can hand
+              them to a friend without asking anyone, and nobody can take them out
+              of your pocket. But the booth is still holding your real money, and
+              if the booth burns down or the owner runs away, your tokens buy
+              nothing. So the tokens are yours, and the money behind them is not.
+            </p>
+          </div>
+
+          <h2 id="answer">The answer, precisely</h2>
+          <div class="box ok">
+            <p class="box-title">Airhop is a non-custodial wallet holding claims against a custodian</p>
+            <p>
+              <strong>Airhop the app is non-custodial in every sense.</strong> The
+              project holds nothing, sees nothing, and cannot move, freeze or
+              recover anyone's money. There is no account, no server, and no
+              administrative key.
+            </p>
+            <p>
+              <strong>The mint is a custodian of the backing bitcoin.</strong> It
+              holds the sats that the ecash represents. It can refuse redemption,
+              inflate, or disappear.
+            </p>
+            <p>
+              <strong>The proofs are bearer instruments you hold.</strong> They sit
+              encrypted on your device. The mint cannot spend them, cannot see them,
+              and cannot connect the ones it issued to the ones it later redeems.
+            </p>
+          </div>
+          <p>
+            The one-sentence version for a user:
+            <strong>the coins are yours, the money behind them is at the mint you
+            chose.</strong>
+          </p>
+          <div class="box bad">
+            <p class="box-title">What would be dishonest to say</p>
+            <ul>
+              <li>
+                <strong>"Non-custodial", full stop.</strong> That implies nobody
+                can take your funds, and a mint absolutely can. Cashu is
+                explicitly a <em>minimal trust</em> system, not a trustless one.
+              </li>
+              <li>
+                <strong>"Custodial".</strong> That implies a company holding an
+                account for you that it could freeze or hand over. There is no
+                account, and the mint does not know who you are.
+              </li>
+              <li>
+                <strong>"Your keys, your coins."</strong> True about the proofs,
+                misleading about the value, because the value depends on a party
+                honouring a redemption.
+              </li>
+            </ul>
+          </div>
+
+          <h2 id="spectrum">The custody spectrum</h2>
+          <pre class="ascii">
+  FULLY CUSTODIAL ◀────────────────────────────────▶ FULLY SELF-CUSTODIAL
+
+  Exchange     Custodial LN     CASHU        Fedimint    LN node    On-chain
+  account      wallet           ECASH                     you run    bitcoin
+     │             │              │             │            │          │
+  they hold    they hold      THEY HOLD     a FEDERATION  you hold   you hold
+  the coins    the channel    THE BACKING   holds it,     the        the keys
+  AND your     AND your       BITCOIN.      m-of-n        channel
+  identity     balance                      guardians     funds
+     │             │          YOU HOLD          │            │          │
+  KYC, can     can freeze,    THE PROOFS.   no single    you manage  you manage
+  freeze,      can see        No account.   party can    liquidity   keys and
+  can seize    your graph     No identity.  run off.     and backup  fees
+                              Blind sigs
+                              hide the
+                              graph.
+                                  ▲
+                            AIRHOP IS HERE
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Model</th><th>Who can take your funds</th><th>Who knows your transactions</th><th>Works offline</th></tr></thead>
+              <tbody>
+                <tr><td>Exchange account</td><td>The exchange, a court, a hacker</td><td>The exchange, and whoever it reports to</td><td>No</td></tr>
+                <tr><td>Custodial Lightning</td><td>The provider</td><td>The provider sees everything</td><td>No</td></tr>
+                <tr><td><strong>Cashu (Airhop)</strong></td><td><strong>The mint, by refusing redemption</strong></td><td><strong>Nobody.</strong> Blind signatures break the link between issuance and redemption, and a transfer between people never touches the mint.</td><td><strong>Yes, for transfer</strong></td></tr>
+                <tr><td>Fedimint</td><td>A threshold of guardians colluding</td><td>Nobody, same blinding</td><td>Yes</td></tr>
+                <tr><td>Self-hosted Lightning node</td><td>Nobody, but you can lose it</td><td>Routing nodes see the path</td><td>No</td></tr>
+                <tr><td>On-chain bitcoin</td><td>Nobody, but you can lose it</td><td><strong>Everybody, forever.</strong> The chain is public.</td><td>No</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Notice that the most self-custodial option, on-chain bitcoin, is the
+            <em>worst</em> for privacy and cannot work offline at all. Cashu trades
+            a narrow, named custody risk for the two properties this product
+            actually needs.
+          </p>
+
+          <h2 id="split">What is yours and what is theirs</h2>
+          <div class="grid two">
+            <div class="box ok">
+              <p class="box-title">Entirely yours</p>
+              <ul>
+                <li><strong>The proofs.</strong> On your device, in an AES-256 encrypted MMKV partition under a key in the OS keychain.</li>
+                <li><strong>The secrets.</strong> Each proof's secret is known only to you. The mint has never seen it until you spend.</li>
+                <li><strong>The P2PK key</strong> that nutzaps lock to.</li>
+                <li><strong>The recovery phrase</strong>, if you enabled it.</li>
+                <li><strong>The mint list.</strong> You choose. The app ships with none.</li>
+                <li><strong>The transaction history.</strong> Local only. No NIP-60 events are published.</li>
+                <li><strong>The decision to spend.</strong> No approval, no limits, no counterparty.</li>
+              </ul>
+            </div>
+            <div class="box bad">
+              <p class="box-title">At the mint</p>
+              <ul>
+                <li><strong>The backing bitcoin.</strong> Real sats, on Lightning or on chain, held by the operator.</li>
+                <li><strong>The signing keys</strong> that make a proof valid.</li>
+                <li><strong>The spent set</strong>, which is the only thing that can answer "has this been spent".</li>
+                <li><strong>The power to refuse</strong> redemption, or to inflate.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>The mint CAN</th><th>The mint CANNOT</th></tr></thead>
+              <tbody>
+                <tr><td>Refuse to redeem</td><td>Spend your proofs</td></tr>
+                <tr><td>Disappear with the backing</td><td>See your balance</td></tr>
+                <tr><td>Issue proofs with no backing (inflate)</td><td>Link an issuance to a redemption</td></tr>
+                <tr><td>See your IP, without Tor</td><td>Know who you paid</td></tr>
+                <tr><td>See the total it has issued and redeemed</td><td>Freeze an account, because there is no account</td></tr>
+                <tr><td>Go offline and strand redemption</td><td>Identify you, because there is no identity</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">Why this is much better than it sounds</p>
+            <p>
+              A custodial payment provider knows who you are, who you pay, when,
+              and how much, and it holds the balance in an account it can freeze on
+              request. A Cashu mint knows only that it issued N sats at some point
+              and redeemed N sats at some other point, with no way to connect the
+              two, and it has no account to freeze because there is nothing tying a
+              proof to a person.
+            </p>
+            <p>
+              The custody risk is real and it is <em>narrow</em>: the mint can fail
+              to honour redemption. It cannot surveil, cannot censor a specific
+              user, and cannot selectively freeze.
+            </p>
+          </div>
+
+          <h2 id="compare">Against other wallet models</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Question</th><th>Airhop</th><th>A custodial LN wallet</th><th>A self-custodial LN wallet</th></tr></thead>
+              <tbody>
+                <tr><td>Sign up</td><td><strong>None</strong></td><td>Email or phone, often KYC</td><td>None</td></tr>
+                <tr><td>Who holds the money</td><td>The mint you chose</td><td>The company</td><td>You, in channels</td></tr>
+                <tr><td>Who sees your payments</td><td><strong>Nobody</strong></td><td>The company, in full</td><td>Routing nodes see the path</td></tr>
+                <tr><td>Pay with no internet</td><td><strong>Yes</strong></td><td>No</td><td>No</td></tr>
+                <tr><td>Can be frozen</td><td><strong>No account to freeze</strong></td><td>Yes, individually</td><td>No</td></tr>
+                <tr><td>Backup</td><td>Optional 12 words, off by default</td><td>The company's problem</td><td>Channel state, which is hard</td></tr>
+                <tr><td>Lose the phone</td><td>Money gone, unless the phrase was enabled</td><td>Log in again</td><td>Money gone without a backup</td></tr>
+                <tr><td>Liquidity management</td><td><strong>None</strong></td><td>None</td><td>Yes, and it is the hard part</td></tr>
+                <tr><td>Smallest payment</td><td><strong>1 sat</strong></td><td>Fee-limited</td><td>Fee-limited</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The row that decides it for this product is
+            <strong>"pay with no internet"</strong>. Nothing else in the table can
+            do it, because everything else settles a state change live at the moment
+            of payment. A bearer token does not.
+          </p>
+
+          <h2 id="choosing">Choosing a mint</h2>
+          <p>
+            The mint is the one trust decision the user makes, so the app tries to
+            make it an informed one rather than a hidden one.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Design decision</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td><strong>No default mint ships</strong></td><td>The user must add one deliberately. There is no way to receive money without having made the trust decision first.</td></tr>
+                <tr><td><strong>Balances are per (mint, unit), never pooled</strong></td><td>One mint failing cannot take the rest. It is also why the balance screen refuses to show a single number: a token names exactly one mint, so value at two mints is not fungible without a Lightning round trip.</td></tr>
+                <tr><td><strong>Incoming ecash is only redeemed at a known mint</strong></td><td>A nutzap naming a mint the wallet does not already hold is refused outright. This was a High severity finding when it was not enforced: it would let an attacker introduce a hostile mint through a payment.</td></tr>
+                <tr><td><strong>Test mints are labelled</strong></td><td>A heuristic on the mint's own name, description and hostname (<code>testnut</code>, <code>fakewallet</code>, <code>regtest</code>, <code>signet</code>). Deliberately permissive, because a false positive costs a needless badge while a false negative lets somebody mistake play money for real sats. It only ever adds a warning and never blocks.</td></tr>
+                <tr><td><strong>You can run your own</strong></td><td>Which converts the custody question into "do I trust myself".</td></tr>
+                <tr><td><strong>Consolidation exists</strong></td><td><code>consolidateMints</code> moves value between mints over Lightning, so leaving a mint you no longer trust costs one routing fee rather than an external wallet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="nutzap">The nutzap flow, traced</h2>
+          <p>
+            A nutzap is <strong>not a request to pay, it is the payment</strong>.
+            NIP-61, two event kinds.
+          </p>
+          <pre class="ascii">
+  ─── STEP 0: THE RECIPIENT ADVERTISES, ONCE ───────────────────────
+
+  Bob publishes kind 10019 (replaceable, so it has one current version)
+
+     tags:  ["relay",  "wss://relay.example"]      where to send them
+            ["mint",   "https://mint.example", "sat"]   what he accepts
+            ["pubkey", "02a1b2...33 bytes hex"]    LOCK TO THIS
+
+  If Bob never publishes this, he cannot receive nutzaps at all, and
+  a payment to him degrades to an ordinary token in a DM.
+
+  ─── STEP 1: THE SENDER PREPARES ──────────────────────────────────
+
+  Alice: findNutzapTarget(bobPubkey)
+     fetch Bob's kind 10019
+     intersect HIS mint list with the mints ALICE ALREADY HOLDS VALUE AT
+        no overlap -> CANNOT nutzap. Fall through to rail 3.
+     pick the mint, in Bob's stated order of preference
+
+  ─── STEP 2: LOCK THE PROOFS ──────────────────────────────────────
+
+  Alice: lockProofsForNutzap({ amount, mint, p2pkPubkey })
+     swap her ordinary proofs at the mint for new ones carrying a
+     NUT-11 P2PK spending condition: only a signature from Bob's
+     key can spend them.
+
+     THIS IS THE COMMITMENT POINT. Past here the money is BOB'S,
+     whether or not he ever comes online. It is NOT reclaimable.
+
+  ─── STEP 3: PUBLISH ──────────────────────────────────────────────
+
+  Alice: publishLockedNutzap(...)
+     kind 9321
+       content: an optional comment, max 280 chars
+       tags:  ["proof", <proof JSON>]   ONE TAG PER PROOF, up to 64
+              ["u", <mint url>]         which mint issued them
+              ["p", <bob's nostr pubkey>]
+              ["e", <event id>, <relay>]   optional, what is zapped
+
+     PUBLISHED TO BOB'S RELAYS, from his kind 10019, NOT ours.
+     That is where he subscribes.
+
+  THE EVENT IS PUBLIC. Anyone can read the proofs. NOBODY BUT BOB
+  CAN SPEND THEM, because of the P2PK lock. So the relay never
+  holds spendable value.
+
+  ─── STEP 4: THE RECIPIENT CLAIMS ─────────────────────────────────
+
+  Bob's nutzap watcher is subscribed to kind 9321 with p=<his key>,
+  with a 30 DAY LOOKBACK so nothing is missed while offline.
+
+     for each event:
+       verify the Schnorr signature
+       is the "u" mint one BOB ALREADY HOLDS?   no -> REFUSE OUTRIGHT
+       parse at most 64 proof tags, each at most 4096 bytes
+       DLEQ-verify the proofs (NUT-12)
+       SWAP them at the mint, signing with the P2PK private key,
+         which converts them into ordinary proofs only Bob controls
+       record it in local history
+
+  ─── STEP 5: SETTLEMENT ───────────────────────────────────────────
+
+  Alice: settleNutzap(txId) when it is confirmed delivered,
+         failNutzapDelivery(txId, reason) if the relay refused.
+
+     PayResult.final === true for this rail ALONE, and every
+     confirmation names the rail and says whether Pending will
+     offer the money back. For a nutzap it will not.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Guard</th><th>Value</th><th>Prevents</th></tr></thead>
+              <tbody>
+                <tr><td>Proofs per nutzap</td><td>64</td><td>A single event forcing unbounded parsing work.</td></tr>
+                <tr><td>Proof tag length</td><td>4096 bytes</td><td>An oversized tag exhausting memory.</td></tr>
+                <tr><td>Comment length</td><td>280 chars</td><td>Attacker-controlled text sitting next to an amount.</td></tr>
+                <tr><td>Mints and relays in a 10019</td><td>16 each</td><td>An enormous advertised list.</td></tr>
+                <tr><td>Lookback</td><td>30 days</td><td>Missing payments received while offline, without unbounded history.</td></tr>
+                <tr><td><strong>Mint allow-list</strong></td><td>Must already be held</td><td><strong>A hostile mint introduced through a payment.</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every field of a nutzap event is treated as hostile until parsed,
+            because the event is public and unauthenticated apart from its
+            signature, and the signature only proves who published it, not that
+            the contents are sane.
+          </p>
+
+          <h2 id="p2pk">P2PK, and the 33 byte trap</h2>
+          <p>
+            NUT-11 adds a spending condition to a proof: it can only be spent by
+            presenting a signature from a named public key.
+          </p>
+          <pre class="ascii">
+  AN ORDINARY PROOF
+
+     secret = random bytes
+     spend it by presenting the secret
+
+  A P2PK-LOCKED PROOF
+
+     secret = a structured condition naming a PUBLIC KEY
+     spend it by presenting a SIGNATURE from the matching private key
+
+  So a locked proof can be PUBLISHED IN THE OPEN and remain
+  unspendable by everyone except the key holder. That is what makes
+  a public payment event safe.
+</pre>
+          <div class="box bad">
+            <p class="box-title">The mistake that makes money unspendable by everyone</p>
+            <p>
+              The <code>pubkey</code> tag in a kind 10019 is a
+              <strong>33 byte compressed secp256k1 key</strong>. A Nostr pubkey is
+              a <strong>32 byte x-only key</strong>. They are different encodings
+              of related things, and locking to the wrong form produces proofs that
+              <em>nobody</em> can spend, including the sender who created them. The
+              money is not stolen, it is simply gone.
+            </p>
+            <p>
+              This is why Airhop keeps a separate P2PK key in the keychain under
+              <code>airhop.wallet.p2pk.v1</code> rather than reusing the Nostr
+              identity key directly, and why the module's header comment names it
+              as one of the two rules that are easy to get wrong and both lose
+              money. The other is using a mint the recipient does not accept, which
+              produces proofs that are valid and worthless to them.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Consequence</th></tr></thead>
+              <tbody>
+                <tr><td>The recipient need not be online</td><td>The proofs wait in a public event until they subscribe. This is why the rail is <em>final</em>: the money is theirs already.</td></tr>
+                <tr><td>The relay holds no spendable value</td><td>A hostile relay operator reading every nutzap gains nothing.</td></tr>
+                <tr><td>The sender cannot reclaim</td><td>The proofs are locked to somebody else's key. There is no path back, which is exactly why <code>PayResult.final</code> is true only here.</td></tr>
+                <tr><td>Amounts are public</td><td>Anyone reading the event sees the value and the mint. Nutzaps are not private payments, they are <em>unstealable</em> public ones.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="nips">Every NIP and NUT in play</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Spec</th><th>Name</th><th>Airhop's use</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td><strong>NIP-17</strong></td><td>Private direct messages</td><td>The gift-wrap <em>layering</em> for DMs: kinds 14, 13, 1059.</td><td><span class="pill ok">structure used</span></td></tr>
+                <tr><td><strong>NIP-44</strong></td><td>Encrypted payloads</td><td><span class="pill bad">NOT the published version.</span> bitchat's own <code>nip44-v2</code> construction is used instead, because the event signature covers the ciphertext and byte-identical output is the whole of interoperability.</td><td><span class="pill warn">diverges</span></td></tr>
+                <tr><td><strong>NIP-59</strong></td><td>Gift wrap</td><td>The ephemeral outer envelope hiding the sender from relays.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NIP-40</strong></td><td>Expiration timestamp</td><td>On courier drops, kind 1401, so relays can drop expired mail.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NIP-13</strong></td><td>Proof of work</td><td><span class="pill warn">not implemented</span>, in either direction. Chapter <a href="24-nostr.html">24</a> explains why.</td><td><span class="pill warn">absent</span></td></tr>
+                <tr><td><strong>NIP-29</strong></td><td>Relay-managed groups</td><td><span class="pill bad">deliberately rejected.</span> It puts membership enforcement on a relay, making a server the authority on who may speak.</td><td><span class="pill bad">rejected</span></td></tr>
+                <tr><td><strong>NIP-60</strong></td><td>Cashu wallet on Nostr</td><td>Kinds 17375 and 7375. <strong>Airhop publishes neither.</strong> See below.</td><td><span class="pill bad">not published</span></td></tr>
+                <tr><td><strong>NIP-61</strong></td><td>Nutzaps</td><td>Kinds 9321 and 10019. The whole flow above.</td><td><span class="pill ok">implemented</span></td></tr>
+                <tr><td><strong>NIP-96</strong></td><td>HTTP file storage</td><td><span class="pill bad">deliberately rejected.</span> It would mean a central server that can log, throttle or remove your files, which is exactly what the app avoids. So media never rides Nostr.</td><td><span class="pill bad">rejected</span></td></tr>
+                <tr><td colspan="4"></td></tr>
+                <tr><td><strong>NUT-00</strong></td><td>Notation and token format</td><td><code>cashuA</code> decoded, <code>cashuB</code> emitted.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-01, 02</strong></td><td>Mint keys, keysets and fees</td><td>Cached public keys per mint, and the parts-per-thousand input fee schedule.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-03</strong></td><td>Swap</td><td>Receiving, splitting, making change.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-04</strong></td><td>Mint (deposit)</td><td>Lightning in: a bolt11 quote, polled while the sheet is open, reconciled on next launch.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-05</strong></td><td>Melt (withdraw)</td><td>Lightning out, with the routing reserve quoted first and unused reserve returned as change.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-07</strong></td><td>Proof state check</td><td>What turns "unverified" into confirmed or removed.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-09</strong></td><td>Restore</td><td>Asking a mint which blinded messages it already signed. Recovery, and interrupted-swap recovery.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-11</strong></td><td>P2PK</td><td>Locking proofs to a key. The basis of nutzaps.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-12</strong></td><td>DLEQ proofs</td><td>Offline verification that the mint really signed a proof.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-13</strong></td><td>Deterministic secrets</td><td>Deriving proof secrets from a BIP-39 seed. The optional recovery phrase.</td><td><span class="pill ok">used</span></td></tr>
+                <tr><td><strong>NUT-19</strong></td><td>Cached responses</td><td>Replaying an interrupted swap against the mint's cache rather than double-spending the inputs.</td><td><span class="pill ok">used</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="nip60">Why NIP-60 is not published</h2>
+          <p>
+            NIP-60 defines how to store a Cashu wallet's state on Nostr: kind
+            17375 for the wallet, kind 7375 for token events. It makes a wallet
+            portable across devices without any local backup.
+          </p>
+          <div class="box bad">
+            <p class="box-title">And it would publish your balance history to relays</p>
+            <p>
+              Token events are encrypted to your own key, so a relay cannot read
+              the amounts. But it can see <strong>that there are events, how many,
+              how often, and how large</strong>, all tied to one durable pubkey.
+              That is a transaction-frequency and rough-volume feed for anyone
+              watching, indefinitely, on infrastructure the project does not
+              operate.
+            </p>
+            <p>
+              Airhop keeps history <strong>local only</strong>, in the encrypted
+              wallet partition, wiped by the panic wipe. The cost is that a wallet
+              does not follow you to a new device automatically, which is exactly
+              what the optional NUT-13 recovery phrase is for: it rebuilds the
+              balance <em>from the mint's records</em> rather than from anything
+              published anywhere.
+            </p>
+          </div>
+          <p>
+            This is a good illustration of the project's general posture: given a
+            choice between convenience that publishes metadata and inconvenience
+            that does not, it takes the inconvenience and makes the recovery path
+            explicit and opt-in.
+          </p>
+
+          <h2 id="failures">How money is actually lost</h2>
+          <p>
+            Not by cryptographic break. These are the real paths, in rough order
+            of likelihood.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Path</th><th>Airhop's handling</th></tr></thead>
+              <tbody>
+                <tr><td><strong>The phone is lost and backup was off</strong></td><td>Money gone, like cash in a lost wallet. The recovery phrase is off by default and its coverage is shown honestly, including the uncovered remainder.</td></tr>
+                <tr><td><strong>The mint disappears</strong></td><td>Value at that mint is gone. Per-mint balances mean the rest survives. <code>consolidateMints</code> lets you leave a mint you stop trusting.</td></tr>
+                <tr><td><strong>An offline token was already spent</strong></td><td>Stored as <em>unverified</em> and never counted as settled. <code>refreshAccount</code> runs a NUT-07 check and removes anything the mint reports spent, rather than showing it as money.</td></tr>
+                <tr><td><strong>A send is abandoned mid-flight</strong></td><td>Proofs move to <em>reserved</em> rather than being deleted, and the serialised token stays on the transaction, so it is reclaimable. A crash, a closed sheet, or a DM that never routes all leave the value recoverable.</td></tr>
+                <tr><td><strong>A swap response is lost</strong></td><td>The blinded messages are persisted <em>before</em> the call, so the retry replays against the mint's NUT-19 cache, or recovers the outputs by NUT-09 using those exact blinded messages. Inputs are not removed until outputs are in hand.</td></tr>
+                <tr><td><strong>A token posted in a public channel</strong></td><td>It is a bearer instrument: anyone reading can redeem it. The UI states this before sending.</td></tr>
+                <tr><td><strong>Reclaiming a send the recipient did receive</strong></td><td>A race, not a cancellation: whoever reaches the mint first keeps it. The UI says so before reclaiming.</td></tr>
+                <tr><td><strong>A nutzap locked to the wrong key form</strong></td><td>Unspendable by everyone. Prevented by using the 33 byte compressed P2PK key from the recipient's kind 10019.</td></tr>
+                <tr><td><strong>A nutzap from a mint the recipient does not accept</strong></td><td>Valid proofs, worthless to them. Prevented by intersecting mint lists before locking anything.</td></tr>
+                <tr><td><strong>An empty token handed over</strong></td><td>A real past bug: a failed proof mapping returned <code>exact: true</code> with an empty list. The invariant now is that a send either covers the amount or refuses.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Is Airhop a custodial wallet? Answer in three sentences.</span>
+              <span class="a">The app is non-custodial: it holds nothing, sees nothing, and cannot move, freeze or recover anyone's money, and there is no account anywhere. The proofs are bearer instruments held on your device, encrypted at rest, which the mint cannot spend, see, or link to you. But the mint is a custodian of the backing bitcoin and can refuse redemption or disappear, so the honest phrasing is that the coins are yours and the money behind them is at the mint you chose.</span>
+            </li>
+            <li>
+              <span class="q">What exactly can and cannot a mint do?</span>
+              <span class="a">It can refuse to redeem, disappear with the backing, issue proofs it has no backing for, see your IP without Tor, and see its own totals issued and redeemed. It cannot spend your proofs, see your balance, link an issuance to a redemption (blind signatures break that), know who you paid (a transfer never touches it), freeze an account (there is none), or identify you (there is no identity). The custody risk is real and narrow: failure to honour redemption, not surveillance or selective censorship.</span>
+            </li>
+            <li>
+              <span class="q">Trace a nutzap from intention to settlement.</span>
+              <span class="a">The recipient must first have published a kind 10019 listing their relays, the mints they accept, and a 33 byte P2PK pubkey. The sender fetches it, intersects the recipient's mint list with mints they already hold value at, and refuses the rail if there is no overlap. They swap their proofs for new ones P2PK-locked to the recipient's key, which is the commitment point: past there the money is the recipient's and is not reclaimable. They publish a kind 9321 to <em>the recipient's</em> relays with one proof tag per proof and the mint URL. The recipient's watcher, subscribed with a 30 day lookback, verifies the signature, refuses any mint it does not already hold, DLEQ-verifies the proofs, and swaps them using the P2PK private key into proofs only it controls.</span>
+            </li>
+            <li>
+              <span class="q">Why is a nutzap the only payment rail reported as final?</span>
+              <span class="a">Because the proofs are cryptographically locked to the recipient's key by a NUT-11 spending condition. They are not ours to reclaim, and they are the recipient's whether or not they ever come online. Every other rail reserves proofs that can be released back to spendable. Conflating the two would either tell a user their money is safely delivered when it is sitting in a queue, or offer to take back money that is no longer theirs, which is why <code>PayResult.final</code> exists and why every confirmation names the rail.</span>
+            </li>
+            <li>
+              <span class="q">Why does Airhop not publish NIP-60 wallet events?</span>
+              <span class="a">Because although the token events are encrypted to your own key, a relay still sees that events exist, how many, how often and how large, all tied to one durable pubkey. That is a transaction frequency and rough volume feed, published indefinitely on infrastructure the project does not run. History stays local in the encrypted wallet partition and is destroyed by the panic wipe. The cost is that a wallet does not follow you to a new device, which the optional NUT-13 phrase covers by rebuilding the balance from the mint's own records instead.</span>
+            </li>
+            <li>
+              <span class="q">Somebody says "your keys, your coins" about this wallet. Correct them.</span>
+              <span class="a">It is true about the proofs and misleading about the value. You hold the proofs and the secrets, and nobody can take them from your device or spend them. But a proof is a claim against a mint, and the mint holds the bitcoin behind it. If it refuses redemption or disappears, you hold cryptographically perfect claims that buy nothing. Cashu is explicitly a minimal trust system rather than a trustless one, and the design's answers are that you choose the mint, the app ships with none, balances are never pooled across mints, and consolidation lets you leave one.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

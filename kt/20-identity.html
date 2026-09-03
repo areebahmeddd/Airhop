@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 20: Identity and trust. Peer IDs, TOFU, QR, safety numbers, and impersonation in practice." />
+    <title>20 Identity and trust · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 20 · Cryptography</p>
+          <h1>Identity and trust</h1>
+          <p class="kt-lede">
+            Encryption is easy compared to knowing who you are encrypting to.
+            This chapter is the hardest problem in the product: binding a key to
+            a person, with no server, no registry, and no authority.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#tree">The identity tree</a></li>
+              <li><a href="#peerid">Peer IDs</a></li>
+              <li><a href="#names">Names</a></li>
+              <li><a href="#tofu">Trust on first use, and its two tiers</a></li>
+              <li><a href="#proof">The 0x21 identity proof</a></li>
+              <li><a href="#capabilities">Capabilities, hints versus proof</a></li>
+              <li><a href="#verify">Verification: QR and safety numbers</a></li>
+              <li><a href="#geohash">Pseudonyms and the contact card</a></li>
+              <li><a href="#attacks">Attacks and their answers</a></li>
+              <li><a href="#unsolved">What stays unsolved</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              There is no register of who is who. So when your phone hears a new
+              name for the first time, it writes down the fingerprint that came
+              with it and refuses to ever change that entry, because a stranger
+              could shout the same name later. The only way to correct it is to
+              stand next to the person and scan their code with the camera, or to
+              read six words aloud to each other and check they match. Everything
+              else is a guess your phone is honest about.
+            </p>
+          </div>
+
+          <h2 id="tree">The identity tree</h2>
+          <pre class="ascii">
+  ONE ROOT, GENERATED ON DEVICE, NEVER TRANSMITTED
+
+  ┌─ noiseStaticPrivKey  (X25519, 32 random bytes)
+  │     └─ noiseStaticPubKey
+  │           └─ peerID = hex(SHA-256(pub))[0:16]      8 bytes, 16 hex chars
+  │                 └─ username = adjective-noun-4hex
+  │
+  └─ signingPrivKey     (Ed25519, 32 random bytes)
+        ├─ signingPubKey        signs every packet
+        │
+        ├─ HKDF("airhop-nostr-key-v1")
+        │     └─ nostrPrivKey (secp256k1)
+        │           └─ nostrPubKey (x-only, 32 bytes)   the durable npub
+        │
+        └─ HMAC("airhop-geohash-seed-v1")
+              └─ geohash seed
+                    ├─ HMAC(seed, "u4pruy" || 0) -> per-cell key for u4pruy
+                    ├─ HMAC(seed, "u4pru"  || 0) -> per-cell key for u4pru
+                    └─ ... one unlinkable identity per cell
+
+  Everything below the root is DERIVED. There is exactly one secret to
+  back up, one to wipe, and one to lose.
+</pre>
+          <p>
+            Two independent random keys at the root, then everything else by
+            one-way derivation. Nothing is stored twice, nothing needs
+            separate provisioning, and the panic wipe has exactly one item to
+            destroy for identity.
+          </p>
+          <p>
+            The Nostr key is derived rather than stored because a second stored
+            secret is a second thing to back up, a second thing to wipe, and a
+            second way to end up with a device holding half an identity. The
+            derivation is one-way, so the Nostr key cannot be walked back to the
+            signing key.
+          </p>
+
+          <h2 id="peerid">Peer IDs</h2>
+          <pre class="code">
+  peerID = hex(SHA-256(noiseStaticPubKey)).slice(0, 16)
+
+  8 bytes on the wire. 16 hex characters as a string.
+  Example: 3a9f2c1b8e4d5f60
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Consequence</th></tr></thead>
+              <tbody>
+                <tr><td>Derived from the public key</td><td>You cannot choose your peer ID. There is nothing to squat, nothing to register, and no first-come-first-served race.</td></tr>
+                <tr><td>Preimage resistant</td><td>An attacker cannot construct a Noise key that hashes to someone else's peer ID. 2^64 work for a targeted collision.</td></tr>
+                <tr><td>Verifiable from the announce</td><td>Every announce carries the Noise public key, so a receiver recomputes the derivation and refuses a mismatch. bitchat names this rejection <code>.senderMismatch(derivedPeerID:)</code>.</td></tr>
+                <tr><td>Bound to a completed Noise session</td><td>A session is only stored if the authenticated remote static key hashes to the claimed peer ID. This is what makes the ID meaningful rather than a label.</td></tr>
+                <tr><td><strong>Does not rotate</strong></td><td><span class="pill warn">acknowledged limitation</span> The same device is linkable across sessions forever, until the identity is regenerated. Listed as out of scope in the threat model. Only per-cell geohash identities are ephemeral.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="names">Names</h2>
+          <p>Two different things are called a name, and they have opposite trust properties.</p>
+          <div class="grid two">
+            <div class="box ok">
+              <p class="box-title">The derived username</p>
+              <pre class="code">peerIDToUsername("3a9f2c1b...")
+  byte[0] % 128 -> adjective
+  byte[1] % 128 -> noun
+  first 4 hex   -> suffix
+
+  "swift-falcon-3a9f"</pre>
+              <p>
+                Cannot be chosen. Cannot be claimed by anyone without the key it
+                derives from. 128 x 128 x 65536 is about a billion combinations.
+                Both word lists are exactly 128 entries so the byte modulo is
+                perfectly uniform.
+              </p>
+            </div>
+            <div class="box warn">
+              <p class="box-title">The announced nickname</p>
+              <p>
+                ANNOUNCE TLV <code>0x01</code>, up to 32 UTF-8 bytes, chosen
+                freely by the sender. A bitchat peer picks its own nickname and
+                Airhop renders what it announces.
+              </p>
+              <p>
+                <strong>This is decoration, not identity.</strong> Which is why a
+                public-channel sender is always shown with a <code>#last4</code>
+                suffix from the peer ID, so two people with the same nickname stay
+                distinguishable.
+              </p>
+            </div>
+          </div>
+          <h3>Nickname canonicalisation</h3>
+          <p>
+            The same visible name has more than one valid encoding. "Jose" with
+            an acute accent is either <code>U+00E9</code> or <code>U+0065</code>
+            followed by the combining acute <code>U+0301</code>. The two render
+            identically and compare unequal.
+          </p>
+          <p>
+            Airhop normalises to <strong>Unicode NFC</strong> on both encode and
+            decode, so everything downstream of the wire compares one form.
+            Without it, an accented name typed on one platform and announced from
+            another fails to match: an at-mention never fires, and one person
+            occupies two rows of a participant list. Both failures are silent,
+            which is what makes it worth a rule rather than a bug report.
+          </p>
+          <p>
+            This is a local canonicalisation, not a wire change. The packet still
+            carries whatever bytes the sender chose, peer IDs derive from keys
+            rather than names, and no signature covers the normalised form, so a
+            peer that normalises differently stays fully interoperable.
+          </p>
+          <p>
+            Truncation to the 32 byte budget counts <strong>UTF-8 bytes and drops
+            whole code points</strong>. Counting UTF-16 units would be wrong
+            twice: 32 emoji is 128 bytes, four times the budget, and a slice can
+            land inside a surrogate pair and emit a lone half that decodes to a
+            replacement character on the far side. The cut also backs off past a
+            trailing combining mark or zero-width joiner, so a name never ends in
+            a mark rendered on a dotted circle or half a split emoji. 32 bytes is
+            about ten Devanagari characters, so the budget is reached most often
+            in exactly the scripts that write with marks.
+          </p>
+
+          <h2 id="tofu">Trust on first use, and its two tiers</h2>
+          <p>
+            Here is the problem in its sharpest form. An announce is signed with
+            a key <em>carried inside that same announce</em>. So the signature
+            proves the announce is self-consistent and nothing more.
+          </p>
+          <pre class="ascii">
+  THE ATTACK
+
+  Victim V announces:
+     senderID   = V's peer ID
+     noisePub   = V's X25519 public key      ← broadcast IN THE CLEAR
+     signingPub = V's Ed25519 public key
+     signature  = V's signature
+
+  Attacker A hears it and crafts:
+     senderID   = V's peer ID                 ← copied
+     noisePub   = V's X25519 public key       ← copied, it was public
+     signingPub = A's OWN Ed25519 public key  ← substituted
+     signature  = A's signature over the whole thing
+
+  Now check it:
+     SHA-256(noisePub)[0:16] == senderID ?    ✓ PASSES (it is V's real key)
+     signature verifies against signingPub ?  ✓ PASSES (A signed with A's key)
+
+  Both checks pass. The announce is internally consistent and forged.
+</pre>
+          <p>
+            Signature checking alone cannot stop this. The only defence is to
+            refuse to <strong>replace</strong> a key already bound to a peer ID.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tier</th><th>Source</th><th>May create a pin</th><th>May replace a pin</th></tr></thead>
+              <tbody>
+                <tr><td>1. TOFU</td><td>A self-signed ANNOUNCE</td><td>Yes, if none exists</td><td><strong>Never</strong></td></tr>
+                <tr><td>2. Proven</td><td>Noise payload <code>0x21</code> inside a completed session</td><td>Yes</td><td><strong>Yes.</strong> Proven beats assumed.</td></tr>
+                <tr><td>Out of band</td><td>An in-person QR scan</td><td>Yes</td><td><strong>Yes.</strong> The camera witnessed it.</td></tr>
+                <tr><td>Out of band, weaker</td><td>An <code>airhop://</code> link, or a card in a geohash DM</td><td>Yes</td><td><strong>No.</strong> Recorded as <code>source: "link"</code>, never verified.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The rejection is <strong>whole-update</strong>, not
+            keep-the-key-take-the-rest. If a conflicting announce arrives, the
+            entire update is dropped, including the nickname and the capability
+            bits, because they come from the same unverified source. Accepting any
+            of it would still let an attacker rewrite how that peer is presented.
+            This mirrors bitchat's <code>BLEAnnounceTrustPolicy</code>
+            <code>.signingKeyMismatch</code> and <code>.keyMismatch</code>.
+          </p>
+          <p>
+            Identity pinning has <strong>no expiry</strong>, deliberately.
+            Reachability does. They are different questions, and conflating them
+            was a real bug: a <code>LEAVE</code> arrives precisely when a peer has
+            stopped announcing, so resolving its signing key through the
+            reachability window refused the genuine ones. Hence
+            <code>pinnedSigningKey()</code>, which ignores the TTL, alongside
+            <code>get()</code>, which applies it.
+          </p>
+
+          <h2 id="proof">The 0x21 identity proof</h2>
+          <p>
+            TOFU has a race: whoever announces first wins the pin. If an attacker
+            gets there first, the real peer is locked out of their own identity on
+            that device. <code>AUTHENTICATED_PEER_STATE</code> is how that heals.
+          </p>
+          <pre class="code">
+  NoisePayloadType 0x21, sent INSIDE a completed Noise XX session
+
+    [version = 0x01]
+    TLV 0x01  capabilities   minimal little-endian
+    TLV 0x02  Ed25519 signing public key
+</pre>
+          <p>
+            The session only completes when the remote static key hashes to the
+            claimed peer ID, so arriving inside one is
+            <strong>proof of possession of the Noise private key</strong>, which
+            no observer can fake. Three consequences:
+          </p>
+          <ul>
+            <li>A proven signing key <strong>may correct</strong> a TOFU pin.</li>
+            <li>An announce <strong>may never</strong> overwrite a proven one.</li>
+            <li>
+              Two different <em>proven</em> keys for one peer ID cannot both be
+              real, so the first one stands and the second is refused. That is the
+              only case the caller has to act on.
+            </li>
+          </ul>
+          <p>
+            Decoding is <strong>all or nothing</strong>: an unknown version, a
+            missing or duplicated required field, a non-minimal capability
+            encoding, or a malformed length all change no state. A partial parse
+            of an authenticated identity claim is worse than no parse.
+          </p>
+
+          <h2 id="capabilities">Capabilities, hints versus proof</h2>
+          <p>
+            Peers advertise what they support so features can degrade gracefully.
+            The bits are byte-for-byte with bitchat's
+            <code>PeerCapabilities</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Bit</th><th>Name</th><th>Meaning</th></tr></thead>
+              <tbody>
+                <tr><td>0</td><td>prekeys</td><td>Understands one-time prekey bundles.</td></tr>
+                <tr><td>1</td><td>wifiBulk</td><td>Has a high bandwidth fast path.</td></tr>
+                <tr><td>2</td><td>gateway</td><td>Will carry internet traffic for mesh-only peers.</td></tr>
+                <tr><td>3</td><td>groups</td><td>Understands private groups.</td></tr>
+                <tr><td>4</td><td>board</td><td>Understands bulletin board posts.</td></tr>
+                <tr><td>5</td><td>vouch</td><td>Vouching, a bitchat feature.</td></tr>
+                <tr><td>6</td><td>meshDiagnostics</td><td>Answers ping.</td></tr>
+                <tr><td>7</td><td>bridge</td><td>Bridges the public room across islands.</td></tr>
+                <tr><td>8</td><td>privateMedia</td><td>Reads Noise payload <code>0x20</code>, encrypted attachments.</td></tr>
+                <tr><td>9</td><td>privateMediaReceipts</td><td>Durable dedup of stable media IDs, so a sender may retry.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The capability downgrade attack</p>
+            <p>
+              Announced bits are a <strong>discovery hint</strong>. Anyone can
+              copy a victim's public Noise key off the air and self-sign an
+              announce carrying whatever bits they like. If encrypted media
+              selection depended on the announced bit, an attacker could announce
+              bit 8 <em>off</em> for a victim and force every attachment sent to
+              them into the signed cleartext form, readable by every node it
+              crosses.
+            </p>
+            <p>
+              So the rule is absolute: <strong>only the authenticated bit
+              counts</strong>. Encrypted private media is selected only on a
+              capability proven inside a Noise session via <code>0x21</code>.
+              Announced bits are enough to start a handshake, never enough to
+              change how we send. <code>update()</code> on the registry cannot
+              lower <code>authenticatedCapabilities</code>, so the next announce
+              cannot quietly reduce a proof back to a claim.
+            </p>
+          </div>
+
+          <h2 id="verify">Verification: QR and safety numbers</h2>
+          <p>
+            Two orthogonal facts are tracked, and confusing them was a real
+            security finding:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Question</th><th>Values</th></tr></thead>
+              <tbody>
+                <tr><td><code>source</code></td><td>How did the keys arrive?</td><td><code>qr</code>, <code>link</code>, <code>manual</code></td></tr>
+                <tr><td><code>verification</code></td><td>Has a human confirmed them?</td><td>verified or not</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            They are independent, so a contact learned from a link can be verified
+            later on a call. Only <code>source: "qr"</code> may re-pin keys
+            already bound to a peer ID.
+          </p>
+
+          <h3>Route 1: the QR contact card</h3>
+          <pre class="code">
+  airhop:v1/&lt;base64url&gt;
+
+  [0]        u8     version = 1
+  [1..8]     8      peerID
+  [9..40]    32     Noise static public key (X25519)
+  [41..72]   32     Ed25519 signing public key
+  [73]       u8     nickname length, 0 to 32
+  [74..M]    utf8   nickname
+  [M+1..+32] 32     Nostr public key (secp256k1)
+
+  Total: 106 + nickname bytes
+</pre>
+          <p>
+            Every card carries all three keys: Noise and signing for Bluetooth,
+            and the Nostr key so a contact met only by QR is still reachable over
+            the internet. On scan, the peer ID is checked against
+            <code>SHA-256(noisePub)[0:16]</code> before anything is trusted.
+          </p>
+          <p>
+            Airhop can also read bitchat's own verification QR, where the Nostr
+            key is optional, so absence means "mesh-only contact from bitchat"
+            rather than a malformed card.
+          </p>
+
+          <h3>Route 2: the safety number</h3>
+          <p>
+            Six words both people read to each other over a channel they already
+            trust: a phone call, a radio, another app.
+          </p>
+          <pre class="code">
+  peerFingerprint(noisePub, signingPub)
+      = SHA-256("airhop-fingerprint-v1" || noisePub || signingPub)
+
+  safetyNumber(ours, theirs)
+      = SHA-256("airhop-safety-number-v1" || sorted(ours, theirs))
+
+  then take 6 x 7-bit indices, MSB first, into a 128-word list
+      = 42 bits, six words
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Design choice</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Covers both keys</strong></td><td>A peer ID is SHA-256 of the Noise key alone, so reading a peer ID aloud would not catch the attack that matters: a forged card that keeps the victim's real peer ID and Noise key while substituting the attacker's signing key.</td></tr>
+                <tr><td><strong>Inputs are sorted before hashing</strong></td><td>So neither side needs to know who is who, and both derive the same string. Without it each side derives a different code and the exchange doubles in length.</td></tr>
+                <tr><td><strong>Six words, 42 bits</strong></td><td>Sized against the attack rather than to a round number. Forging a match means grinding keys until the pair hash lands on the same six words: 2^42 for one targeted pair, and it must be done <em>before</em> the two people speak. Every extra word is another word to read over a bad line, and a code nobody finishes reading protects nothing.</td></tr>
+                <tr><td><strong>Bit extraction is pinned in code</strong></td><td>Seven-bit indices taken most significant bit first, defined once so two devices agree exactly rather than depending on how a runtime slices bytes. The word list itself is presentation.</td></tr>
+                <tr><td><strong>It imports nothing</strong></td><td>A match sets a flag, a mismatch tells the user to stop. Neither writes a key, so unlike the scan path there is no re-pinning power to gate and none is needed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            This is the route that makes verification possible with someone you
+            can only reach by voice, which in a blackout may be the only channel
+            available.
+          </p>
+
+          <h2 id="geohash">Pseudonyms and the contact card</h2>
+          <p>
+            In a location channel you appear under a per-cell secp256k1 key with
+            no link to your durable identity. That is the point. But sometimes two
+            people who met in a cell want to become real contacts.
+          </p>
+          <p>
+            Noise payload <code>0x22</code>, <code>CONTACT_CARD</code>, carries
+            that assertion. A per-cell pubkey and a peer ID are unlinkable by
+            construction, so only the holder can assert they are the same person.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Sent only on explicit user action</td><td>Never automatic, and never an automatic reply to an inbound card. Otherwise receiving a card would deanonymise you.</td></tr>
+                <tr><td>Gift-wrapped from the sender's <strong>per-cell</strong> key</td><td>The envelope stays pseudonymous. Only the card body identifies the sender.</td></tr>
+                <tr><td>Validated exactly like a scanned card</td><td>Peer ID must equal <code>SHA-256(noisePub)[0:16]</code>.</td></tr>
+                <tr><td>Treated as <strong>not in person</strong></td><td>It may introduce a contact but never re-pin keys already bound to a peer ID.</td></tr>
+                <tr><td>Threads merge only after <strong>both</strong> cards have crossed</td><td>Merging moves replies to the durable rail, which attributes senders by known Nostr key alone. Merging earlier strands them in an unattributed thread.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="kt-note">
+            The machinery underneath all of this, meaning the three code formats,
+            the card byte layout, the five ways a contact can arrive and the
+            merge policy that decides which of them may overwrite what, is
+            <a href="21-contacts.html">21</a>.
+          </p>
+
+          <h2 id="attacks">Attacks and their answers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Attack</th><th>Answer</th><th>Test</th></tr></thead>
+              <tbody>
+                <tr><td>Claim someone else's peer ID with your own Noise key</td><td>Peer ID must equal <code>SHA-256(noisePub)[0:16]</code>. Preimage resistance makes it infeasible.</td><td>C08</td></tr>
+                <tr><td>Replay their announce with your signing key substituted</td><td>TOFU: no announce may replace a pinned key. The whole update is rejected.</td><td>C08</td></tr>
+                <tr><td>Send an unsigned announce</td><td><code>verifyPacket</code> returns false when SIGNED is clear, so one unconditional call covers both missing and invalid.</td><td>C08</td></tr>
+                <tr><td>Replay a captured announce forever</td><td>15 minute symmetric freshness window on the timestamp.</td><td>C03</td></tr>
+                <tr><td>Post in a channel as a known peer, unsigned</td><td>A missing key is a failed check, not a skipped one.</td><td>C01, C02</td></tr>
+                <tr><td>Forge a LEAVE to evict someone</td><td>Verified against the pinned signing key <strong>before</strong> the relay decision, so an unverifiable one is neither acted on nor forwarded.</td><td>C09</td></tr>
+                <tr><td>Mint hundreds of identities to flood the radar</td><td>Registry and radar capped at 200 with oldest-first eviction that never drops a peer holding a real BLE link.</td><td>C04</td></tr>
+                <tr><td>Claim to be directly connected by setting TTL to 7</td><td>A link binds to the first peer that announces directly on it. A later claim from a different peer ID on that link is downgraded to relayed.</td><td>C04</td></tr>
+                <tr><td>Announce bit 8 off for a victim to force plaintext media</td><td>Only the authenticated capability from <code>0x21</code> selects encrypted sending.</td><td>M09</td></tr>
+                <tr><td>Get a "Verified" badge from a link</td><td>An <code>airhop://</code> card records <code>source: "link"</code> and is never verified. This was a real High severity finding.</td><td></td></tr>
+                <tr><td>Forge a group state naming yourself creator</td><td>A group pins its <code>creatorFingerprint</code> and refuses a state naming a different creator even at a higher epoch. Enforced in two places, because a group state can either update or delete a group.</td><td>F01</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="unsolved">What stays unsolved</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Gap</th><th>Status</th><th>Honest framing</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Peer IDs never rotate</strong></td>
+                  <td>Out of scope, documented</td>
+                  <td>The same device is linkable across sessions forever. bitchat has an entire design document on peer ID rotation and has not shipped it either, because rotation breaks the direct-link rule, courier tags, contact pinning and the outbox all at once. This is the largest open privacy question in the design.</td>
+                </tr>
+                <tr>
+                  <td><strong>TOFU on first contact</strong></td>
+                  <td>Inherent</td>
+                  <td>If an attacker is present at first contact and wins the announce race, they own that identity on your device until an in-person scan corrects it. The <code>0x21</code> proof heals the case where the real peer later completes a session, but not the case where the attacker also completes one first.</td>
+                </tr>
+                <tr>
+                  <td><strong>No key rotation or revocation</strong></td>
+                  <td>Not implemented</td>
+                  <td>A compromised identity cannot be revoked. The only remedy is to regenerate, which produces a new peer ID and a new username, and every contact must re-scan. There is no "this key is retired" message.</td>
+                </tr>
+                <tr>
+                  <td><strong>Nicknames are free text</strong></td>
+                  <td>Deliberate</td>
+                  <td>A bitchat peer chooses its own nickname freely and Airhop renders what it announces. The <code>#last4</code> suffix on public messages is the mitigation, and it is a mitigation rather than a solution.</td>
+                </tr>
+                <tr>
+                  <td><strong>No transitive trust</strong></td>
+                  <td>Deliberate</td>
+                  <td>There is no web of trust and no vouching path in Airhop (bitchat has a vouch capability bit; Airhop does not implement the feature). Every verification is bilateral. That is simple and honest, and it does not scale to verifying a crowd.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is a valid Ed25519 signature on an announce not enough?</span>
+              <span class="a">Because the signature is checked against a key carried inside that same announce, so it only proves internal consistency. The Noise public key is broadcast in the clear, so an attacker copies the victim's peer ID and Noise key, substitutes their own signing key, and signs. The derivation check passes and the signature check passes. Only refusing to <em>replace</em> a key already bound to that peer ID stops it.</span>
+            </li>
+            <li>
+              <span class="q">Why may a <code>0x21</code> payload overwrite a TOFU pin when an announce may not?</span>
+              <span class="a">Because it arrives inside a completed Noise XX session, and a session only completes when the remote static key hashes to the claimed peer ID. That is proof of possession of the Noise private key, which no observer can fake. TOFU binds whoever announced first, and an attacker can win that race; a proof cannot be won by racing. Proven beats assumed, and the reverse never happens, because <code>update()</code> cannot clear the authenticated fields.</span>
+            </li>
+            <li>
+              <span class="q">Why does the safety number cover both keys rather than just the peer ID?</span>
+              <span class="a">Because a peer ID is SHA-256 of the Noise key alone. The attack that matters keeps the victim's real peer ID and real Noise key and substitutes only the signing key, so reading a peer ID aloud would match perfectly while the attacker holds the key that authenticates every packet. Covering both keys is what makes the comparison meaningful.</span>
+            </li>
+            <li>
+              <span class="q">Why does a link-delivered contact card get a weaker status than a scanned one?</span>
+              <span class="a">Because the camera is the evidence. An in-person scan means both people were physically present, which is what justifies letting it re-pin keys. A link can be forwarded, planted, or sent by anyone, so it can introduce a contact but may never overwrite keys already bound. Minting a "Verified" badge from a link was a real High severity finding: it would let anyone who could get you to tap a link impersonate a contact.</span>
+            </li>
+            <li>
+              <span class="q">Six words is only 42 bits. Signal uses 60 digits. Is that enough?</span>
+              <span class="a">It is sized against the attack rather than to a round number. Forging a match means grinding key pairs until the pair hash lands on the same six words: about 2^42 work for one specific targeted pair, and it has to be completed before those two people speak. Against that, every extra word is another word to read over a bad phone line, and a code nobody finishes reading protects nothing. It is a defensible trade, and it is a smaller margin than Signal's, which is worth saying rather than hiding.</span>
+            </li>
+            <li>
+              <span class="q">What happens if someone regenerates their identity?</span>
+              <span class="a">They become a completely different person to the network: new Noise key, new peer ID, new username, new Nostr key, new geohash identities. Every contact's pin for the old ID stays and is now dead. Nobody can message them under the old identity, and there is no revocation message to say so. That is the cost of having no registry, and it is the same reason there is no account recovery.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

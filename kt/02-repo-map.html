@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 02: Repository map. Every folder and every important file, and what owns what." />
+    <title>02 Repository map · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 02 · Orientation</p>
+          <h1>Repository map</h1>
+          <p class="kt-lede">
+            Roughly 200,000 lines of TypeScript across 398 files, plus Swift and
+            Kotlin for the hardware. This chapter tells you what every directory
+            is for, what owns what, and the rules that keep the layers apart.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#top-level">The top level</a></li>
+              <li><a href="#layer-rule">The layering rule</a></li>
+              <li><a href="#core">src/core, the protocol</a></li>
+              <li><a href="#services">src/services, the runtime</a></li>
+              <li><a href="#store">src/store, the state</a></li>
+              <li><a href="#features">src/features and src/ui</a></li>
+              <li><a href="#bridge-native">src/bridge and the native trees</a></li>
+              <li><a href="#tests">Tests</a></li>
+              <li><a href="#biggest">The ten biggest files</a></li>
+              <li><a href="#naming">Naming conventions that carry meaning</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="top-level">The top level</h2>
+          <pre class="ascii">
+airhop/
+├── src/                 everything that compiles to JavaScript
+├── android/             Kotlin native modules + Gradle build
+├── ios/                 Swift native modules + Xcode project
+├── assets/              bundled data (the Nostr relay CSV) and images
+├── docs/                design, spec and dev documentation
+│   ├── design/          VISION.md, ROADMAP.md
+│   ├── spec/            ARCHITECTURE.md, PROTOCOLS.md, test vectors
+│   └── dev/             REFERENCE.md, PROGRESS.md, CHANGELOG.md, GLOSSARY.md
+├── bitchat/             the vendored upstream sources, read only
+│   ├── ios/             bitchat-ios, the protocol source of truth
+│   └── android/         bitchat-android
+├── landing/             the marketing site (React + Vite), separate app
+├── press/               press kit build tooling
+├── fastlane/            store metadata
+├── scripts/             codegen and CI helpers
+├── .github/             workflows, agent definitions, skills
+└── KT/                  this manual
+</pre>
+          <div class="box plain">
+            <p class="box-title">Why bitchat is checked in</p>
+            <p>
+              <code>bitchat/ios</code> and <code>bitchat/android</code> are not
+              dependencies. They are the specification. Airhop's conformance
+              test parses their Swift and Kotlin sources at test time and fails
+              if a constant drifts: it reads <code>maxPayloadBytes</code> out of
+              <code>FileTransferLimits.swift</code>, and it fails if bitchat's
+              packet type allocation comes within 16 of Airhop's
+              <code>0x50</code> extension range. iOS is treated as canonical
+              where the two upstreams disagree, because it is the more mature of
+              the two and implements more packet types.
+            </p>
+          </div>
+
+          <h2 id="layer-rule">The layering rule</h2>
+          <p>
+            One rule explains most of the structure:
+            <strong>a lower layer may never import a higher one</strong>.
+          </p>
+          <pre class="ascii">
+  features/  ──imports──▶  services/  ──imports──▶  core/
+      │                        │                      │
+      └──imports──▶ store/ ◀───┘                      │
+                       │                              │
+                       └──── core/ may import store/mmkv only
+                             (courier and prekey stores persist)
+
+  core/ imports NOTHING from services/, features/, or ui/.
+  core/ has NO native dependencies. It runs in plain Node under jest.
+</pre>
+          <p>
+            The payoff is that the entire protocol is testable in CI with no
+            phone attached, and that a fix in gossip sync fixes iOS and Android
+            at the same instant. Airhop's answer to bitchat's biggest structural
+            problem (two native codebases that drift, which once broke iOS to
+            Android messaging for months over a fragment size mismatch) is
+            simply that there is one implementation.
+          </p>
+          <p>
+            Imports that cross a top-level layer are written as path aliases
+            (<code>@core/mesh/wire/packet-codec</code>); imports inside a layer
+            stay relative. Aliases live in <code>tsconfig.json</code> and are
+            mirrored in <code>package.json</code> for jest. So a diff that
+            reaches across layers is visible in the import block.
+          </p>
+
+          <h2 id="core">src/core, the protocol</h2>
+          <p>
+            Pure TypeScript. No React, no React Native, no native module. If it
+            defines bytes on the wire or performs a cryptographic operation, it
+            lives here.
+          </p>
+
+          <h3>core/crypto</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>File</th><th>Owns</th></tr></thead>
+              <tbody>
+                <tr><td><code>identity.ts</code></td><td>Key generation, peer ID derivation, save and load. 99 lines and deliberately boring.</td></tr>
+                <tr><td><code>keychain.ts</code></td><td>The registry of every OS keychain item, and the only module that calls <code>expo-secure-store</code>. Also the orphan sweeper.</td></tr>
+                <tr><td><code>noise-xx.ts</code></td><td>The full <code>Noise_XX_25519_ChaChaPoly_SHA256</code> handshake and transport session, including the 1024-nonce sliding replay window.</td></tr>
+                <tr><td><code>noise-x.ts</code></td><td>One-way sealing for courier envelopes.</td></tr>
+                <tr><td><code>double-ratchet.ts</code></td><td>Signal's Double Ratchet: symmetric chain, DH ratchet, skipped key cache capped at 1000.</td></tr>
+                <tr><td><code>fingerprint.ts</code></td><td>Safety numbers: a hash over both parties' keys, rendered as six words.</td></tr>
+                <tr><td><code>contact-exchange.ts</code></td><td>The QR contact card binary format and its validation.</td></tr>
+                <tr><td><code>bitchat-verify-qr.ts</code></td><td>Reading bitchat's own QR verification format.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>core/mesh</h3>
+          <p>
+            The one subsystem large enough to need grouping. A diff that changes
+            the wire format shows up under one directory.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Directory</th><th>Files</th><th>Owns</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>wire/</code></td>
+                  <td>12 modules</td>
+                  <td>Byte layouts. <code>packet-codec.ts</code> is the frame itself. Then one module per payload: <code>file-packet</code>, <code>board-packet</code>, <code>prekey-bundle</code>, <code>noise-payload</code>, <code>dm-payload</code>, <code>mesh-ping</code>, <code>nostr-carrier</code>, <code>location-pin</code>, <code>peer-state-packet</code>, plus <code>message-padding</code> and <code>packet-compression</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>routing/</code></td>
+                  <td>4 modules</td>
+                  <td><code>flood-router.ts</code> (TTL, jitter, relay scheduling), <code>deduplicator.ts</code> (the seen-set LRU), <code>fragment-manager.ts</code> (split and reassemble), <code>source-route.ts</code> (follow a route someone else planned).</td>
+                </tr>
+                <tr>
+                  <td><code>sync/</code></td>
+                  <td>2 modules</td>
+                  <td><code>gossip-sync.ts</code> (GCS filters, candidate windows, response rate limits) and <code>request-sync-manager.ts</code> (tracking which requests are outstanding so a response can be attributed).</td>
+                </tr>
+                <tr>
+                  <td><code>discovery/</code></td>
+                  <td>2 modules</td>
+                  <td><code>announce-manager.ts</code> (the ANNOUNCE TLV, capability bits, cadence) and <code>nickname.ts</code> (Unicode NFC canonicalization).</td>
+                </tr>
+                <tr>
+                  <td><code>rooms/</code></td>
+                  <td>2 modules</td>
+                  <td><code>channel-crypto.ts</code> (private channels) and <code>group-protocol.ts</code> (bitchat-compatible groups, roster signing, epoch keys).</td>
+                </tr>
+                <tr>
+                  <td><code>courier/</code></td>
+                  <td>2 modules</td>
+                  <td><code>courier-store.ts</code> (envelope format, tags, quotas, spray budget) and <code>prekey-store.ts</code> (our one-time prekeys and peers' bundles).</td>
+                </tr>
+                <tr>
+                  <td><code>voice/</code></td>
+                  <td>2 modules</td>
+                  <td><code>voice-capture.ts</code> and <code>voice-player.ts</code>: push-to-talk packetization and jitter-buffered playback.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>core/nostr, core/payments, core/router, core/encoding</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Path</th><th>Owns</th></tr></thead>
+              <tbody>
+                <tr><td><code>nostr/nostr-client.ts</code></td><td>A <code>SimplePool</code> wrapper: 3 to 5 relays, first-ACK-wins publishing, bounded reads, an inbound pump that yields the thread.</td></tr>
+                <tr><td><code>nostr/gift-wrap.ts</code></td><td>NIP-17 layering (rumor 14, seal 13, wrap 1059), timestamp jitter, and the HKDF that derives the Nostr key from the signing key.</td></tr>
+                <tr><td><code>nostr/bitchat-nip44.ts</code></td><td>bitchat's non-standard "nip44-v2" cipher. Not the published NIP-44. See chapter <a href="24-nostr.html">24</a>.</td></tr>
+                <tr><td><code>nostr/geohash-identity.ts</code></td><td>Per-cell secp256k1 keys, so posting in two cells is not linkable.</td></tr>
+                <tr><td><code>nostr/geohash-presence.ts</code></td><td>Geohash encode and decode, kind 20001 heartbeats, allowed precisions.</td></tr>
+                <tr><td><code>nostr/geo-relay.ts</code></td><td>Haversine relay selection, strict relay URL validation, the merge rule for custom relays.</td></tr>
+                <tr><td><code>nostr/bitchat-envelope.ts</code></td><td>The inner payload shapes bitchat expects inside a gift wrap.</td></tr>
+                <tr><td><code>nostr/courier-relay.ts</code></td><td>Parking a sealed courier envelope on relays as kind 1401.</td></tr>
+                <tr><td><code>nostr/bridge-event.ts</code></td><td>The rendezvous event for the mesh bridge, and the content-stable message ID.</td></tr>
+                <tr><td><code>payments/cashu.ts</code></td><td>Token detection in text, decoding, offline DLEQ verification, offline proof selection, QR limits.</td></tr>
+                <tr><td><code>payments/nutzap.ts</code></td><td>NIP-61 event construction and parsing.</td></tr>
+                <tr><td><code>payments/wallet-seed.ts</code></td><td>BIP-39 phrase handling for NUT-13.</td></tr>
+                <tr><td><code>payments/swap-preview.ts</code></td><td>The persisted record that makes an interrupted swap replayable.</td></tr>
+                <tr><td><code>router/message-router.ts</code></td><td>The <code>PeerRegistry</code> (who is reachable, whose keys are pinned) and the transport ladder for a DM.</td></tr>
+                <tr><td><code>encoding/base64.ts</code></td><td>base64 and base64url, because bytes cross the native bridge base64 encoded.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="services">src/services, the runtime</h2>
+          <p>
+            Long-lived objects with side effects. This is where core modules are
+            wired to hardware, timers and stores.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>File</th><th>Lines</th><th>Owns</th></tr></thead>
+              <tbody>
+                <tr><td><code>mesh-service.ts</code></td><td>6,349</td><td>The centre of the app. Owns both radios, the flood router, the peer registry, the courier, gossip sync, the Nostr client, groups, the board, prekeys, live voice, the gateway, and the DM send path. Every handler for every packet type is here.</td></tr>
+                <tr><td><code>wallet-service.ts</code></td><td>3,595</td><td>Everything that talks to a mint: mint, melt, swap, restore, consolidate, nutzaps.</td></tr>
+                <tr><td><code>geohash-channel-service.ts</code></td><td>1,319</td><td>Location channels over Nostr: cell resolution, subscription, presence, geo DMs.</td></tr>
+                <tr><td><code>file-transfer-service.ts</code></td><td>922</td><td>Attachment send and receive, the paced fragment queue, the on-disk cache and its retention sweep.</td></tr>
+                <tr><td><code>tor-routing.ts</code></td><td>664</td><td>The single decision point for Tor: the WebSocket swap on iOS, the fail-closed gate on Android, the VPN watch.</td></tr>
+                <tr><td><code>payment-router.ts</code></td><td>651</td><td><code>payPerson</code>, the four-rung ladder every payment entry point calls.</td></tr>
+                <tr><td><code>bridge-service.ts</code></td><td>619</td><td>The mesh bridge: rendezvous cell, loop caches, rate limits.</td></tr>
+                <tr><td><code>panic-wipe.ts</code></td><td>354</td><td>The ordered, resumable, time-boxed destruction sequence.</td></tr>
+                <tr><td><code>radio-controller.ts</code></td><td></td><td>The BLE reconciler: desired state, observed state, idempotent pass, backoff ladder.</td></tr>
+                <tr><td><code>wifi-controller.ts</code></td><td></td><td>The same shape for WiFi Aware. Android only.</td></tr>
+                <tr><td><code>power-policy.ts</code></td><td></td><td>A pure function of four facts, deciding how hard to run the radios.</td></tr>
+                <tr><td><code>private-channel-service.ts</code></td><td></td><td>Sealed channel send and receive, and the trial-decrypt loop.</td></tr>
+                <tr><td><code>notification-service.ts</code>, <code>notification-policy.ts</code></td><td></td><td>Local notifications, previews, the nearby-peers alert.</td></tr>
+                <tr><td><code>location-service.ts</code></td><td></td><td>Coarse position with a five minute cache, cleared on wipe.</td></tr>
+                <tr><td><code>presence-service.ts</code></td><td></td><td>Online, away and invisible.</td></tr>
+                <tr><td><code>link-router.ts</code></td><td></td><td>Handling an inbound <code>airhop://</code> link.</td></tr>
+                <tr><td><code>wipe-marker.ts</code>, <code>wipe-generation.ts</code></td><td></td><td>Making the panic wipe resumable across a process death, and invalidating startup work in flight.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="store">src/store, the state</h2>
+          <p>
+            Zustand stores, most persisted into MMKV. MMKV is a memory-mapped
+            key-value store with a JSI binding, so reads are synchronous and
+            fast enough to call during a render.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Store</th><th>Holds</th><th>Persisted</th></tr></thead>
+              <tbody>
+                <tr><td><code>chat-store</code></td><td>Every channel and message. The largest store by far.</td><td>Yes, id <code>airhop-chat</code></td></tr>
+                <tr><td><code>wallet-store</code></td><td>Cashu proofs, mints, transaction history.</td><td>Yes, and the only partition opened with an explicit AES-256 key</td></tr>
+                <tr><td><code>peer-store</code></td><td>The mesh radar: who is nearby, RSSI, direct or relayed.</td><td>No. In-memory only, so it resets on restart.</td></tr>
+                <tr><td><code>contacts-store</code></td><td>Saved contacts, their keys, verification state, local nicknames.</td><td>Yes</td></tr>
+                <tr><td><code>outbox-store</code></td><td>Undelivered DMs awaiting a route. 7 day TTL, 100 per peer, 8 attempts.</td><td>Yes</td></tr>
+                <tr><td><code>group-store</code>, <code>group-invite-outbox-store</code></td><td>Group rosters, epoch keys, and states owed to unreachable members.</td><td>Yes</td></tr>
+                <tr><td><code>board-store</code></td><td>Bulletin board posts and tombstones.</td><td>Yes</td></tr>
+                <tr><td><code>blocked-store</code></td><td>Blocked peer IDs and Nostr pubkeys.</td><td>Yes</td></tr>
+                <tr><td><code>activity-store</code></td><td>The notification feed.</td><td>Yes, id <code>activity</code></td></tr>
+                <tr><td><code>settings-store</code></td><td>Every toggle: theme, language, gateway, bridge, Tor, relays, retention, units.</td><td>Yes</td></tr>
+                <tr><td><code>transfer-store</code></td><td>In-flight attachment progress.</td><td>Yes</td></tr>
+                <tr><td><code>mesh-state-store</code></td><td>Live transport health: BLE blocker, Tor phase, bridge status, clock skew.</td><td>No</td></tr>
+                <tr><td><code>place-names-store</code>, <code>geohash-bookmarks-store</code>, <code>location-notes-store</code>, <code>channel-members-store</code>, <code>permission-primer-store</code>, <code>alert-store</code></td><td>Supporting state.</td><td>Mostly yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">One handle per partition</p>
+            <p>
+              <code>src/store/mmkv.ts</code> is the only place a partition is
+              opened, and it memoizes by id. A second handle on the same file is
+              fatal: MMKV maps the file into memory, and two mappings can
+              produce writes that clobber each other. This also matters for the
+              panic wipe, which walks a list of partition ids and clears each
+              through its single handle.
+            </p>
+          </div>
+
+          <h2 id="features">src/features and src/ui</h2>
+          <p>
+            <code>features/</code> holds screens and screen-level logic, grouped
+            by area: <code>chat/</code> (18 files, including the 6,625 line
+            <code>message-thread.tsx</code>), <code>wallet/</code>,
+            <code>settings/</code> (with a <code>sections/</code> subdirectory
+            of 13 settings screens), <code>contacts/</code>,
+            <code>discovery/</code> (the mesh radar and peer list), and
+            <code>onboarding/</code>.
+          </p>
+          <p>
+            <code>ui/</code> holds shared components (bottom sheet, toast, alert
+            modal, avatar, status dot, error boundary), hooks, the theme tokens,
+            and the font setup. There is no navigation library: the four-tab
+            state machine is hand-rolled in <code>src/app/app.tsx</code>, and
+            screens are plain components. Styling is <code>StyleSheet</code>
+            plus theme tokens, with no Tailwind.
+          </p>
+          <p>
+            <code>utils/</code> holds stateless helpers with no side effects:
+            username generation, mentions, message preview text, geohash grid
+            maths, conversation ordering, media policy, deep links, formatting.
+            Every one has a test.
+          </p>
+
+          <h2 id="bridge-native">src/bridge and the native trees</h2>
+          <p>
+            Five contracts, and they are the entire surface between TypeScript
+            and native code. Bytes cross base64 encoded, the only representation
+            both runtimes agree on safely.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Spec</th><th>Backed by</th><th>Surface</th></tr></thead>
+              <tbody>
+                <tr><td><code>NativeAirhopBLE.ts</code></td><td><code>AirhopBLEModule.swift</code>, <code>AirhopBLEModule.kt</code></td><td>14 methods, 10 events. Advertising, scanning, writes, radio state, power mode, background service, Tor probe, VPN watch.</td></tr>
+                <tr><td><code>NativeAirhopWiFi.ts</code></td><td><code>AirhopWiFiModule.kt</code></td><td>Android only. Start, stop, write, plus 4 events including <code>availabilityChanged</code>.</td></tr>
+                <tr><td><code>NativeAirhopVoice.ts</code></td><td><code>AirhopVoiceModule.swift</code>, <code>AirhopVoiceModule.kt</code></td><td>AAC-LC capture and playback.</td></tr>
+                <tr><td><code>NativeAirhopTor.ts</code></td><td><code>AirhopTorModule.swift</code>, <code>AirhopTorManager.swift</code></td><td>iOS only. Start Arti, report bootstrap phase, wipe state.</td></tr>
+                <tr><td><code>NativeAirhopTorSocket.ts</code></td><td><code>AirhopTorSocket.swift</code></td><td>iOS only. The SOCKS5 socket that <code>TorWebSocket</code> sits on.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            None of these knows anything about packets, routing or encryption.
+            That is the point: native code is harder to test, harder to keep
+            consistent across two platforms, and harder to reason about, so it
+            is limited to one module per hardware capability and no more.
+          </p>
+          <p>
+            The Android tree also holds
+            <code>service/AirhopForegroundService.kt</code>, which is what keeps
+            the process alive under Doze and OEM battery managers, and
+            <code>MainApplication.kt</code> / <code>MainActivity.kt</code>. The
+            iOS tree holds <code>AppDelegate.swift</code> with the CoreBluetooth
+            state restoration identifier.
+          </p>
+          <div class="box warn">
+            <p class="box-title">Never run prebuild</p>
+            <p>
+              <code>ios/</code> and <code>android/</code> are checked in and
+              hand-modified. <code>npx expo prebuild</code> regenerates them
+              from <code>app.json</code> and would delete every native module.
+              This is stated in the README as a caution and it is the single
+              most destructive command in this repository.
+            </p>
+          </div>
+
+          <h2 id="tests">Tests</h2>
+          <p>Three tiers, in increasing order of ambition.</p>
+          <ol>
+            <li>
+              <strong>Co-located unit tests</strong> in
+              <code>__tests__/</code> folders beside the code they cover. Around
+              90 files. These pin byte layouts, crypto vectors, store behaviour
+              and pure helpers.
+            </li>
+            <li>
+              <strong>Lifecycle tests</strong> in
+              <code>src/__tests__/lifecycle/</code>: cold start, mid session,
+              teardown. These drive the real app shell against a modelled OS.
+            </li>
+            <li>
+              <strong>The multi-device simulation</strong> in
+              <code>src/__tests__/simulation/</code>. A <code>World</code> with a
+              single fake clock, a radio fabric that models the air between
+              phones, and full isolated copies of the app as devices. Scenarios
+              are labelled A01 to A06, B01 to B07, C01 to C09, M01 to M12, N01 to
+              N14, R01 to R05, S01 to S04, W01 to W21, F01 to F06, X01 to X03.
+              Chapter <a href="44-testing.html">44</a> covers this in full.
+            </li>
+          </ol>
+
+          <h2 id="biggest">The ten biggest files</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Lines</th><th>File</th><th>Why it is that big</th></tr></thead>
+              <tbody>
+                <tr><td>6,625</td><td><code>features/chat/message-thread.tsx</code></td><td>One screen that renders text, media, voice, payment cards, location pins, receipts, reactions, forwarding, search and the composer, for six different kinds of conversation.</td></tr>
+                <tr><td>6,349</td><td><code>services/mesh-service.ts</code></td><td>The composition root of the whole protocol. Twenty packet handlers, two radios, six subsystems.</td></tr>
+                <tr><td>4,337</td><td><code>features/wallet/wallet-screen.tsx</code></td><td>Balance, send, receive, deposit, withdraw, history, mints, backup, consolidation.</td></tr>
+                <tr><td>3,595</td><td><code>services/wallet-service.ts</code></td><td>Every mint interaction, each with an interrupted-network recovery path.</td></tr>
+                <tr><td>2,615</td><td><code>app/app.tsx</code></td><td>Onboarding, the tab machine, permissions, deep links, foreground and background transitions, notification routing.</td></tr>
+                <tr><td>~2,200 x 35</td><td><code>i18n/locales/*.ts</code></td><td>1,535 strings and 27 plural keys, per language, compiled into the bundle.</td></tr>
+                <tr><td>1,709</td><td><code>features/settings/profile-screen.tsx</code></td><td>Profile, identity, QR card, and the panic wipe gesture.</td></tr>
+                <tr><td>1,646</td><td><code>__tests__/simulation/harness/device.ts</code></td><td>One simulated phone: a modelled OS, native modules, and a real app instance.</td></tr>
+                <tr><td>1,574</td><td><code>__tests__/simulation/scenarios/wallet.test.ts</code></td><td>21 wallet scenarios against a real BDHKE mint implementation.</td></tr>
+                <tr><td>1,319</td><td><code>services/geohash-channel-service.ts</code></td><td>Five channel precisions, teleport, presence, geo DMs, contact card merging.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="naming">Naming conventions that carry meaning</h2>
+          <p>
+            Three families of string are addresses rather than labels. Renaming
+            one does not move data, it orphans it.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Family</th><th>Shape</th><th>Example</th><th>Cost of renaming</th></tr></thead>
+              <tbody>
+                <tr><td>Keychain item</td><td><code>airhop.&lt;domain&gt;.&lt;thing&gt;.v1</code></td><td><code>airhop.wallet.p2pk.v1</code></td><td>The secret becomes unreachable and survives the panic wipe.</td></tr>
+                <tr><td>HKDF domain separator</td><td><code>airhop-&lt;purpose&gt;-v1</code></td><td><code>airhop-dr-root-v1</code></td><td>Every key derived from it changes, so old and new builds cannot talk.</td></tr>
+                <tr><td>MMKV partition id</td><td><code>&lt;name&gt;-store</code></td><td><code>wallet-store</code></td><td>The next launch opens a file that has never been written, while the old data sits on disk unreferenced.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Three names predate the convention and stay:
+            <code>airhop-chat</code>, <code>wallet-state</code> and
+            <code>activity</code>. No store declares a <code>migrate</code>
+            function, so changing any of these safely means shipping a
+            per-store migration that reads the old name and writes the new one,
+            at least one release before the old name is dropped.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why is <code>src/core/</code> forbidden from importing native modules?</span>
+              <span class="a">So the entire protocol runs under jest in CI with no device. That is what lets the wire format, both handshakes, the ratchet, gossip sync and the routing be tested on every pull request. It also means the same code is what runs on both platforms, so a protocol bug cannot exist on one and not the other.</span>
+            </li>
+            <li>
+              <span class="q">Where would you add a new packet type, and what would you have to touch?</span>
+              <span class="a">The enum in <code>core/mesh/wire/packet-codec.ts</code>, at <code>0x52</code> or above. Then a codec module in <code>wire/</code> with a test. Then a case in <code>MeshService.routePacket</code> and a handler. If it should survive a partition, a sync bit in <code>gossip-sync.ts</code>. If it needs padding, a case in <code>padsBLEFrame</code>. And <code>PROTOCOLS.md</code> section 3.</span>
+            </li>
+            <li>
+              <span class="q">Why is <code>mesh-service.ts</code> 6,000 lines rather than split up?</span>
+              <span class="a">It is the composition root: it holds the radios, the identity, the registry and the stores, and almost every handler needs several of those at once. Splitting it would mean either passing a large context object everywhere or creating circular imports. The subsystems it coordinates <em>are</em> split, into <code>core/mesh/*</code>, and those are where the logic and the tests live. This is a defensible shape, but it is also the file most in need of a second pass. See chapter 49.</span>
+            </li>
+            <li>
+              <span class="q">Someone renames <code>chat-store</code> to <code>messages-store</code> in a refactor. What happens?</span>
+              <span class="a">Every existing user's entire message history becomes invisible on next launch, and stays on disk with nothing referencing it, so it is not even destroyed by a store clear. The panic wipe would also miss it, since it walks a hardcoded list of partition ids. This is why the naming rule is in the architecture document rather than in a style guide.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

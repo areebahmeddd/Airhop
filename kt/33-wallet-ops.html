@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 33: Wallet operations. Mint, melt, swap, send, reclaim, recover, nutzap, consolidate." />
+    <title>33 Wallet operations · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 33 · Money</p>
+          <h1>Wallet operations</h1>
+          <p class="kt-lede">
+            Chapter 32 was the cryptography. This is the state machine: every
+            operation the wallet performs, what it commits, what it can take back,
+            and what happens when the network dies in the middle.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#states">The three buckets</a></li>
+              <li><a href="#ops">The operation list</a></li>
+              <li><a href="#send">Send, reserve, reclaim</a></li>
+              <li><a href="#lightning">Lightning in and out</a></li>
+              <li><a href="#interrupted">Interrupted operations</a></li>
+              <li><a href="#payperson">payPerson, the one ladder</a></li>
+              <li><a href="#nutzap">Nutzaps</a></li>
+              <li><a href="#recovery">The recovery phrase</a></li>
+              <li><a href="#consolidate">Moving between mints</a></li>
+              <li><a href="#security">The security model in one table</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Your wallet has three pockets. One holds coins you can spend right
+              now. One holds coins you have promised to somebody but who has not
+              taken them yet, so you cannot spend them again, but if the person
+              never turns up you can put them back. And one holds coins somebody
+              handed you that you have not been able to check with the bank yet,
+              which might be real or might already have been spent by them.
+            </p>
+          </div>
+
+          <h2 id="states">The three buckets</h2>
+          <pre class="ascii">
+  ┌─────────────────────────────────────────────────────────────┐
+  │  SPENDABLE           proofs you hold and can use now         │
+  │    verified: true    the mint has confirmed them unspent     │
+  │    verified: false   received offline, NOT yet confirmed     │
+  ├─────────────────────────────────────────────────────────────┤
+  │  RESERVED            set aside for a send already serialised │
+  │                      into a token string. Not spendable.     │
+  │                      RECLAIMABLE if it never lands.          │
+  ├─────────────────────────────────────────────────────────────┤
+  │  (removed)           swapped, melted, or reported spent by   │
+  │                      the mint. Gone from the balance.        │
+  └─────────────────────────────────────────────────────────────┘
+
+  Balances are per (MINT, UNIT) and NEVER POOLED.
+  The headline never folds unverified or reserved into itself.
+</pre>
+          <div class="box">
+            <p class="box-title">Why "reserved" rather than "deleted"</p>
+            <p>
+              The moment a token string leaves the device, those proofs must not
+              be spendable again from here, or the wallet double-spends itself.
+              But deleting them means an abandoned sheet, a crash, or a DM that
+              never routes destroys the value. Reserving them, and keeping the
+              serialised token on the transaction, makes every one of those cases
+              recoverable. This is the single design decision the whole wallet is
+              built around.
+            </p>
+          </div>
+
+          <h2 id="ops">The operation list</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Operation</th><th>Needs internet</th><th>Commits</th><th>Reversible</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Balance</strong></td><td>No</td><td>Nothing</td><td>n/a</td></tr>
+                <tr><td><strong>Add mint</strong></td><td>Yes, once</td><td>Fetches and caches keysets</td><td>Yes, remove it</td></tr>
+                <tr><td><strong>Deposit</strong> (NUT-04 mint)</td><td>Yes</td><td>A bolt11 invoice from the mint</td><td>Unpaid invoice expires</td></tr>
+                <tr><td><strong>Withdraw</strong> (NUT-05 melt)</td><td>Yes</td><td>Proofs handed to the mint</td><td>Failed payment returns them</td></tr>
+                <tr><td><strong>Send</strong></td><td>No</td><td>Proofs move to reserved</td><td><strong>Yes, until claimed</strong></td></tr>
+                <tr><td><strong>Receive</strong></td><td>Optional</td><td>Stored, swapped if online</td><td>n/a</td></tr>
+                <tr><td><strong>Pay</strong> (<code>payPerson</code>)</td><td>Depends on rail</td><td>Reserved or P2PK-locked, never both</td><td>All rails except nutzap</td></tr>
+                <tr><td><strong>Refresh</strong></td><td>Yes</td><td>NUT-07 state check, then swaps</td><td>n/a</td></tr>
+                <tr><td><strong>Backup</strong> (NUT-13)</td><td>No</td><td>Generates a 12 word phrase</td><td><strong>No.</strong> Cannot be turned off.</td></tr>
+                <tr><td><strong>Restore</strong> (NUT-09)</td><td>Yes</td><td>Re-derives secrets, asks each mint</td><td>n/a</td></tr>
+                <tr><td><strong>Consolidate</strong></td><td>Yes</td><td>A Lightning payment between mints</td><td>No, one routing fee spent</td></tr>
+                <tr><td><strong>History</strong></td><td>No</td><td>Nothing. Stays local; no NIP-60 events published.</td><td>n/a</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="send">Send, reserve, reclaim</h2>
+          <pre class="ascii">
+  quoteSend(amount)
+     │  select proofs, compute the recipient's swap fee
+     │  "send 100" must mean THEY CAN CLAIM 100
+     │  report exact: true/false
+     │     false = the denominations cannot make this amount without
+     │             overpaying. OFFLINE THERE IS NO CHANGE, so the
+     │             difference goes to the recipient. Consent required.
+     ▼
+  prepareSend(quote)
+     │  move the selected proofs to RESERVED under a txId
+     │  serialise the cashuB token and STORE IT ON THE TRANSACTION
+     ▼
+  hand the token over (DM, QR, copy, mesh)
+     │
+     ├── confirmSend(txId)   the recipient acknowledged
+     │      -> drop the reserved proofs permanently
+     │
+     ├── reclaimSend(txId)   nothing landed, the user takes it back
+     │      -> release the reserved proofs to spendable
+     │
+     └── failSend(txId, reason)
+            -> release, and record why
+</pre>
+          <div class="box warn">
+            <p class="box-title">Reclaiming is not free, and the UI says so</p>
+            <p>
+              The proofs are still valid at the mint, so the reclaim works. But if
+              the recipient also holds the token string, then whoever reaches the
+              mint first keeps the value. Reclaiming a send the recipient did in
+              fact receive is a race, not a cancellation. The UI states this
+              before reclaiming.
+            </p>
+          </div>
+          <p>
+            One bug worth remembering here, because it is the shape of every money
+            bug: <code>quoteSend</code> mapped selected proofs back by secret and
+            dropped unmatched ones <em>without checking coverage</em>, so a failed
+            mapping returned <code>exact: true</code> with a negative fee and an
+            empty proof list, reserving nothing. A send could hand over an empty
+            token. The invariant now enforced is that a send either covers the
+            amount or refuses; it can never silently send zero.
+          </p>
+
+          <h2 id="lightning">Lightning in and out</h2>
+          <h3>Deposit, NUT-04</h3>
+          <pre class="ascii">
+  1. ask the mint for a MINT QUOTE for N sats
+     -> the mint returns a bolt11 invoice and a quote id
+  2. the user pays that invoice from ANY Lightning wallet
+  3. poll the quote while the sheet is open
+  4. once paid, request the proofs: send blinded messages,
+     receive blind signatures, unblind
+  5. store the proofs, verified
+
+  If the app closes mid-flight, the quote is RECONCILED ON NEXT LAUNCH.
+  If the invoice is never paid, nothing is minted, however hard the
+  user taps.  (scenario W15)
+</pre>
+          <h3>Withdraw, NUT-05</h3>
+          <pre class="ascii">
+  1. paste a bolt11 invoice
+  2. ask the mint for a MELT QUOTE
+     -> amount + FEE RESERVE (Lightning routing is not free and the
+        cost is not known until the route is found)
+  3. select proofs covering amount + reserve
+  4. melt: hand them over, the mint pays the invoice
+  5. UNUSED RESERVE COMES BACK AS CHANGE          (scenario W08)
+
+  If the payment FAILS, the input proofs are returned.  (W09)
+  If the answer never arrives, the operation is RESOLVED, not guessed. (W11)
+  If the CHANGE is unreachable, that is NOT read as a refusal.  (W21)
+</pre>
+          <p>
+            That last one is the subtle case. A melt can succeed while the change
+            proofs fail to arrive. Treating an unreachable change response as a
+            failed payment would tell the user their money came back when the
+            invoice had in fact been paid.
+          </p>
+
+          <h2 id="interrupted">Interrupted operations</h2>
+          <p>
+            Every mint call is a network round trip that can die halfway. This is
+            where most of the wallet's complexity lives, and it is the right place
+            for it.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Interruption</th><th>Danger</th><th>Recovery</th><th>Scenario</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Swap response lost</td>
+                  <td>The inputs are spent at the mint but the outputs never arrived. Retrying naively double-spends and gets refused, losing the value.</td>
+                  <td>The blinded messages are <strong>persisted as a swap preview before the call</strong>. On retry, replay against the mint's NUT-19 response cache.</td>
+                  <td>W17</td>
+                </tr>
+                <tr>
+                  <td>Same, but the mint does not cache</td>
+                  <td>No cached response to replay.</td>
+                  <td>Recover the outputs by NUT-09 restore, using <strong>the exact blinded messages</strong> that were persisted.</td>
+                  <td>W18</td>
+                </tr>
+                <tr>
+                  <td>Process killed mid-swap</td>
+                  <td>The preview is in memory only.</td>
+                  <td>It is persisted, so the next launch finds it.</td>
+                  <td>W17</td>
+                </tr>
+                <tr>
+                  <td>Mint dies mid-swap</td>
+                  <td>Input proofs destroyed for nothing.</td>
+                  <td>Inputs are not removed until the outputs are in hand.</td>
+                  <td>W05</td>
+                </tr>
+                <tr>
+                  <td>Deposit invoice paid, app closed</td>
+                  <td>Money paid, no proofs.</td>
+                  <td>The quote is reconciled on next launch.</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td>Melt answer never arrives</td>
+                  <td>Guessing either way is wrong.</td>
+                  <td>Resolved against the mint rather than assumed.</td>
+                  <td>W11</td>
+                </tr>
+                <tr>
+                  <td>Balance the mint already spent</td>
+                  <td>Showing money that does not exist.</td>
+                  <td><code>refreshAccount</code> runs a NUT-07 state check and removes anything reported spent, rather than showing it as money.</td>
+                  <td>W16</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">The counter problem, for deterministic wallets</p>
+            <p>
+              With NUT-13 enabled, secrets are derived from a counter per keyset.
+              Re-deriving a counter recreates a secret the mint has already signed,
+              and the swap is rejected. So the cursor is <strong>persisted per
+              keyset, only ever moves forward</strong>, and a restore pushes it
+              past everything the mint has on record. A rejected swap leaves the
+              input proofs untouched, so the failure mode is a retry rather than a
+              loss.
+            </p>
+          </div>
+
+          <h2 id="payperson">payPerson, the one ladder</h2>
+          <p>
+            Four screens can pay somebody: the DM attach menu, the contact info
+            sheet, the Mesh peer sheet, and the Wallet Zap button. All four call
+            one function, so they cannot disagree about what a payment does.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rung</th><th>Rail</th><th>Condition</th><th>Commits</th><th>Final</th><th>Reclaimable</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td><strong>Radio</strong></td><td>A direct BLE or WiFi link exists</td><td>Reserved</td><td>No</td><td>Yes</td></tr>
+                <tr><td>2</td><td><strong>Nutzap</strong></td><td>No radio link, their Nostr key known, they published a kind 10019, and we hold value at a mint they accept</td><td><strong>P2PK-locked</strong></td><td><strong>Yes</strong></td><td><strong>No</strong></td></tr>
+                <tr><td>3</td><td><strong>Token in a DM</strong></td><td>Anything else. <code>sendDm</code> then picks Nostr, courier or the outbox.</td><td>Reserved</td><td>No</td><td>Yes</td></tr>
+                <tr><td>4</td><td><strong>Manual</strong></td><td>Nothing carried it. The token string is returned.</td><td>Reserved</td><td>No</td><td>Yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Radio comes first so that someone standing in front of you does not
+            wait on a mint round trip, and so the in-person case keeps working with
+            no internet on either phone. Rung 2 beats rung 3 when available,
+            because locked proofs are the recipient's whether or not they ever come
+            online, where a bearer token is theirs only once claimed.
+          </p>
+          <div class="box ok">
+            <p class="box-title">Two rules that hold across the whole ladder</p>
+            <p>
+              <strong>One commitment per payment.</strong> Proofs are either
+              reserved (rungs 1, 3, 4) or P2PK-locked (rung 2), never both. A rung
+              that fails <em>before</em> committing falls through to the next; a
+              rung that fails <em>after</em> committing retries delivery only.
+            </p>
+            <p>
+              <strong>Finality is reported, never inferred.</strong>
+              <code>PayResult.final</code> is true for rung 2 alone, and every
+              confirmation names the rail that carried the money and says whether
+              Pending will offer it back. That is not decoration: "locked to them
+              forever" and "queued, take it back whenever" are the same gesture to
+              the user and completely different facts about their money.
+            </p>
+          </div>
+          <p>
+            The result also reports <em>how</em> the DM actually left the device.
+            Before that was surfaced, every screen said "sent over the mesh" even
+            when there was no route and the token had merely been queued, which is
+            the difference between "they have it" and "they might get it
+            tomorrow".
+          </p>
+
+          <h2 id="nutzap">Nutzaps</h2>
+          <p>
+            NIP-61. Ecash sent over Nostr, locked so that only the recipient can
+            spend it, which means the event itself can be public.
+          </p>
+          <pre class="ascii">
+  1. fetch the recipient's kind 10019
+       lists their trusted mints, their relays, and a 33-byte P2PK pubkey
+
+  2. mint or swap ecash P2PK-LOCKED to that pubkey        (NUT-11)
+       the proof carries a spending condition: only a signature from
+       that key can spend it
+
+  3. publish a kind 9321 nutzap event TO THE RECIPIENT'S RELAYS
+       which is where they subscribe. Not to ours.
+
+  4. the recipient's client swaps the token into its own wallet,
+       REFUSING OUTRIGHT if the event names a mint they do not
+       already hold
+
+  5. history stays LOCAL. Airhop publishes no NIP-60 events.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Rule</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td>Published to <em>their</em> relays</td><td>That is where they subscribe. Publishing to ours would be a message nobody reads.</td></tr>
+                <tr><td>Refuse an unknown mint</td><td>A High severity finding: redeeming from any mint an incoming event named would let an attacker introduce a hostile mint through a payment. NIP-61 assumes the recipient's own mint list is the filter.</td></tr>
+                <tr><td>P2PK-locked, not reserved</td><td>The money is committed to the recipient's key. This is the only rail that cannot be taken back, and the only one reported as final.</td></tr>
+                <tr><td>Falls back to an encrypted message</td><td>If the recipient has never published a kind 10019, there is nothing to lock to, so the payment degrades to an ordinary token in a DM.</td></tr>
+                <tr><td>A late nutzap stops looking pending</td><td>Scenario W06: a locked nutzap that reached its owner late must resolve rather than sitting in Pending forever.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The P2PK private key lives in the OS keychain under
+            <code>airhop.wallet.p2pk.v1</code>, separate from the identity keys,
+            and is destroyed by the panic wipe like everything else.
+          </p>
+
+          <h2 id="recovery">The recovery phrase</h2>
+          <p>
+            Off by default. Turning it on generates a 12 word BIP-39 phrase and
+            switches proof creation from random secrets to NUT-13 deterministic
+            derivation.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th></th></tr></thead>
+              <tbody>
+                <tr><td><strong>Covers</strong></td><td>Ecash derived from the phrase, at mints the user re-adds.</td></tr>
+                <tr><td><strong>Excludes</strong></td><td>The Airhop identity, chats, contacts and the mint list. This is a <em>wallet</em> backup, not an account backup.</td></tr>
+                <tr><td><strong>Excludes</strong></td><td>Coins received and never swapped, which carry the <em>sender's</em> secrets. They come under the phrase once swapped, which is what <code>refreshAccount</code> does.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li>
+              <strong>The keychain is the source of truth.</strong> If the flag
+              says backup is on but the phrase is gone, startup clears the flag
+              rather than claiming coverage the user does not have.
+            </li>
+            <li>
+              <strong>The uncovered remainder is shown.</strong>
+              <code>StoredProof.derived</code> tracks which proofs the phrase can
+              rebuild, and the UI shows what is not covered rather than folding it
+              into a green tick.
+            </li>
+            <li>
+              <strong>It cannot be turned off.</strong> Deleting a phrase that
+              coins derive from is indistinguishable from deleting the coins. Only
+              the panic wipe removes it.
+            </li>
+          </ul>
+          <p>
+            Restore (NUT-09) re-derives the secrets on any device and asks each
+            mint which of them it signed, so the balance is rebuilt from the mint's
+            records rather than from a backup file. Scenario W10: "a wiped phone
+            gets its money back from twelve words".
+          </p>
+
+          <h2 id="consolidate">Moving between mints</h2>
+          <p>
+            A token names exactly one mint, so ecash from two mints can never be
+            combined into one token. <code>consolidateMints</code> moves the value
+            instead:
+          </p>
+          <pre class="ascii">
+  destination mint issues a bolt11 invoice
+        ▲                                   │
+        │                                   ▼
+  source mint MELTS proofs to pay it   destination MINTS new proofs
+
+  Result: the balance is at one mint, for one Lightning routing fee,
+  with no external wallet involved.
+</pre>
+          <p>Scenario W12 pins it.</p>
+
+          <h2 id="security">The security model in one table</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Attack</th><th>Mitigation</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Double spend</strong></td><td>The mint is the only authority. A proof received offline is stored as unverified and never claimed as confirmed. <code>refreshAccount</code> runs a NUT-07 state check and swaps; anything reported spent is removed from the balance rather than shown as money.</td></tr>
+                <tr><td><strong>Fake token</strong></td><td>NUT-12 DLEQ verification against cached mint keys on every received token. A failing witness is rejected before the store sees it. Missing keys report "unchecked", never "valid".</td></tr>
+                <tr><td><strong>Inflated amount</strong></td><td>Amounts come from the decoded proofs rather than a self-declared field, and every proof is bounded before being summed.</td></tr>
+                <tr><td><strong>Token interception</strong></td><td>DMs encrypt the token in transit. A token posted to a public channel is a bearer instrument anyone reading can redeem, which the UI states before sending.</td></tr>
+                <tr><td><strong>Interrupted send</strong></td><td>Proofs move to reserved rather than being deleted, and the serialised token stays on the transaction. An abandoned sheet, a crash, or a DM that never routes leaves the value reclaimable.</td></tr>
+                <tr><td><strong>Mint failure</strong></td><td>The user chooses which mints to trust. Balances are per (mint, unit) and never pooled, so one mint failing cannot take the rest.</td></tr>
+                <tr><td><strong>Hostile payment source</strong></td><td>Ecash is redeemed only from a mint the user already added, and incoming proofs are DLEQ-verified before anything is stored.</td></tr>
+                <tr><td><strong>Proofs at rest</strong></td><td>The MMKV partition is AES-256 encrypted under a keychain-held key. If that key is unavailable the wallet <strong>locks rather than falling back to plaintext</strong>.</td></tr>
+                <tr><td><strong>IP linkage over Tor</strong></td><td>On iOS only the Nostr WebSocket is routed, so mint HTTP would bypass Tor. Mint calls are refused while Tor is on unless the user opts in. On Android the proxy sits in the shared OkHttp client, so <code>fetch</code> is covered too.</td></tr>
+                <tr><td><strong>Fee underpayment</strong></td><td>NUT-02 input fees are computed with the mint's rounding (ceiling), or a swap is rejected for underpaying by one satoshi. Scenario W20: "send 100" still means they get 100, and a melt is funded for the fee too.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>The wallet partition</h3>
+          <p>
+            Cashu proofs are bearer instruments, so <code>wallet-store</code> is
+            the one MMKV partition opened with an explicit encryption key: 24
+            random bytes, base64 encoded to the 32 ASCII characters AES-256
+            allows, generated on first run and held in the keychain.
+          </p>
+          <p>
+            It is fetched asynchronously, so the store cannot exist at module
+            scope. <code>bootstrapWalletStorage()</code> opens it and every
+            persist read and write awaits that promise. The panic wipe deletes the
+            partition with <code>deleteMMKV</code> rather than clearing it, since
+            the file cannot be reopened without its key and the same wipe destroys
+            the key.
+          </p>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why are proofs reserved rather than deleted when a token is created?</span>
+              <span class="a">Because both failure directions have to be covered. If they stayed spendable, the wallet could spend the same value twice from this device. If they were deleted, an abandoned sheet, a crash, or a DM that never routed would destroy the money. Reserving them makes them unspendable and recoverable at the same time, and keeping the serialised token on the transaction is what makes the reclaim possible. Reclaiming is a race rather than a cancellation if the recipient also holds the string, and the UI says so.</span>
+            </li>
+            <li>
+              <span class="q">A swap request is sent and the response never arrives. What must the wallet not do?</span>
+              <span class="a">It must not retry naively. The inputs may already be spent at the mint, so a fresh swap would be refused and the value lost. The blinded messages are persisted as a swap preview <em>before</em> the call, so the retry replays against the mint's NUT-19 response cache, and against a mint that does not cache, recovers the outputs by NUT-09 restore using those exact blinded messages. It must also not remove the inputs until the outputs are in hand.</span>
+            </li>
+            <li>
+              <span class="q">Why can the recovery phrase not be turned off?</span>
+              <span class="a">Because once it is on, proof secrets are derived from it. Deleting the phrase is indistinguishable from deleting the coins that derive from it, so a "turn off backup" button would be a delete-my-money button wearing a different label. The only thing that removes it is the panic wipe, which destroys the coins too, so the two stay consistent.</span>
+            </li>
+            <li>
+              <span class="q">Why is a nutzap the only rail reported as final?</span>
+              <span class="a">Because its proofs are P2PK-locked to the recipient's published key. They are not ours to reclaim, and they are the recipient's whether or not they ever come online. Every other rail reserves proofs that can be released back to spendable. Conflating the two would tell a user their money is safely delivered when it is actually sitting in a queue, or offer to take back money that is no longer theirs to take.</span>
+            </li>
+            <li>
+              <span class="q">Why does the balance screen refuse to show one number?</span>
+              <span class="a">Because balances are per (mint, unit) and never pooled: a token names exactly one mint, so value at two mints cannot be combined without a Lightning round trip through <code>consolidateMints</code>. Folding them into one figure would imply a fungibility that does not exist, and would hide the fact that one mint failing cannot take the rest. The headline also excludes unverified and reserved amounts, which are broken out rather than counted as spendable money.</span>
+            </li>
+            <li>
+              <span class="q">Someone asks what happens to their money if they lose their phone. What is the honest answer?</span>
+              <span class="a">Without the optional recovery phrase, it is gone, exactly like cash in a lost wallet. With the phrase enabled beforehand, a new device re-derives the secrets and asks each mint which of them it signed, rebuilding the balance from the mint's records. Even then it excludes the Airhop identity, the chats, the contacts and the mint list, and it excludes coins received and never swapped, which carry the sender's secrets rather than yours. It is a wallet backup, not an account backup, and the UI shows the uncovered remainder rather than a green tick.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

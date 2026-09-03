@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 27: Gateway and bridge. Lending a connection, and stitching two mesh islands together." />
+    <title>27 Gateway and bridge · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 27 · The internet layer</p>
+          <h1>Gateway and bridge</h1>
+          <p class="kt-lede">
+            Two features that both carry traffic between the mesh and the
+            internet, in opposite directions and for opposite reasons. Both are
+            off by default. Understanding why they are separate is most of the
+            chapter.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#difference">The difference in one table</a></li>
+              <li><a href="#carrier">The carrier packet</a></li>
+              <li><a href="#gateway">The internet gateway</a></li>
+              <li><a href="#bridge">The mesh bridge</a></li>
+              <li><a href="#loops">Loop prevention</a></li>
+              <li><a href="#limits">Rate limits and budgets</a></li>
+              <li><a href="#privacy">What each one costs the operator</a></li>
+              <li><a href="#failures">Failure modes</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              <strong>The gateway</strong> is lending your phone signal to someone
+              standing next to you who has none, so they can read the local
+              noticeboard on the internet. <strong>The bridge</strong> is putting
+              a walkie-talkie in two rooms that cannot hear each other, and having
+              the internet carry what each room says to the other, so it feels
+              like one room.
+            </p>
+          </div>
+
+          <h2 id="difference">The difference in one table</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Internet gateway</th><th>Mesh bridge</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Problem it solves</strong></td><td>A nearby phone has no internet and cannot reach a location channel.</td><td>Two groups of phones are out of Bluetooth range of each other and cannot share a public room.</td></tr>
+                <tr><td><strong>Who benefits</strong></td><td>Someone else, who has no connection.</td><td>Everyone in both islands.</td></tr>
+                <tr><td><strong>What it carries</strong></td><td>Geohash channel events, kind 20000, in both directions.</td><td>Public <code>#bluetooth</code> messages, republished to a rendezvous cell.</td></tr>
+                <tr><td><strong>Direction bytes</strong></td><td><code>0x01</code> toGateway, <code>0x02</code> fromGateway</td><td><code>0x03</code> toBridge, <code>0x04</code> fromBridge</td></tr>
+                <tr><td><strong>Advertised as</strong></td><td>Capability bit 2</td><td>Capability bit 7, plus ANNOUNCE TLV <code>0x06</code> naming the rendezvous cell</td></tr>
+                <tr><td><strong>Scope</strong></td><td>The cells the gateway is subscribed to</td><td>One geohash-6 cell, about 1.2 km</td></tr>
+                <tr><td><strong>Default</strong></td><td>Off</td><td>Off</td></tr>
+                <tr><td><strong>Analogy</strong></td><td>Tethering, for one channel</td><td>An IRC network bridge</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="carrier">The carrier packet</h2>
+          <p>
+            Both features share one packet type, <code>0x28</code>
+            <code>NOSTR_CARRIER</code>, byte-compatible with bitchat's
+            <code>NostrCarrierPacket</code>.
+          </p>
+          <pre class="code">
+  TLV, 2-byte big-endian lengths (event JSON exceeds the 1-byte range)
+
+    0x01  direction   1 byte     0x01 toGateway   0x02 fromGateway
+                                 0x03 toBridge    0x04 fromBridge
+    0x02  geohash     1 to 12 bytes UTF-8
+    0x03  eventJSON   1 to 16384 bytes, a COMPLETE SIGNED Nostr event
+
+  toGateway / toBridge   ride a DIRECTED packet, recipientID = the gateway
+  fromGateway / fromBridge ride a BROADCAST packet
+</pre>
+          <div class="box">
+            <p class="box-title">Why the carrier adds no encryption</p>
+            <p>
+              The carried event is public geohash chat, which is already plaintext
+              on Nostr. Encrypting it to the gateway would hide it from the mesh
+              and reveal it to the gateway, which is backwards.
+            </p>
+            <p>
+              What it <em>is</em> is Schnorr-signed by the originator's per-cell
+              identity. So a gateway cannot forge an event, cannot alter one, and
+              cannot attribute one to somebody else. Every receiver verifies the
+              carried event's own signature before acting on it, which is what
+              makes it safe to accept an event that arrived through an untrusted
+              intermediary.
+            </p>
+          </div>
+
+          <h2 id="gateway">The internet gateway</h2>
+          <pre class="ascii">
+  PHONE A                    PHONE B                    NOSTR RELAYS
+  no internet                has internet
+  gateway OFF                GATEWAY ON
+      │                          │                            │
+      │  announces capability bit 2 in every ANNOUNCE          │
+      │◀─────────────────────────┤                            │
+      │                          │                            │
+
+  UPLINK: A wants to post in #city
+
+      A signs the kind 20000 event with its OWN per-cell identity
+      A wraps it: direction = toGateway, geohash, eventJSON
+      A sends a DIRECTED carrier to B
+      │─────────────────────────▶│
+                                 │ B checks:
+                                 │   sender signature authentic?
+                                 │   kind == 20000?
+                                 │   age <= 15 minutes?
+                                 │   geohash == a cell B serves?
+                                 │   depositor under 10 per minute?
+                                 │   event's own Schnorr signature valid?
+                                 │
+                                 │ B PUBLISHES IT AS-IS ────────▶│
+                                 │ B did not sign it. B cannot   │
+                                 │ alter it. A is the author.    │
+
+  DOWNLINK: someone posts in #city over the internet
+
+                                 │◀──────────────────────────────│
+                                 │ B checks kind, age, cell,
+                                 │ per-minute budget, loop caches
+                                 │
+                                 │ B wraps: direction = fromGateway
+      │◀─────────────────────────│ B BROADCASTS it on the mesh
+      │
+      A verifies the event's own signature, then renders it
+</pre>
+          <h3>The gate list</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Check</th><th>Value</th><th>Prevents</th></tr></thead>
+              <tbody>
+                <tr><td>Kind</td><td>20000 only</td><td>A gateway being used to publish arbitrary events on someone's behalf.</td></tr>
+                <tr><td>Freshness</td><td>15 minutes</td><td>Replaying old traffic onto the mesh, or onto relays. Receivers drop stale events anyway, so ferrying them is pure cost.</td></tr>
+                <tr><td>Cell</td><td>Must match a cell this gateway serves</td><td>Using a gateway to publish into a cell it is not part of. Scenario N14 pins this: an Airhop gateway will not publish a deposit aimed at another cell.</td></tr>
+                <tr><td>Depositor signature</td><td>Authentic against the pinned key</td><td>Charging one peer's uplink budget to another peer's identity.</td></tr>
+                <tr><td>Uplink budget</td><td>10 per depositor per rolling minute</td><td>One mesh peer making the gateway publish unboundedly on its behalf.</td></tr>
+                <tr><td>Downlink budget</td><td>30 events per rolling minute total</td><td>A busy cell saturating the mesh's airtime with ferried traffic.</td></tr>
+                <tr><td>Queue caps</td><td>20 total, 5 per depositor</td><td>Unbounded memory while relays are unreachable, and one peer filling the bag.</td></tr>
+                <tr><td>Event's own signature</td><td>Verified before use</td><td>A hostile gateway injecting fabricated messages into the mesh.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The gateway <strong>republishes the event exactly as signed</strong>.
+            It does not re-sign, cannot alter, and is not the author. That is the
+            property that makes it safe to accept help from a stranger's phone.
+          </p>
+
+          <h2 id="bridge">The mesh bridge</h2>
+          <pre class="ascii">
+  ISLAND 1                    NOSTR                    ISLAND 2
+  (a building, a square)   rendezvous cell        (300 m away, no BLE path)
+   A ── B ── C              geohash-6 (~1.2 km)      X ── Y ── Z
+        │                                                 │
+   B has internet                                    Y has internet
+   BRIDGE ON                                         BRIDGE ON
+        │                                                 │
+        │  C posts "water at the south gate" in #bluetooth
+        │                                                 │
+        │  B sees it on the radio, and republishes a SIGNED
+        │  copy to the rendezvous cell using an UNLINKABLE
+        │  per-cell Nostr identity, kind 20000 with an #r tag
+        │─────────────────▶ relay ─────────────────────────▶│
+        │                                                 │
+        │                        Y receives it, verifies it, and
+        │                        injects it into ITS OWN #bluetooth
+        │                        timeline, keyed on the same
+        │                        CONTENT-STABLE message ID
+        │                                                 │
+        │                        X and Z see it as an ordinary
+        │                        #bluetooth message
+</pre>
+          <h3>Three things that make it work</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mechanism</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>The content-stable ID</strong></td>
+                  <td>Both the radio copy and the bridged copy key the timeline row on the same identifier, derived from sender, timestamp and content (<code>bridgeStableID</code> here, <code>MeshMessageIdentity.stableID</code> in bitchat). So duplicates collapse in either arrival order, with none of bitchat's alias-removal bookkeeping. This is also why <code>#bluetooth</code> needs no message ID in its payload.</td>
+                </tr>
+                <tr>
+                  <td><strong>The unlinkable per-cell identity</strong></td>
+                  <td>The bridge publishes under a geohash-derived key, not the operator's durable Nostr identity. So bridging does not tell relays who is running it.</td>
+                </tr>
+                <tr>
+                  <td><strong>The rendezvous cell</strong></td>
+                  <td>Geohash precision 6, about 1.2 km, matching bitchat's <code>BridgeService.Limits.cellPrecision</code>. Two islands in the same cell meet. A device with no location of its own can use a cell advertised by a reachable bridge peer in ANNOUNCE TLV <code>0x06</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The scope limitation</p>
+            <p>
+              The rendezvous covers the device's own geohash-6 cell
+              <strong>only</strong>. Two islands 200 metres apart but on opposite
+              sides of a cell boundary do not meet. Subscribing to the eight
+              neighbouring cells would fix it and is a documented follow-up, not
+              implemented. This is a real and easily encountered limitation: cell
+              boundaries do not follow streets.
+            </p>
+          </div>
+          <p>
+            Mesh-only peers with no internet reach the rendezvous through a bridge
+            peer using <code>toBridge</code> and <code>fromBridge</code> carriers,
+            the same mechanism as the gateway. A single phone can be both a bridge
+            and a gateway, which is the setup that actually happens; scenario N08
+            holds across a nine-seed sweep that the far island receives the
+            message <em>and</em> the phone carrying it keeps its own copy.
+          </p>
+          <h3>Presence across the bridge</h3>
+          <p>
+            A bridge also publishes presence heartbeats to the rendezvous cell,
+            at least 30 seconds apart, so the UI can report how many people are
+            across the bridge. A participant counts for 10 minutes after their
+            last heartbeat.
+          </p>
+
+          <h2 id="loops">Loop prevention</h2>
+          <p>
+            Both features move traffic between two networks, so a message can
+            come back to where it started. Both use the same three-cache pattern.
+          </p>
+          <pre class="ascii">
+  THE LOOP THAT MUST NOT HAPPEN
+
+    C posts on the radio in island 1
+      -> B bridges it to Nostr
+        -> B receives its own event back from the relay
+          -> B injects it into the local #bluetooth timeline
+            -> B sees a new local message
+              -> B bridges it to Nostr
+                -> ... forever, at relay speed
+
+  THREE CACHES, EACH CLOSING ONE EDGE
+
+    publishedEventIDs     our own published events. Ignore them coming back.
+    receivedEventIDs      acted on once. Never act twice.
+    rebroadcastEventIDs   ferried to the mesh once. Never ferry twice.
+    seenRadioStableIDs    a radio copy already exists. Do not bridge the
+                          bridged copy back out.
+
+  Each set is capped at 512 entries, oldest evicted.
+</pre>
+          <p>
+            The gateway uses the equivalent three caches for carrier traffic.
+            Scenario N03 pins the multi-gateway case: two gateways in one room do
+            not each publish the same message.
+          </p>
+
+          <h2 id="limits">Rate limits and budgets</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Limit</th><th>Gateway</th><th>Bridge</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td>Downlink to the mesh</td><td>30 per minute</td><td>20 per minute</td><td>BLE airtime is scarce and shared. This is the ceiling on how much internet traffic one device may push onto the radio.</td></tr>
+                <tr><td>Uplink per depositor</td><td>10 per minute</td><td>10 per minute</td><td>Bounds how much a single mesh peer can make you publish on its behalf.</td></tr>
+                <tr><td>Event freshness</td><td>15 minutes</td><td>15 minutes</td><td>Same window on both paths, and the same one receivers apply.</td></tr>
+                <tr><td>Queued uplinks while offline</td><td>20 total, 5 per depositor</td><td>Same shape</td><td>Bounded twice: in total so a busy island cannot make the gateway hold unbounded memory, and per depositor so one peer cannot fill the bag.</td></tr>
+                <tr><td>Loop cache size</td><td>512</td><td>512</td><td>Enough for a busy cell, bounded against growth.</td></tr>
+                <tr><td>Presence spacing</td><td>n/a</td><td>30 seconds minimum</td><td>Heartbeats should not become traffic in their own right.</td></tr>
+                <tr><td>Participant TTL</td><td>n/a</td><td>10 minutes</td><td>Covers several missed heartbeats without keeping a departed island alive in the count.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="privacy">What each one costs the operator</h2>
+          <div class="grid two">
+            <div class="box">
+              <p class="box-title">Running a gateway</p>
+              <ul>
+                <li>Your IP is used to publish other people's events. To a relay, their traffic looks like yours.</li>
+                <li>Your battery and data allowance carry someone else's traffic.</li>
+                <li>Your radio spends airtime ferrying inbound events to the mesh.</li>
+                <li>You announce capability bit 2, so everyone nearby knows you have internet.</li>
+              </ul>
+              <p>
+                What you do <strong>not</strong> take on: authorship. Every event
+                stays signed by its originator, so you cannot be mistaken for the
+                author, and you cannot alter what you carry.
+              </p>
+            </div>
+            <div class="box">
+              <p class="box-title">Running a bridge</p>
+              <ul>
+                <li>Your public room becomes reachable from anyone in the same 1.2 km cell with internet, including people not physically present.</li>
+                <li>You publish under an unlinkable per-cell key, so relays do not learn who you are, but they do learn that <em>someone</em> is bridging that cell.</li>
+                <li>You announce capability bit 7 and the rendezvous cell in TLV <code>0x06</code>, so nearby peers know both.</li>
+              </ul>
+              <p>
+                The room changes character: <code>#bluetooth</code> stops being
+                strictly "people I could walk to". That is why it is off by
+                default and why the toggle lives on the room rather than in a
+                settings screen nobody reads.
+              </p>
+            </div>
+          </div>
+          <div class="box">
+            <p class="box-title">Media is never bridged</p>
+            <p>
+              Attachments ride the BLE file-transfer path only. They are never
+              published to Nostr, so a photo posted in <code>#bluetooth</code>
+              reaches the local island and nothing else. Scenario N07 pins the
+              related rule: a message marked nearby-only is never bridged.
+            </p>
+          </div>
+
+          <h2 id="failures">Failure modes</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Failure</th><th>Behaviour</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Gateway loses its connection mid-conversation</td><td>It stops publishing immediately rather than pretending. Uplinks queue, bounded at 20 and 5 per depositor, and flush on reconnect.</td><td>Correct, pinned by N04</td></tr>
+                <tr><td>Gateway recovery time after reconnecting</td><td>Depends on the relay pool's reconnect backoff and geohash resubscription. N04 records the recovery leg but <strong>does not assert a deadline on it</strong>.</td><td><span class="pill warn">unbounded and untested</span></td></tr>
+                <tr><td>Two islands on opposite sides of a cell boundary</td><td>They never meet, however close they are.</td><td><span class="pill warn">documented follow-up</span></td></tr>
+                <tr><td>A gateway drops everything it is handed</td><td>Nothing detects it. The depositor has no acknowledgement to wait on.</td><td>Accepted. The mitigation is that any peer can be a gateway, and the sender is not relying on it for anything the mesh could carry itself.</td></tr>
+                <tr><td>A hostile gateway injects fabricated events</td><td>Impossible. Every carried event is verified against its own Schnorr signature before use.</td><td>Correct</td></tr>
+                <tr><td>A hostile peer floods a gateway with uplinks</td><td>Capped at 10 per depositor per minute, and the depositor's identity is signature-checked so the budget cannot be charged to somebody else.</td><td>Correct</td></tr>
+                <tr><td>A bitchat phone in the middle</td><td>It relays carrier packets it is not part of (N10) and neither breaks nor is broken by a bridged room (N11). An Airhop gateway also carries a bitchat phone's message to the internet (N13).</td><td>Correct</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why does a gateway not sign the events it publishes?</span>
+              <span class="a">Because the event is already signed by its author's per-cell identity, and republishing it as-is is what makes the gateway safe to use. If the gateway signed, it would become the author: it could alter content, it could be blamed for what it carries, and a receiver would have no way to attribute a message to the person who actually wrote it. Verifying the carried event's own signature before acting is the receiver's half of the same property.</span>
+            </li>
+            <li>
+              <span class="q">Explain the three loop caches.</span>
+              <span class="a">A bridge moves messages between two networks, so a message can return to where it started and be re-bridged forever. <code>publishedEventIDs</code> stops us acting on our own event coming back from a relay. <code>receivedEventIDs</code> stops acting twice on the same inbound event. <code>rebroadcastEventIDs</code> stops ferrying the same event onto the mesh twice. And <code>seenRadioStableIDs</code> stops bridging out a message that already exists as a radio copy. Each closes one edge of the cycle, and each is capped at 512 entries.</span>
+            </li>
+            <li>
+              <span class="q">Why are both features off by default?</span>
+              <span class="a">Because both spend the operator's resources on other people and change what their own device reveals. A gateway lends your IP, battery and airtime, and announces that you have internet. A bridge changes the meaning of the local public room from "people I could walk to" to "anyone in this 1.2 km cell with a connection". Neither is a bad thing to do; both are decisions the user should make deliberately rather than discover.</span>
+            </li>
+            <li>
+              <span class="q">Why does the bridge use a per-cell identity rather than the operator's Nostr key?</span>
+              <span class="a">Because the durable Nostr key is published in every ANNOUNCE and used for DMs, so bridging under it would tell every relay serving that cell exactly who is operating the bridge, and would link the operator's DM identity to a physical place. The per-cell key is derived by HMAC from a device seed and is unlinkable both to the durable identity and to any other cell.</span>
+            </li>
+            <li>
+              <span class="q">What is the weakest part of these two features?</span>
+              <span class="a">Two things. The bridge covers one geohash-6 cell only, so two islands a few hundred metres apart on opposite sides of a boundary never meet, and cell boundaries do not follow streets. And gateway recovery after losing signal has no asserted deadline: the scenario records the recovery leg but does not bound it, so how long a gateway takes to become useful again is unmeasured.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

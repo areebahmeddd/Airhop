@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 42: The design system. Tokens, the laws behind every value, concentric radius, contrast floors, and the apps this borrows from." />
+    <title>42 The design system · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 42 · The device</p>
+          <h1>The design system</h1>
+          <p class="kt-lede">
+            Chapter 41 was what the screens do. This is why every value in them
+            is the value it is. One rule governs the whole thing: a number is
+            right when a rule produced it and wrong when somebody picked it.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#rule">The governing rule</a></li>
+              <li><a href="#tokens">theme.ts, the whole vocabulary</a></li>
+              <li><a href="#colour">Colour: one accent, meaning only</a></li>
+              <li><a href="#dark">Two palettes, one set of keys</a></li>
+              <li><a href="#radius">Concentric radius</a></li>
+              <li><a href="#targets">Targets match their meaning</a></li>
+              <li><a href="#feedback">Every tap reports</a></li>
+              <li><a href="#optical">Optical, not mathematical</a></li>
+              <li><a href="#grouping">Grouping and hairlines</a></li>
+              <li><a href="#contrast">Contrast floors</a></li>
+              <li><a href="#motion">Motion and haptics</a></li>
+              <li><a href="#language">Speaking the user's language</a></li>
+              <li><a href="#nielsen">The ten heuristics, scored</a></li>
+              <li><a href="#laws">The laws, and where each one shows</a></li>
+              <li><a href="#borrowed">What is borrowed, and from where</a></li>
+              <li><a href="#enforce">How this is enforced</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine building with Lego instead of clay. With clay every piece
+              is whatever shape your hands made that day, so nothing quite
+              matches anything else. With Lego every piece comes from a small
+              set of sizes, so anything you build fits together without you
+              thinking about it. The app is built from a small set of sizes:
+              nine spacings, nine text sizes, seven corner roundings, one
+              accent colour. Nobody picks a number. They pick a piece.
+            </p>
+          </div>
+
+          <h2 id="rule">The governing rule</h2>
+          <div class="box ok">
+            <p class="box-title">The rule, from <code>.github/skills/ui-ux.md</code></p>
+            <p>
+              <strong>A value is right when a rule produced it and wrong when
+              somebody picked it.</strong>
+            </p>
+            <p>
+              Quality lives in the relationships between elements, not in any
+              element: radius against padding, target against the thing it
+              represents, one gesture's timing against the same gesture
+              elsewhere. None of it shows in a screenshot; all of it shows in
+              the hand.
+            </p>
+            <p>
+              The corollary is the part that actually holds a codebase
+              together: <strong>solving something once is half the job. It is
+              finished when the answer is a token, a shared component, or a lint
+              rule.</strong> Every drift in this codebase was a correct decision
+              that never propagated.
+            </p>
+          </div>
+          <p>
+            That is a testable claim, not a slogan. A hand-typed
+            <code>50</code> sitting next to <code>BUTTON_HEIGHT</code> is
+            evidence that somebody eyeballed it, and it is the shape of every
+            inconsistency that ever shipped.
+          </p>
+
+          <h2 id="tokens">theme.ts, the whole vocabulary</h2>
+          <p>
+            412 lines, one file: <code>src/ui/theme.ts</code>. Every scale is
+            deliberately short, because a scale long enough to contain the value
+            you wanted is a scale that has stopped constraining anything.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Scale</th><th>Values</th><th>Why these</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Spacing</code></td>
+                  <td>4, 8, 12, 16, 20, 24, 32, 48, 64</td>
+                  <td>A 4pt grid, the common denominator of the iOS 8pt grid and Material's 4dp grid. Nine steps covers a phone; a tenth would be someone splitting the difference.</td>
+                </tr>
+                <tr>
+                  <td><code>FontSize</code></td>
+                  <td>10, 11, 13, 15, 17, 20, 24, 30, 38</td>
+                  <td>10 is glyph-only: unread counts and radar ring labels, never anything a person reads. Anything readable starts at 11. Nothing below 10 exists, because a 9pt digit is illegible and has no token to justify itself.</td>
+                </tr>
+                <tr>
+                  <td><code>Radius</code></td>
+                  <td>2, 6, 10, 14, 20, 28, <code>full</code></td>
+                  <td>Steps of 4 up to 14, then wider. Built so that outer minus padding lands on another token (see below). <code>full</code> is 999, so a circle is never a hand-halved size.</td>
+                </tr>
+                <tr>
+                  <td><code>Duration</code></td>
+                  <td>180, 220, 700</td>
+                  <td>One motion vocabulary so a list reorder, a sheet dismissal and a toast fade read as one app moving. 700 is the pull-to-refresh hold, because the work itself returns instantly and a flash-then-gone spinner reads as broken.</td>
+                </tr>
+                <tr>
+                  <td><code>FontWeight</code></td>
+                  <td>400, 500, 600, 700</td>
+                  <td>Four, named. No 300, no 800: a weight nobody can distinguish from its neighbour is a decision with no output.</td>
+                </tr>
+                <tr>
+                  <td><code>Shadow</code></td>
+                  <td>low, medium, high</td>
+                  <td>Three elevation steps rather than a hand-tuned shadow per component. Each names what it is for: a thumb lifted off its track, a pill floating over content, persistent chrome.</td>
+                </tr>
+                <tr>
+                  <td><code>MaxFontScale</code></td>
+                  <td>chrome 1.4, badge 1.2</td>
+                  <td>Caps on OS text scaling, and each names the fixed container it protects. Body copy is uncapped on purpose.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Beside the scales sit the single-value constants, each one existing
+            so that a dozen call sites cannot each pick their own:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Constant</th><th>Value</th><th>Reasoning recorded in the file</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>MIN_TOUCH</code></td><td>44</td><td>Apple's 44pt and Material's 48dp round to the same practical floor. WCAG 2.5.8 asks 24x24 minimum with 44x44 as the AAA target.</td></tr>
+                <tr><td><code>BUTTON_HEIGHT</code></td><td>50</td><td>Past the floor, because full-width buttons are stacked commitments, several destructive, so there is no adjacency to resolve and the height is free.</td></tr>
+                <tr><td><code>LONG_PRESS_MS</code></td><td>320</td><td>Under React Native's 500ms default, which is tuned for a rare secondary menu rather than the message actions this opens.</td></tr>
+                <tr><td><code>PRESSED_OPACITY</code></td><td>0.85</td><td>For a surface with nothing neutral to darken: an accent fill, or a bare icon and label.</td></tr>
+                <tr><td><code>DISABLED_OPACITY</code></td><td>0.4</td><td>The floor at which a glyph still reads as a shape, so the affordance survives while clearly not inviting a tap.</td></tr>
+                <tr><td><code>HIT_SLOP</code></td><td>8 all round</td><td>The default forgiveness for a control that is already comfortably sized.</td></tr>
+                <tr><td><code>TAB_BAR_CLEARANCE</code></td><td>96</td><td>The bottom padding a scrollable tab screen leaves so its last rows clear the floating tab bar instead of scrolling under it.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>hitSlopFor(visualSize)</code> is the escape hatch that keeps
+            the rule intact rather than breaking it: a 32pt header glyph stays
+            32pt on screen and becomes 44pt to a thumb, computed rather than
+            typed.
+          </p>
+
+          <h2 id="colour">Colour: one accent, meaning only</h2>
+          <div class="box ok">
+            <p class="box-title">The colour rule, stated in the first six lines of theme.ts</p>
+            <p>
+              <strong>If a colour does not communicate information, it should
+              not exist.</strong>
+            </p>
+          </div>
+          <p>
+            The result is a monochrome app with exactly one interactive accent
+            (near-black on light, near-white on dark) and a small set of colours
+            that are each locked to one meaning:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Colour</th><th>Means, and only ever means</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Green <code>e2ee</code>, <code>online</code>, <code>success</code></td><td>End-to-end encrypted; a peer is reachable; an operation worked.</td></tr>
+                <tr><td>Blue <code>verified</code></td><td>A verified contact. Never anything else, so a blue shield always reads one way.</td></tr>
+                <tr><td>Amber <code>syncing</code></td><td>Scanning, or reconnecting. Caution, not failure.</td></tr>
+                <tr><td>Red <code>danger</code></td><td>Destructive. The panic wipe, and deletions.</td></tr>
+                <tr><td>Blue <code>relay</code>, violet <code>tor</code>, teal <code>gateway</code>, indigo <code>bridge</code></td><td>Four distinct network states on the Mesh tab, each hue naming one, so the tab reads at a glance.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Two colour decisions in that file are worth reading as examples of
+            the general method, because both started as bugs:
+          </p>
+          <div class="box bad">
+            <p class="box-title">The selection colour is not the accent</p>
+            <p>
+              The accent is a solid near-black, and a text field paints the
+              selection as an opaque block <em>behind</em> the glyphs. Using the
+              accent meant selecting a whole message hid the text under a slab.
+              The fix is <code>rgba(17,17,17,0.18)</code>: enough alpha to show
+              the run, little enough to keep every glyph readable. The dark
+              palette carries 0.24 instead, because a pale wash on a near-black
+              canvas reads fainter than the same alpha of black on white.
+            </p>
+          </div>
+          <div class="box bad">
+            <p class="box-title">The offline dot is not pale grey</p>
+            <p>
+              A <code>#CCCCCC</code> dot measures 1.6:1 on a white row and
+              simply cannot be seen, which makes "this peer has gone quiet"
+              unreadable at exactly the size it matters most. A status dot is a
+              meaningful UI indicator, so it owes 3:1 against its own background
+              under WCAG 1.4.11. The token is <code>#909090</code>.
+            </p>
+          </div>
+          <p>
+            The three text greys carry their measured ratios in a comment beside
+            them, against <code>#F8F8F8</code>, the worse of the two surfaces
+            they sit on:
+          </p>
+          <pre class="ascii">
+  textPrimary    #111111    17.4 : 1     AAA
+  textSecondary  #565656     7.0 : 1     AAA
+  textMuted      #6F6F6F     4.8 : 1     AA   &lt;- timestamps, placeholders
+
+  the pair that failed, and why the note exists:
+  #666666 / #8A8A8A  ->  3.2 : 1   under AA, on every timestamp,
+                                    scope line, placeholder and label
+</pre>
+          <p>
+            The recorded fix is "darken rather than restructure, keeping the
+            same hue and the same three-step hierarchy". That sentence is the
+            method: the constraint moved a value, it did not redesign the
+            screen.
+          </p>
+
+          <h2 id="dark">Two palettes, one set of keys</h2>
+          <p>
+            <code>Colors</code> and <code>DarkColors</code> hold identical keys,
+            so a screen swaps the entire palette by swapping which object it
+            reads. Nothing imports either one directly. Everything calls
+            <code>useThemeColors()</code>, which is what makes the theme setting
+            apply everywhere rather than in the screens somebody remembered.
+          </p>
+          <pre class="ascii">
+  useThemeColors()
+        │
+        ├─ preference: "light" | "dark" | "system"
+        ├─ systemScheme from useColorScheme()
+        ├─ resolveTheme(preference, systemScheme)   "system" is the
+        │                                           ABSENCE of a choice,
+        │                                           resolved here once so
+        │                                           two callers cannot
+        │                                           disagree
+        └─ returns { ...Colors } or { ...DarkColors }
+
+  monoFont is part of the memo identity on purpose: it does not change
+  the palette, but a fresh object forces every memoized style to
+  recompute and re-read FontFamily.mono, so a font change applies live
+  exactly like a theme switch.
+</pre>
+          <p>
+            Dark mode is not a filter over the light palette. Three things are
+            re-derived rather than inverted:
+          </p>
+          <ul>
+            <li>
+              <strong>Elevation direction flips.</strong> On light,
+              <code>surfaceRaised</code> is <em>darker</em> than
+              <code>surface</code>. On dark it is <em>lighter</em>. A naive lift
+              inverts, so anything raised has to be checked against its own
+              track in both themes.
+            </li>
+            <li>
+              <strong>Shadows stop working.</strong> Black on
+              <code>#0B0B0B</code> is invisible, so anything relying on a shadow
+              for separation carries a hairline border too. The tab bar and the
+              transfer pill both do.
+            </li>
+            <li>
+              <strong>Every <code>-Dim</code> carries more alpha.</strong> 0.09
+              on light becomes 0.16 on dark, because a low-alpha wash
+              disappears on near-black.
+            </li>
+          </ul>
+
+          <h2 id="radius">Concentric radius</h2>
+          <p>
+            The single most-cited detail in the skill file, and the one most
+            visible when it is wrong.
+          </p>
+          <pre class="ascii">
+  inner radius  =  outer radius  -  padding
+
+
+   correct                        wrong (inner too large)
+   ┌────────────────────┐         ┌────────────────────┐
+   │  ╭──────────────╮  │         │ ╭────────────────╮ │
+   │  │              │  │         │╱                  ╲│
+   │  │   constant   │  │         │    corners bulge   │
+   │  │   gap round  │  │         │    toward each     │
+   │  │   the corner │  │         │    other           │
+   │  ╰──────────────╯  │         │╲                  ╱│
+   └────────────────────┘         └────────────────────┘
+</pre>
+          <p>
+            A rounded box inside a rounded box holds a constant gap around the
+            corner only at that value. Too large and the corners bulge toward
+            each other; too small and they pinch. The eye registers it without
+            naming it, which is exactly why it is worth getting right: nobody
+            will report it and everybody will feel it.
+          </p>
+          <p>
+            The scale is built so the arithmetic lands on tokens.
+            <code>Radius.lg</code> (14) minus <code>Spacing.xs</code> (4) is 10,
+            which is <code>Radius.md</code>. Minus <code>Spacing.sm</code> (8) is
+            6, which is <code>Radius.sm</code>. Above <code>lg</code> they stop
+            lining up, so the instruction is to compute the value rather than
+            reach for the nearest token. A hand-typed radius sitting next to a
+            token is the tell.
+          </p>
+
+          <h2 id="targets">Targets match their meaning</h2>
+          <p>
+            Fitts's Law, applied literally: <strong>if a row means "this
+            message", the whole row acts like it.</strong> A one-word bubble is
+            a 40pt target inside a full-width row, and the rest of that row must
+            not be inert.
+          </p>
+          <pre class="ascii">
+  three ways to reach MIN_TOUCH, in order of preference
+
+  1. measure it            the control is genuinely 44pt or more
+  2. hitSlopFor(size)      32pt glyph, 44pt to a thumb, unchanged
+                           on screen
+  3. padding / negative    where hitSlop cannot reach (inside a
+     margin                scroll view's own hit testing)
+
+     padding: (MIN_TOUCH - SIZE) / 2
+     margin: -(MIN_TOUCH - SIZE) / 2
+</pre>
+          <div class="box warn">
+            <p class="box-title">Grow height only, when targets are adjacent</p>
+            <p>
+              Two 44pt-wide targets whose centres are 24pt apart overlap, and
+              then view order decides the winner rather than the finger. That is
+              worse than the small target was, because it is non-deterministic
+              from the user's point of view: the same tap in the same place hits
+              different things depending on render order.
+            </p>
+          </div>
+
+          <h2 id="feedback">Every tap reports</h2>
+          <p>
+            Nielsen's first heuristic, visibility of system status, and both
+            platforms require it: UIKit highlights a selected cell, Material
+            draws a ripple. A tap that changes nothing until the next screen
+            arrives reads as broken on a slow push, and gets tapped twice.
+          </p>
+          <p>
+            Two treatments, chosen by what the surface already is:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Surface</th><th>Treatment</th><th>Why the other one fails</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A neutral fill of its own: a row, a raised pill</td>
+                  <td><strong>Darken</strong> to <code>surfacePressed</code></td>
+                  <td>A row cannot dim. A white row on an off-white page loses nothing visible.</td>
+                </tr>
+                <tr>
+                  <td>An accent fill, or no fill at all: a tab, a segment</td>
+                  <td><strong>Dim</strong> to <code>PRESSED_OPACITY</code></td>
+                  <td>An accent button cannot darken. Its fill <em>is</em> the accent, so darkening means recolouring the label, which reads as a state change rather than a press.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Always through <code>Pressable</code>'s
+            <code>style={({ pressed }) =&gt; ...}</code> callback, never
+            component state, which re-renders twice per tap. Feedback under
+            400ms is the point (Doherty's threshold); anything slower needs its
+            own progress indicator.
+          </p>
+
+          <h2 id="optical">Optical, not mathematical</h2>
+          <p>
+            Four places where the correct number and the correct-looking number
+            differ. All four are recorded because all four were shipped wrong
+            once.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Effect</th><th>What goes wrong</th><th>Fix</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Letter-spacing</td>
+                  <td>Tracking is applied after the last glyph too, so a tracked string measures wider than it draws. Centring that box leaves the glyphs half a track short.</td>
+                  <td><code>marginEnd: -TRACKING</code>, or trim the trailing padding on a pill.</td>
+                </tr>
+                <tr>
+                  <td><code>includeFontPadding</code></td>
+                  <td>Android-only and on by default. It reserves ascender and descender room a digit never uses, so a numeral that centres on iOS sits low on Android.</td>
+                  <td><code>includeFontPadding: false</code> on any digit centred in a circle.</td>
+                </tr>
+                <tr>
+                  <td>One-sided nudges</td>
+                  <td>An optical nudge on one side makes the box asymmetric, so text centred inside it lands off by half the nudge.</td>
+                  <td>Every nudge needs its mirror on the other side.</td>
+                </tr>
+                <tr>
+                  <td>Display figures</td>
+                  <td>Default 1.1 leading at 38pt leaves a band of dead space under the digits.</td>
+                  <td>Pull leading in to the font size, with slight negative tracking.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="grouping">Grouping and hairlines</h2>
+          <p>
+            Common Region, Proximity and Similarity, applied to one specific
+            recurring decision: where a separator starts.
+          </p>
+          <pre class="ascii">
+  inset to the ROW PADDING            inset to the LABEL
+  ┌──────────────────────────┐        ┌──────────────────────────┐
+  │  ◍   Bluetooth        >  │        │  ◍   Bluetooth        >  │
+  │ ─────────────────────────│        │      ────────────────────│
+  │  ◍   Location         >  │        │  ◍   Location         >  │
+  │ ─────────────────────────│        │      ────────────────────│
+  │  ◍   Notifications    >  │        │  ◍   Notifications    >  │
+  └──────────────────────────┘        └──────────────────────────┘
+     the line slices the                the icon column reads as
+     icon column                        a clean channel
+
+  const ROW_LABEL_INSET = ICON_WIDTH + Spacing.base + Spacing.sm;
+  // derived, not typed
+</pre>
+          <p>
+            UIKit's <code>separatorInset</code> and Material's divider keyline
+            agree on this, which is the usual sign that a convention is about
+            perception rather than about a platform.
+          </p>
+          <p>
+            The companion rule: <strong>things that are the same object must
+            match in every property.</strong> Three badges at the same size with
+            three different line heights are three objects to the eye, not one
+            object shown three times.
+          </p>
+
+          <h2 id="contrast">Contrast floors</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>What</th><th>Floor</th><th>Source</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Body text</td><td>4.5:1</td><td>WCAG 1.4.3</td></tr>
+                <tr><td>Non-text UI: checkbox ring, status dot, slider thumb</td><td>3:1</td><td>WCAG 1.4.11</td></tr>
+                <tr><td>Touch target</td><td>24 x 24 minimum</td><td>WCAG 2.5.8; 44 is the practical floor</td></tr>
+                <tr><td>Animation</td><td>Honour reduce-motion</td><td>WCAG 2.3.3</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">The measurement mistake worth naming</p>
+            <p>
+              Measure against the surface the element <strong>actually sits
+              on</strong>, not the page. Text on a selection wash is on the
+              wash, not on the row, and not on the background behind the row.
+              This is the single most common way a palette that "passes" still
+              produces unreadable text.
+            </p>
+          </div>
+          <p>
+            A disabled control is allowed to be a dim rather than a colour
+            change, because WCAG 1.4.3 exempts inactive controls. But every
+            disabled control also carries
+            <code>accessibilityState.disabled</code>, so it is never dim
+            <em>alone</em>: the state is available to a screen reader that
+            cannot perceive opacity at all.
+          </p>
+
+          <h2 id="motion">Motion and haptics</h2>
+          <p>
+            Durations come from <code>Duration</code> so a list reorder, a sheet
+            dismissal and a toast fade read as one app moving rather than three
+            components each guessing. Reanimated defaults to
+            <code>ReduceMotion.System</code> and needs no second gate;
+            <code>Animated.loop</code> does, through
+            <code>useReducedMotion()</code>.
+          </p>
+          <p>
+            Haptics are the part of this system that generalises least and is
+            therefore most carefully constrained. They are named
+            <strong>by the situation that earns them</strong>, never by feedback
+            type, and importing <code>expo-haptics</code> directly is blocked by
+            an ESLint rule.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Verb</th><th>The situation that earns it</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>acknowledged()</code></td><td>A silent action landed. Copying is the case that matters: the only visual confirmation is a glyph under the thumb that just covered it.</td></tr>
+                <tr><td><code>held()</code></td><td>A press-and-hold crossed its threshold. The only gesture with no visible progress, so the tick is what confirms the hold is working.</td></tr>
+                <tr><td><code>released()</code></td><td>A hold ended. The light counterpart, closing the pair a press-and-hold opens.</td></tr>
+                <tr><td><code>crossedThreshold()</code></td><td>A drag passed the point where letting go closes rather than springs back. The sheet's dismiss line is invisible; this is the only thing marking it.</td></tr>
+                <tr><td><code>armed()</code></td><td>A hold crossed into "let go now and this is thrown away": sliding a push-to-talk recording back to cancel. Rigid rather than a tick, because push-to-talk is used without looking and the destructive threshold has to be tellable apart by feel.</td></tr>
+                <tr><td><code>succeeded()</code></td><td>Something completed while the user may not be watching the screen. Scanning is the case: the phone is held up at another display.</td></tr>
+                <tr><td><code>rejected()</code></td><td>A check refused something the user must register: a card whose keys do not match its own peer ID. Not for "that was not a QR code".</td></tr>
+                <tr><td><code>warned()</code></td><td>Something irreversible happened with no dialog in front of it. The panic wipe's triple tap is the only one, and this is its only confirmation.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Every call is fire-and-forget: a device with no motor, a simulator,
+            or a declined vibration permission all reject, and none of that is
+            actionable, so it is swallowed once in that module rather than at
+            each call site. Haptics are deliberately <em>not</em> wired to
+            reduce-motion, because that setting is about animation and haptics
+            are what the app falls back to when motion is off.
+          </p>
+
+          <h2 id="language">Speaking the user's language</h2>
+          <p>
+            Nielsen's second heuristic, and the one this app is most exposed to,
+            because it has more protocol vocabulary than almost any consumer
+            application. The rule is absolute:
+            <strong>never surface protocol vocabulary.</strong>
+          </p>
+          <div class="box bad">
+            <p class="box-title">The example the skill file uses</p>
+            <p>
+              "0 mints, 0 proofs" is the wallet describing its own plumbing in
+              the most prominent slot on the screen. A user has no word for a
+              mint and no word for a proof, and the sentence tells them nothing
+              about whether they have money.
+            </p>
+          </div>
+          <p>Three corollaries follow from it:</p>
+          <ul>
+            <li>
+              <strong>Say nothing rather than something empty.</strong> A card
+              with nothing to report reports nothing. The conditional notes that
+              appear only when relevant are the ones that read as personal.
+            </li>
+            <li>
+              <strong>An alert must earn its tap.</strong> An alert demands
+              acknowledgement for news nobody needs to acknowledge. Confirmations
+              use <code>Toast</code> or an in-place tick; alerts are kept for
+              information the user must act on.
+            </li>
+            <li>
+              <strong>Never delete real information just to remove a
+              dialog.</strong> The fix for a noisy alert is a quieter surface,
+              not less truth.
+            </li>
+          </ul>
+          <p>
+            Copy style, from the design principles: terse, plain, no exclamation
+            marks, no jargon where a plain word exists.
+          </p>
+
+          <h2 id="nielsen">The ten heuristics, scored</h2>
+          <p>
+            Nielsen's ten, each with where it shows in this app and an honest
+            note where it is only partly met. Chapters are linked for the long
+            version.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Heuristic</th><th>Where it shows in Airhop</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>Visibility of system status</td>
+                  <td>Every tap has a pressed treatment. The Mesh banner names the <em>one</em> reason the mesh cannot run and carries the button that fixes it, from an eight-value union rather than a boolean (<a href="37-permissions.html">37</a>). Delivery ticks distinguish queued, sent and acknowledged (<a href="41-ui-ux.html">41</a>).</td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>Match between system and the real world</td>
+                  <td>The "0 mints, 0 proofs" rule. Area channels are named "block", "city", "region", not geohash precisions. A safety number is six words, not 42 bits of hex.</td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>User control and freedom</td>
+                  <td>Undo Send. Every bottom sheet dismisses by drag, flick, backdrop tap and back button. The permission primer is not a gate and resolves however it is closed.</td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td>Consistency and standards</td>
+                  <td>The whole of this chapter. One sheet component, one alert, one toast, one button; tokens rather than values; a lint rule where a convention was not enough.</td>
+                </tr>
+                <tr>
+                  <td>5</td>
+                  <td>Error prevention</td>
+                  <td>The confirm step before a contact is added, whatever route the card arrived by (<a href="21-contacts.html">21</a>). The primer before a permission that a second refusal blocks for good. Destructive thresholds that are tellable apart by feel.</td>
+                </tr>
+                <tr>
+                  <td>6</td>
+                  <td>Recognition rather than recall</td>
+                  <td>The contact sheet shows the peer's own name beside your label, so "who they say they are" stays checkable after a rename. Avatar colours are derived from the peer ID, so the same identity is the same colour everywhere.</td>
+                </tr>
+                <tr>
+                  <td>7</td>
+                  <td>Flexibility and efficiency of use</td>
+                  <td>Long-press message actions at 320ms rather than 500. One unified search across every thread. Paste, camera and manual entry all reach the same add-contact confirm.</td>
+                </tr>
+                <tr>
+                  <td>8</td>
+                  <td>Aesthetic and minimalist design</td>
+                  <td>Monochrome by default. Colour reserved for meaning. Empty states that say nothing rather than something empty.</td>
+                </tr>
+                <tr>
+                  <td>9</td>
+                  <td>Help users recognise, diagnose and recover from errors</td>
+                  <td>A blocked permission produces the reason plus a Settings deep link, not a dead end. An expired bitchat QR is reported as expired rather than unreadable, because only one of those has an obvious remedy. A dropped queue entry is surfaced, never silently evicted (<a href="14-peers-queues.html">14</a>).</td>
+                </tr>
+                <tr>
+                  <td>10</td>
+                  <td>Help and documentation</td>
+                  <td class="pill warn">The weakest of the ten</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Being honest about number 10</p>
+            <p>
+              There is no in-app help, no onboarding beyond the permission
+              primer, and no explanation of what a courier is or why a message
+              might take a day to arrive. For an app whose core mechanics are
+              genuinely unfamiliar, that is a real gap rather than a stylistic
+              choice, and it belongs on the roadmap alongside the review
+              findings in <a href="49-review.html">49</a>.
+            </p>
+          </div>
+
+          <h2 id="laws">The laws, and where each one shows</h2>
+          <p>
+            The named laws from <a href="https://lawsofux.com/">lawsofux.com</a>,
+            each with the specific decision in this codebase that it produced.
+            A law with no decision attached to it is decoration, so any law that
+            did not change something here is left out.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Law</th><th>What it says</th><th>What it produced here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Fitts's Law</strong></td>
+                  <td>Time to acquire a target is a function of its distance and size.</td>
+                  <td><code>MIN_TOUCH</code> 44, <code>hitSlopFor()</code>, and the rule that a row meaning "this message" is tappable across its full width. Also the rule to grow height only when targets are adjacent.</td>
+                </tr>
+                <tr>
+                  <td><strong>Doherty threshold</strong></td>
+                  <td>Interaction stays engaging below about 400ms of response.</td>
+                  <td>Pressed feedback on every tap, applied through the style callback so it is immediate. Anything slower gets its own progress. <code>Duration.base</code> at 180ms sits comfortably inside the threshold.</td>
+                </tr>
+                <tr>
+                  <td><strong>Jakob's Law</strong></td>
+                  <td>People spend most of their time in other apps, and expect yours to work the same way.</td>
+                  <td>The entire borrowed-conventions table below. Delivery ticks, long-press menus, a WhatsApp-style profile drill-down, one unified search surface.</td>
+                </tr>
+                <tr>
+                  <td><strong>Hick's Law</strong></td>
+                  <td>Decision time grows with the number and complexity of choices.</td>
+                  <td>Four tabs. Nine spacing steps. Four font weights. One accent. Settings grouped into sub-screens rather than one long list.</td>
+                </tr>
+                <tr>
+                  <td><strong>Law of Common Region</strong></td>
+                  <td>Elements inside a shared boundary are perceived as a group.</td>
+                  <td>Card surfaces with hairline borders, and the separator inset rule that keeps the icon column reading as a channel rather than being sliced.</td>
+                </tr>
+                <tr>
+                  <td><strong>Law of Proximity</strong></td>
+                  <td>Things close together are perceived as related.</td>
+                  <td>The 4pt grid itself. Gaps inside a group are one step; gaps between groups are two or more.</td>
+                </tr>
+                <tr>
+                  <td><strong>Law of Similarity</strong></td>
+                  <td>Visually similar elements are perceived as related.</td>
+                  <td>"Things that are the same object must match in every property." Three badges with three line heights are three objects.</td>
+                </tr>
+                <tr>
+                  <td><strong>Law of Prägnanz</strong></td>
+                  <td>The eye resolves ambiguous forms into the simplest available reading.</td>
+                  <td>Concentric radius. A constant corner gap resolves as one nested shape; a wrong inner radius resolves as two shapes fighting.</td>
+                </tr>
+                <tr>
+                  <td><strong>Aesthetic-usability effect</strong></td>
+                  <td>People perceive attractive designs as more usable, and forgive their faults.</td>
+                  <td>Treated as a warning rather than a licence. This is why the review chapter separates "looks finished" from "is finished", and why an unaudited protocol is labelled unaudited on the index page.</td>
+                </tr>
+                <tr>
+                  <td><strong>Tesler's Law</strong></td>
+                  <td>Every system has irreducible complexity; the only question is who absorbs it.</td>
+                  <td>The app absorbs it. Transport selection, session state, courier spraying and mint reconciliation are all invisible. The user sends a message; the ladder underneath is <a href="15-mesh-service.html">15</a>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Postel's Law</strong></td>
+                  <td>Be liberal in what you accept, conservative in what you send.</td>
+                  <td>The add-contact screen accepts three code formats and a bare peer ID; it emits exactly one. TLV skips unknown types by length rather than failing.</td>
+                </tr>
+                <tr>
+                  <td><strong>Miller's Law</strong></td>
+                  <td>Working memory holds about seven items.</td>
+                  <td>Eight haptic verbs, four tabs, three elevation steps, three text greys. Every vocabulary in this system is deliberately memorable in one sitting.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="borrowed">What is borrowed, and from where</h2>
+          <p>
+            Jakob's Law, made concrete. Each of these is a convention taken from
+            an app most users already know, and each is recorded in a comment at
+            the place it is implemented rather than in a style guide nobody
+            reads.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Borrowed from</th><th>What</th><th>Where</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>iMessage</strong></td>
+                  <td>Outgoing bubbles are the inverted accent, incoming are a neutral surface. The single most recognisable convention in mobile chat.</td>
+                  <td><code>theme.ts</code> (<code>myBubble</code>), <code>primary-button.tsx</code></td>
+                </tr>
+                <tr>
+                  <td><strong>WhatsApp</strong></td>
+                  <td>Delivery ticks: one check sent, a dim double check delivered. A "Message info" sheet behind the long-press menu. Document subtitles as "PDF · 2.3 MiB". Captions attached before sending rather than firing on selection. A profile screen as a nav list that drills into its own sub-screens.</td>
+                  <td><code>message-bubble.tsx</code>, <code>message-info-sheet.tsx</code>, <code>message-thread.tsx</code>, <code>profile-screen.tsx</code></td>
+                </tr>
+                <tr>
+                  <td><strong>WhatsApp, Signal, Telegram together</strong></td>
+                  <td>One unified search surface across every thread, rather than per-thread search. Message actions behind a long press. Data and storage settings as their own section.</td>
+                  <td><code>chat-search-results.tsx</code>, <code>message-action-sheet.tsx</code>, <code>general-screen.tsx</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Instagram</strong></td>
+                  <td>An activity tab: a chronological history of notices rather than only a badge that clears.</td>
+                  <td><code>notification-center.tsx</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Apple HIG</strong></td>
+                  <td>44pt touch floor. Selected-cell highlighting. <code>separatorInset</code> to the label. Sheet drag-to-dismiss with a scrim that tracks position.</td>
+                  <td><code>theme.ts</code>, <code>bottom-sheet.tsx</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Material Design 3</strong></td>
+                  <td>48dp touch floor (which meets Apple's at 44 in practice), the divider keyline, ripple-equivalent press feedback, elevation as discrete steps.</td>
+                  <td><code>theme.ts</code> (<code>Shadow</code>, <code>MIN_TOUCH</code>)</td>
+                </tr>
+                <tr>
+                  <td><strong>Signal</strong></td>
+                  <td>Safety numbers as the verification model. Keeping anyone you message as a contact. Sending as a queue rather than a request.</td>
+                  <td><a href="21-contacts.html">21</a>, <code>contacts-store.ts</code></td>
+                </tr>
+                <tr>
+                  <td><strong>WCAG 2.2</strong></td>
+                  <td>Contrast floors, target sizes, reduce-motion. Not an app, but the same role: a convention that already exists and does not need reinventing.</td>
+                  <td><code>theme.ts</code> comments, throughout</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box ok">
+            <p class="box-title">Where it deliberately does not follow</p>
+            <p>
+              Colour is the divergence. Every app in that table uses a brand
+              hue as its accent; Airhop uses near-black and reserves colour for
+              meaning. That is not minimalism for its own sake: this app has
+              more genuinely meaningful states than a normal messenger (four
+              network modes, two trust levels, three delivery states), and a
+              brand colour competing with them would make the meaningful ones
+              harder to read.
+            </p>
+          </div>
+
+          <h2 id="enforce">How this is enforced</h2>
+          <p>
+            The corollary from the top of the chapter says a decision is
+            finished when it becomes a token, a shared component, or a lint
+            rule. All three exist here.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Mechanism</th><th>What it makes impossible</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Tokens</strong> in <code>theme.ts</code></td>
+                  <td>A literal <code>50</code>, <code>320</code> or <code>0.85</code> in a style block. Every one of them has a name.</td>
+                </tr>
+                <tr>
+                  <td><strong><code>useThemeColors()</code></strong></td>
+                  <td>A screen that ignores the theme setting, because importing <code>Colors</code> or <code>DarkColors</code> directly is the only way to hard-code one and it is called out as a mistake.</td>
+                </tr>
+                <tr>
+                  <td><strong>Eleven shared components</strong></td>
+                  <td>A hand-rolled Modal for a sheet, which drifts in behaviour and usually ships a grab handle that ignores the finger. <code>BottomSheet</code> owns the drag, the scrim, keyboard avoidance and back-button dismissal, so converting a sheet means deleting boilerplate rather than restyling.</td>
+                </tr>
+                <tr>
+                  <td><strong>ESLint <code>no-restricted-imports</code></strong></td>
+                  <td>Importing <code>expo-haptics</code> directly. The message names all eight verbs and tells you to add one with a comment if none fits.</td>
+                </tr>
+                <tr>
+                  <td><strong>The skill file</strong></td>
+                  <td>Rediscovery. <code>.github/skills/ui-ux.md</code> is 142 lines and is meant to be read before adding a component, a style block, or any tappable surface.</td>
+                </tr>
+                <tr>
+                  <td><strong>The pseudolocale</strong></td>
+                  <td>A layout that only works in English. It pads every string past the longest real translation. Chapter <a href="40-i18n.html">40</a>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>412</td><td>Lines in <code>theme.ts</code></td><td>The entire visual vocabulary, most of it comments recording why a value is that value.</td></tr>
+                <tr><td>9 / 9 / 7</td><td>Spacing, type and radius steps</td><td>Short enough to memorise, which is the property that makes a scale constrain anything.</td></tr>
+                <tr><td>1</td><td>Interactive accent</td><td>Near-black on light, near-white on dark. Everything else is monochrome or means something.</td></tr>
+                <tr><td>44 / 50</td><td><code>MIN_TOUCH</code> / <code>BUTTON_HEIGHT</code></td><td>The platform floor, and the taller value for stacked commitments where adjacency is not a concern.</td></tr>
+                <tr><td>320 ms</td><td><code>LONG_PRESS_MS</code></td><td>Under RN's 500ms default, which targets a rare secondary menu rather than message actions.</td></tr>
+                <tr><td>180 / 220 / 700 ms</td><td><code>Duration</code></td><td>Enters, dismissals, and the held refresh spinner.</td></tr>
+                <tr><td>0.85 / 0.4</td><td>Pressed / disabled opacity</td><td>Visible press without a colour change; a shape that still reads but does not invite a tap.</td></tr>
+                <tr><td>4.5:1 / 3:1</td><td>Text / non-text contrast</td><td>WCAG 1.4.3 and 1.4.11, measured against the surface the element sits on.</td></tr>
+                <tr><td>1.4 / 1.2</td><td>Text-scale caps</td><td>Chrome labels and badge digits. Body copy is uncapped.</td></tr>
+                <tr><td>8</td><td>Haptic verbs</td><td>Named by situation, lint-enforced, small enough that two call sites meaning the same thing cannot drift.</td></tr>
+                <tr><td>11</td><td>Shared components</td><td>Alert, avatar, bottom sheet, copy glyph, empty state, error boundary, mesh status bar, primary button, status dot, toast, transfer badge.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>A <code>Pressable</code> with no pressed style.</strong>
+              The most common defect, and it fails silently: on a fast device
+              nobody notices, and on a slow push it reads as broken and gets
+              tapped twice.
+            </li>
+            <li>
+              <strong>Contrast checked against the page.</strong> Passing on the
+              background and failing on the surface the element actually sits
+              on. Selection washes and raised surfaces are where this bites.
+            </li>
+            <li>
+              <strong>A naive dark-mode lift.</strong>
+              <code>surfaceRaised</code> is darker than <code>surface</code> on
+              light and lighter on dark, so an elevation that was derived by
+              hand inverts in one theme.
+            </li>
+            <li>
+              <strong>The same object styled in two files.</strong> This is how
+              every drift in the codebase started: a correct decision that never
+              propagated into a token or a component.
+            </li>
+            <li>
+              <strong>A <code>setState</code> on a timer with no cleanup.</strong>
+              Sheets close fastest right after a tap, which is exactly when a
+              pending timer fires into an unmounted tree.
+            </li>
+            <li>
+              <strong>Adjacent targets grown in both dimensions.</strong> Two
+              overlapping 44pt targets hand the decision to view order rather
+              than the finger, which is worse than the original small target.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            The app would keep working and would slowly stop feeling like one
+            app. That is the honest answer: no user-visible failure on day one,
+            and after twenty screens a set of surfaces whose corners, gaps,
+            press treatments and timings each came from whoever wrote that
+            screen. The specific losses are measurable, though: without
+            <code>useThemeColors()</code> the dark theme applies only where
+            somebody remembered it; without the contrast comments the greys
+            drift back toward the 3.2:1 pair that failed; without
+            <code>MIN_TOUCH</code> and <code>hitSlopFor</code> the small glyphs
+            become genuinely hard to hit on a moving bus, which is a
+            disproportionate cost for the people this app is built for.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Approach</th><th>How it works</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Tailwind or NativeWind</td>
+                  <td>Utility classes with a config-defined scale</td>
+                  <td>Gives the scale but not the reasoning. The value of this system is the 200 lines of comments explaining why each number is that number, and a utility string has nowhere to put them. It also adds a build step to a bare-workflow app that deliberately has few.</td>
+                </tr>
+                <tr>
+                  <td>A component library (Tamagui, RN Paper, gluestack)</td>
+                  <td>Pre-built components with their own theming</td>
+                  <td>You inherit someone else's opinions about press feedback, sheet behaviour and elevation, and then fight them at every point where this app differs. Eleven hand-written components is less code than the overrides would be.</td>
+                </tr>
+                <tr>
+                  <td>A brand accent colour</td>
+                  <td>The convention every app in the borrowed table follows</td>
+                  <td>This app has four network states, two trust levels and three delivery states that all genuinely need to be distinguishable. A brand hue competing with them makes the meaningful colours harder to read.</td>
+                </tr>
+                <tr>
+                  <td>Design tokens generated from Figma</td>
+                  <td>A pipeline exports the palette and scales into code</td>
+                  <td>Correct at a larger organisational scale, where the design and the code are maintained by different people. Here it would move the reasoning out of the file where the value is used, which is the opposite of what makes this work.</td>
+                </tr>
+                <tr>
+                  <td>Documented conventions, no enforcement</td>
+                  <td>A style guide, reviewed by humans</td>
+                  <td>This is the state every drift in the codebase came from. The skill file exists <em>and</em> the lint rule exists, because a convention that only lives in prose is rediscovered rather than followed.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">A designer asks why the inner radius of a card inside a card is not simply the same as the outer one.</span>
+              <span class="a">Because a constant visual gap around a corner only happens at <code>inner = outer - padding</code>. Equal radii mean the gap is widest at the corner and narrowest along the edges, which the eye reads as two shapes fighting rather than one nested inside another. Too large and the corners bulge toward each other, too small and they pinch. It is a Prägnanz effect: nobody names it and everybody feels it. The scale is built so the subtraction lands on tokens up to <code>Radius.lg</code>, and above that the instruction is to compute the value rather than reach for the nearest one.</span>
+            </li>
+            <li>
+              <span class="q">Why do rows darken on press while accent buttons dim?</span>
+              <span class="a">Because each treatment fails on the other surface. A row cannot dim: a white row on an off-white page loses nothing visible at 0.85 opacity. An accent button cannot darken: its fill <em>is</em> the accent, so darkening it means recolouring the label too, and a label changing colour reads as a state change rather than a press. So the treatment is chosen by what the surface already is, neutral fill or accent fill, and both go through <code>Pressable</code>'s style callback rather than component state, which would re-render twice per tap.</span>
+            </li>
+            <li>
+              <span class="q">The palette passes a contrast checker but users report unreadable text. Where would you look first?</span>
+              <span class="a">At what the text is sitting on when it fails, rather than at the palette. The most common error is measuring against the page instead of the surface the element actually occupies: text on a selection wash is on the wash, not on the row and not on the background behind it. The second candidate is dark mode elevation, where <code>surfaceRaised</code> is lighter than <code>surface</code> rather than darker, so a value derived by hand for light mode inverts. The third is a non-text element judged by the 4.5:1 text rule when it owes 3:1 under WCAG 1.4.11, or the reverse: a status dot at 1.6:1 passes nothing and is exactly the case where the information matters most.</span>
+            </li>
+            <li>
+              <span class="q">Why are haptics named <code>armed()</code> and <code>held()</code> rather than <code>heavy()</code> and <code>medium()</code>?</span>
+              <span class="a">Because naming by feedback type guarantees drift: two call sites that mean the same thing to the user pick different buzzes, and nothing in the name says they should have matched. Naming by situation makes the vocabulary the unit. It also forces the reasoning to be written down, which is where the interesting decisions live: <code>armed()</code> is rigid rather than a tick specifically because push-to-talk is used without looking at the screen, so the destructive threshold has to be tellable apart from the ordinary one by feel alone. The rule is enforced by ESLint rather than convention, and the error message names all eight verbs.</span>
+            </li>
+            <li>
+              <span class="q">Which of Nielsen's ten does this app meet least well, and what would you do about it?</span>
+              <span class="a">Number ten, help and documentation. There is no in-app help, no explanation of what a courier is, and nothing that tells a user why a message might take a day to arrive. For an app whose core mechanics are genuinely unfamiliar, that is a real gap rather than a stylistic choice. The fix is not a help centre: it is contextual, one sentence at the moment the unfamiliar thing happens. A message that has gone to a courier should say what that means, once, where it happens. That is also consistent with the rule that a card with nothing to report reports nothing, because the note only appears in the situation it explains.</span>
+            </li>
+            <li>
+              <span class="q">Justify a monochrome palette to someone who thinks it looks unfinished.</span>
+              <span class="a">The constraint is not aesthetic, it is informational: if a colour does not communicate information, it should not exist. This app has more genuinely meaningful colour states than a typical messenger, four network modes, two trust levels, three delivery states, and a brand hue competing with them makes the meaningful ones harder to read. A green padlock always means encrypted and a blue shield always means verified precisely because nothing decorative is allowed to be green or blue. The trade is real and worth naming: the app is less immediately distinctive than one with a brand colour, and it depends more on typography and spacing to feel finished, which is why the token discipline matters more here than it would elsewhere.</span>
+            </li>
+            <li>
+              <span class="q">A reviewer says the design system is over-engineered for a phone app. Answer them.</span>
+              <span class="a">The whole system is one 412 line file, eleven shared components and a single lint rule, and most of those 412 lines are comments recording why a value is what it is. That is less code than the overrides a component library would need. The cost is small; the thing it buys is that a decision made once propagates, which is the only mechanism that keeps twenty screens looking like one app. The evidence is in the file itself: the selection colour, the offline dot and the three text greys were each shipped wrong, fixed once, and turned into a token with the reasoning attached, so none of them can be re-decided by the next person.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 15: The mesh service. The composition root: what it owns, its lifecycle, and one packet traced end to end." />
+    <title>15 The mesh service · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 15 · The protocol</p>
+          <h1>The mesh service</h1>
+          <p class="kt-lede">
+            Chapters 09 to 14 described the parts. This is the object that holds
+            all of them at once. It is a single file of 6,349 lines, the largest
+            in the repository by a wide margin, and the first thing every new
+            maintainer asks about. The answer is not "nobody got round to
+            splitting it".
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#root">What a composition root is</a></li>
+              <li><a href="#owns">Everything it owns</a></li>
+              <li><a href="#life">Lifecycle: five verbs</a></li>
+              <li><a href="#inbound">One packet, end to end</a></li>
+              <li><a href="#dispatch">The dispatch table</a></li>
+              <li><a href="#outbound">Sending, and the transport ladder</a></li>
+              <li><a href="#subs">The subscription web</a></li>
+              <li><a href="#surface">The public surface</a></li>
+              <li><a href="#boundaries">What it deliberately does not do</a></li>
+              <li><a href="#numbers">The numbers</a></li>
+              <li><a href="#breaks">What breaks it</a></li>
+              <li><a href="#removed">If you removed it</a></li>
+              <li><a href="#alt">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine a busy post office. There are lots of specialists: someone
+              who weighs parcels, someone who writes addresses, someone who
+              decides which van a parcel goes on, someone who keeps the list of
+              customers. None of them talks to the others directly. Instead
+              there is one desk in the middle where every parcel passes through,
+              and the person at that desk knows all the specialists and walks
+              the parcel from one to the next. The mesh service is that desk.
+              It does very little work of its own. It knows who does what.
+            </p>
+          </div>
+
+          <h2 id="root">What a composition root is</h2>
+          <p>
+            A composition root is the one place in a program where all the
+            independent pieces are built and wired to each other. Everything
+            else can then be written as if it has no idea the others exist.
+          </p>
+          <p>
+            The pieces in Airhop are genuinely independent, and each is tested on
+            its own: the packet codec knows nothing about radios, the flood
+            router knows nothing about encryption, the courier store knows
+            nothing about the screen. That independence is what makes them
+            testable. But somebody has to hold the radio handle, the identity,
+            the peer registry, the session table and the message stores all at
+            once, because almost every real operation touches several of them in
+            one step.
+          </p>
+          <div class="box ok">
+            <p class="box-title">Why it is not split</p>
+            <p>
+              Every handler needs three or four of the owned objects
+              simultaneously. Splitting the file leaves exactly two options, and
+              both are worse. Either you pass a large context object into every
+              handler, which is the same coupling with more typing, or the
+              subsystems start importing each other, which is a circular import
+              graph. The logic that <em>can</em> stand alone already does: it
+              lives under <code>src/core/mesh/*</code> and that is where the unit
+              tests are. What is left in the service is wiring.
+            </p>
+          </div>
+          <div class="box warn">
+            <p class="box-title">The honest counterpoint</p>
+            <p>
+              This is a defensible shape, not an unimprovable one. 6,349 lines
+              is past the point where a reader can hold the whole file in their
+              head, and it is the file most in need of a second pass. The
+              engineering review names it explicitly. The realistic improvement
+              is extracting cohesive handler groups that share a narrow slice of
+              state (voice, the Nostr bridge, the courier path) rather than a
+              mechanical split by line count.
+            </p>
+          </div>
+
+          <h2 id="owns">Everything it owns</h2>
+          <p>
+            Roughly sixty fields. They fall into six groups, and knowing the
+            groups is most of knowing the file.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Group</th><th>Fields</th><th>What it is for</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Identity</strong></td>
+                  <td><code>identity</code>, <code>nostrPrivKey</code>, <code>nostrPubKeyHex</code>, <code>nickname</code></td>
+                  <td>The four secrets and names this device speaks as. Read-only for the life of the instance, which is why a new identity means a new instance.</td>
+                </tr>
+                <tr>
+                  <td><strong>Protocol engines</strong></td>
+                  <td><code>floodRouter</code>, <code>registry</code> (PeerRegistry), <code>links</code> (LinkRegistry), <code>announceManager</code>, <code>router</code>, <code>fragmentManager</code>, <code>gossip</code>, <code>requestSync</code>, <code>courier</code>, <code>localPrekeys</code>, <code>peerPrekeys</code>, <code>fileXfer</code></td>
+                  <td>The pure TypeScript from <code>src/core</code>. None of them touches a radio or a screen. All of them are constructed here and nowhere else.</td>
+                </tr>
+                <tr>
+                  <td><strong>Transports</strong></td>
+                  <td><code>radio</code> (RadioController), <code>wifi</code> (WiFiController), <code>lan</code> (LANController), <code>nostrClient</code>, and <code>links</code> (LinkRegistry)</td>
+                  <td>The handles onto real hardware, and one registry holding every link across BLE, WiFi Aware and LAN. This used to be six maps, two per transport, and every caller that wanted "can I reach this peer" had to ask each and merge. Chapter <a href="14-peers-queues.html">14</a> is the registry, chapter <a href="28-transports.html">28</a> how a transport is chosen.</td>
+                </tr>
+                <tr>
+                  <td><strong>Sessions</strong></td>
+                  <td><code>pendingHandshakes</code>, <code>drStates</code>, <code>nostrPubkeyToPeerID</code></td>
+                  <td>Live cryptographic state: half-finished Noise handshakes, per-peer Double Ratchet state, and the map that folds an inbound Nostr reply into the right mesh thread.</td>
+                </tr>
+                <tr>
+                  <td><strong>Higher services</strong></td>
+                  <td><code>geoChannels</code>, <code>privateChannels</code>, <code>bridgeService</code>, <code>pttCapture</code>, <code>pttPlayer</code>, <code>pttPlayback</code></td>
+                  <td>Built lazily, because each one is optional. A user who never opens a location channel never constructs <code>GeohashChannelService</code>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Bookkeeping</strong></td>
+                  <td><code>seenCarrierEventIDs</code>, <code>publishedEventIDs</code>, <code>rebroadcastEventIDs</code>, <code>downlinkSendTimes</code>, <code>uplinkDepositTimes</code>, <code>pendingPings</code>, <code>lastPongAtByLink</code>, <code>bytesSent</code>, <code>bytesReceived</code>, ten <code>*Unsub</code> handles</td>
+                  <td>Deduplication sets, rate-limit windows, counters, and the teardown handles for every subscription the service opened.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="life">Lifecycle: five verbs</h2>
+          <p>
+            There is exactly one instance per process, held at module scope in
+            <code>_instance</code>. Five functions move it between states, and
+            the distinctions between them are not cosmetic.
+          </p>
+          <pre class="ascii">
+  initMeshService(identity, nickname)          App.tsx, once, after
+    │                                          identity is loaded
+    ├─ _instance?.dispose()   <-- not stop(). The outgoing instance
+    │                             holds the OLD identity's private keys
+    │                             and must not fire against the new one
+    ├─ _instance = new MeshService(identity)
+    └─ _instance.start(nickname)
+
+
+  start(nickname)                              also: presence Online
+    ├─ running = true
+    ├─ clearRadioStopGrace()   cancels a teardown scheduled &lt;150 ms ago
+    ├─ radio.start()           hands the radios to the RECONCILER, not
+    │                          three fire-and-forget native calls
+    ├─ announceManager timer
+    ├─ gossip + requestSync
+    └─ subscribe to stores
+
+
+  stop()                                       presence Away, panic wipe
+    ├─ running = false
+    ├─ radio.suspend()         records the decision; touches no radio
+    ├─ sendLeave()             the farewell has to reach the wire
+    ├─ closeVoice()            ends open bursts with END packets
+    └─ setTimeout(150ms) -> radio teardown
+                               grace so the LEAVE actually leaves
+
+
+  dispose()                                    replacement, panic wipe
+    ├─ stop()
+    ├─ clearRadioStopGrace()   drop the courtesy; apply teardown NOW
+    ├─ radio.stop(); radio.dispose()
+    └─ wifi.dispose()          stops the retry ladder, so a pending
+                               attach cannot reopen a socket under an
+                               identity that no longer exists
+
+
+  destroyMeshService()                         panic wipe only
+    ├─ _instance?.dispose()
+    └─ _instance = null        releases the last reference to the
+                               identity's private key bytes
+</pre>
+          <div class="box bad">
+            <p class="box-title">Three ordering bugs this shape exists to prevent</p>
+            <p>
+              <strong>The 150 ms grace.</strong> <code>radio.stop()</code>
+              reconciles on the same tick and reaches the native "stop
+              advertising" call before it returns. Taking the radios down first
+              meant the <code>LEAVE</code> and the voice <code>END</code> were
+              handed to a transport already told to shut. A peer going Away
+              vanished from everyone else's list by 60 second timeout instead of
+              instantly, and an open voice burst ended in a stall.
+            </p>
+            <p>
+              <strong><code>suspend()</code> before the farewell.</strong> It
+              records "we are going offline" without touching hardware, so
+              nothing can restart the radios behind a user who just chose to go
+              away. That was the real reason the stop used to come first, and it
+              is preserved without the cost.
+            </p>
+            <p>
+              <strong><code>closeVoice()</code> in <code>stop()</code>.</strong>
+              This was missing entirely. Teardown took down the radios, the
+              timers, the subscriptions and the Nostr pool, and left the
+              microphone open with every inbound voice session still holding its
+              jitter buffer. Going Away, or triple-tapping to panic wipe, left a
+              stranger's audio coming out of the speaker of a phone whose mesh
+              had just been stopped.
+            </p>
+          </div>
+          <div class="box warn">
+            <p class="box-title">Why <code>destroyMeshService</code> exists at all</p>
+            <p>
+              <code>stop()</code> takes the radios down but leaves the module
+              holding a service whose <code>identity</code> field still contains
+              the wiped identity's private keys. JavaScript gives no way to zero
+              those bytes. Releasing the last reference is the strongest thing
+              available, and it also guarantees the next launch builds a mesh
+              from the new identity rather than finding a stale one. See chapter 35 for the rest of the wipe.
+            </p>
+          </div>
+
+          <h2 id="inbound">One packet, end to end</h2>
+          <p>
+            Every byte that arrives from any radio enters at one function,
+            <code>handleRaw(linkID, dataBase64)</code>. Following it once is the
+            fastest way to understand the file.
+          </p>
+          <pre class="ascii">
+  native BLE / WiFi Aware
+        │  base64 string + linkID
+        ▼
+  handleRaw(linkID, data)
+        │
+        ├─ base64ToBytes            malformed -> return, silently
+        ├─ bytesReceived += n       counters for the diagnostics screen
+        ├─ decodePacket(bytes)      bad header/length -> return
+        │
+        ├─ isFreshOrSolicited()     +/- 2 min window, unless this packet
+        │                           answers something we asked for
+        │                           (see chapter 11)
+        │
+        ├─ type === FRAGMENT ?
+        │     ├─ addressed to us -> do NOT relay (the whole file would
+        │     │                     be relayed back at the receiver)
+        │     ├─ otherwise       -> flood-route it onward
+        │     └─ feed the assembler; a completed inner packet
+        │        re-enters at routePacket() with no second flood
+        │
+        ▼
+  routePacket(packet, linkID)
+        │
+        ├─ dedup: seen this packet ID in the last 5 min? drop
+        ├─ for us, or broadcast?    -> dispatch (below)
+        ├─ relayable? ttl &gt; 0       -> floodRouter.schedule(jitter)
+        └─ neither                  -> drop
+        │
+        ▼
+  switch (packet.type)             19 cases, table below
+        │
+        ▼
+  handler                          decrypts, verifies, writes a store
+        │
+        ▼
+  zustand store  ->  React re-renders  ->  the message appears
+</pre>
+          <p>
+            The important property of this path is that
+            <strong>relaying and consuming are independent</strong>. A broadcast
+            packet is both dispatched to our own handler and scheduled for
+            relay. A packet addressed to somebody else is relayed without ever
+            being decrypted, which is what makes the middle of the mesh blind.
+          </p>
+
+          <h2 id="dispatch">The dispatch table</h2>
+          <p>
+            Nineteen packet types reach a handler. This is the whole protocol
+            surface in one place; each row points at the chapter that explains
+            it.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Type</th><th>Name</th><th>Handler does</th><th>Chapter</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>0x01</code></td><td>ANNOUNCE</td><td>Verify signature, update registry and peer store, flush the outbox for that peer</td><td><a href="20-identity.html">20</a></td></tr>
+                <tr><td><code>0x02</code></td><td>CHANNEL_MSG</td><td>bitchat-compatible public room message</td><td><a href="22-rooms-board.html">22</a></td></tr>
+                <tr><td><code>0x51</code></td><td>CHANNEL_MSG_AIRHOP</td><td>Airhop public room message, richer payload</td><td><a href="22-rooms-board.html">22</a></td></tr>
+                <tr><td><code>0x50</code></td><td>CHANNEL_ENC</td><td>Password-protected room, decrypt with the room key</td><td><a href="22-rooms-board.html">22</a></td></tr>
+                <tr><td><code>0x10</code></td><td>NOISE_HANDSHAKE</td><td>Advance the XX state machine, possibly complete a session</td><td><a href="17-noise.html">17</a></td></tr>
+                <tr><td><code>0x11</code></td><td>NOISE_ENCRYPTED</td><td>Open with the transport keys from a completed session</td><td><a href="17-noise.html">17</a></td></tr>
+                <tr><td><code>0x12</code></td><td>DR_ENCRYPTED</td><td>Double Ratchet decrypt, the Airhop-only forward-secret DM</td><td><a href="18-forward-secrecy.html">18</a></td></tr>
+                <tr><td><code>0x03</code></td><td>LEAVE</td><td>Verify against the pinned signing key, retire the session</td><td><a href="14-peers-queues.html">14</a></td></tr>
+                <tr><td><code>0x04</code></td><td>COURIER_ENV</td><td>Try to open for us; otherwise consider carrying it</td><td><a href="13-courier.html">13</a></td></tr>
+                <tr><td><code>0x21</code></td><td>REQUEST_SYNC</td><td>Answer a Golomb filter with what the peer is missing</td><td><a href="12-gossip-sync.html">12</a></td></tr>
+                <tr><td><code>0x22</code></td><td>FILE_TRANSFER</td><td>Offer, accept, chunk and acknowledge</td><td><a href="30-media.html">30</a></td></tr>
+                <tr><td><code>0x23</code></td><td>BOARD_POST</td><td>Verify signature, insert or tombstone a board post</td><td><a href="22-rooms-board.html">22</a></td></tr>
+                <tr><td><code>0x24</code></td><td>PREKEY_BUNDLE</td><td>Store one-time prekeys for offline courier sealing</td><td><a href="13-courier.html">13</a></td></tr>
+                <tr><td><code>0x25</code></td><td>GROUP_MESSAGE</td><td>Group envelope, per-member sealed copies</td><td><a href="22-rooms-board.html">22</a></td></tr>
+                <tr><td><code>0x28</code></td><td>NOSTR_CARRIER</td><td>A Nostr event carried over the mesh, or bound for a relay</td><td><a href="27-gateway-bridge.html">27</a></td></tr>
+                <tr><td><code>0x26</code></td><td>PING</td><td>Answer with a PONG on the same link</td><td><a href="14-peers-queues.html">14</a></td></tr>
+                <tr><td><code>0x27</code></td><td>PONG</td><td>Resolve the pending ping, record round-trip time</td><td><a href="14-peers-queues.html">14</a></td></tr>
+                <tr><td><code>0x29</code></td><td>VOICE_FRAME</td><td>Into the jitter buffer, or start a session, or END it</td><td><a href="31-voice.html">31</a></td></tr>
+                <tr><td><code>0x20</code></td><td>FRAGMENT</td><td>Handled before the switch, in <code>handleRaw</code></td><td><a href="10-fragmentation.html">10</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="outbound">Sending, and the transport ladder</h2>
+          <p>
+            Outbound is the mirror image, and the service is where the choice of
+            rail is made. A direct message is the richest case:
+          </p>
+          <pre class="ascii">
+  sendDm(peerID, text)
+        │
+        ├─ enqueue in the outbox FIRST, always
+        │    "the write left the radio" is not delivery, and a peer that
+        │    restarted and dropped its session receives nothing while
+        │    the sender sees a tick
+        │
+        ├─ do we hold a Double Ratchet state for them?
+        │     yes -> ratchetEncrypt -> DR_ENCRYPTED
+        │     no  -> completed Noise session? -> NOISE_ENCRYPTED
+        │            neither -> start an XX handshake, queue the message
+        │
+        ├─ pick a rail, in order of cost:
+        │     1. links.linkFor(peerID)   the best link this peer has,
+        │                                in SEND_PREFERENCE order:
+        │                                wifi, then lan, then ble
+        │     2. BLE flood               they may be several hops away
+        │     4. Nostr gift wrap      we hold their npub and have internet
+        │     5. courier envelope     nobody can reach them right now,
+        │                             so hand a sealed copy to strangers
+        │
+        └─ the outbox entry clears only on an AUTHENTICATED receipt
+</pre>
+          <p>
+            Rungs 4 and 5 are what make Airhop different from a plain Bluetooth
+            chat app. Chapter 13 covers the courier, chapter 24 the Nostr path,
+            chapter 28 how the ladder is evaluated in practice.
+          </p>
+
+          <h2 id="subs">The subscription web</h2>
+          <p>
+            The service subscribes to ten different sources, and each
+            subscription is stored so it can be torn down. This is the part that
+            leaks if it is done carelessly, because a subscription outliving its
+            service fires a callback against a wiped identity.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Handle</th><th>Watches</th><th>Reacts by</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>chatUnsub</code></td><td>Chat store</td><td>Sending read receipts when a thread is opened</td></tr>
+                <tr><td><code>gatewayUnsub</code></td><td>Gateway preference</td><td>Starting or stopping internet gateway duty</td></tr>
+                <tr><td><code>bridgeUnsub</code></td><td>Bridge preference</td><td>Starting or stopping the Nostr mesh bridge</td></tr>
+                <tr><td><code>internetUnsub</code></td><td>Connectivity</td><td>Rebuilding or dropping the relay pool</td></tr>
+                <tr><td><code>relayPrefsUnsub</code></td><td>Relay list</td><td>Reconnecting to a changed relay set</td></tr>
+                <tr><td><code>liveVoiceUnsub</code></td><td>Voice preference</td><td>Attaching or detaching the capture pipeline</td></tr>
+                <tr><td><code>backgroundPrefUnsub</code></td><td>Background preference</td><td>Changing the scan duty cycle</td></tr>
+                <tr><td><code>contactsUnsub</code></td><td>Contacts store</td><td>Seeding the registry when a contact is added</td></tr>
+                <tr><td><code>subs[]</code></td><td>Native events</td><td>Link connect, link disconnect, raw data, adapter state</td></tr>
+                <tr><td><code>outboxSweepTimer</code></td><td>Wall clock</td><td>Retrying and expiring queued mail</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="surface">The public surface</h2>
+          <p>
+            Fifty one public methods. The feature layer never reaches past them,
+            which is the contract that keeps the screens free of protocol code.
+            They group cleanly:
+          </p>
+          <div class="grid two">
+            <div class="box plain">
+              <p class="box-title">Sending</p>
+              <p>
+                <code>sendChannelMessage</code>, <code>sendDm</code>,
+                <code>sendAttachment</code>, <code>sendGroupMessage</code>,
+                <code>sendLocationPin</code>, <code>sendReadReceipts</code>,
+                <code>sendMeshPing</code>, <code>createBoardPost</code>,
+                <code>deleteBoardPost</code>, <code>cancelTransfer</code>
+              </p>
+            </div>
+            <div class="box plain">
+              <p class="box-title">Identity and contacts</p>
+              <p>
+                <code>getContactCard</code>, <code>addVerifiedContact</code>,
+                <code>forgetPeer</code>, <code>getPeerID</code>,
+                <code>getPeerNostrPubkey</code>,
+                <code>shareContactCardOverGeoDm</code>. Chapter 21 covers all
+                six.
+              </p>
+            </div>
+            <div class="box plain">
+              <p class="box-title">Rooms and places</p>
+              <p>
+                <code>joinGeohash</code>, <code>refreshGeoChannels</code>,
+                <code>getGeoParticipants</code>, <code>openGeoDm</code>,
+                <code>getChannelGeohash</code>, <code>createGroup</code>,
+                <code>addGroupMembers</code>, <code>removeGroupMember</code>
+              </p>
+            </div>
+            <div class="box plain">
+              <p class="box-title">Control</p>
+              <p>
+                <code>start</code>, <code>stop</code>, <code>dispose</code>,
+                <code>refresh</code>, <code>retryRadios</code>,
+                <code>setDiscoverable</code>, <code>setAppForeground</code>,
+                <code>applyInternetEnabled</code>, <code>restartNostr</code>
+              </p>
+            </div>
+          </div>
+          <p>
+            <code>retryRadios()</code> is worth singling out. It is called after
+            any permission grant, from startup and from the Permissions screen
+            alike. A grant is not the same as a working radio: Bluetooth may
+            still be off, and on Android the stack honours a fresh grant a moment
+            after the app can see it. The radio controller is the only thing that
+            knows how to tell those apart, so both callers nudge it rather than
+            deciding for themselves. Chapter 37 covers the permission side.
+          </p>
+
+          <h2 id="boundaries">What it deliberately does not do</h2>
+          <div class="box ok">
+            <p class="box-title">Three rules that keep the file from growing without limit</p>
+            <p>
+              <strong>No cryptography of its own.</strong> Every primitive comes
+              from <code>src/core/crypto</code>. The service composes calls; it
+              never implements a construction. That is why the crypto is
+              testable without a phone.
+            </p>
+            <p>
+              <strong>No presentation.</strong> It writes to zustand stores and
+              never touches a component. This is what lets the entire protocol
+              run in Jest with no renderer, which is how the multi-device
+              simulations in chapter 44 are possible at all.
+            </p>
+            <p>
+              <strong>No native calls outside the two controllers.</strong> BLE
+              goes through <code>RadioController</code>, WiFi through
+              <code>WiFiController</code>. Both are reconcilers: you tell them
+              the state you want, they read the device and converge on it with
+              backoff. Direct native calls were the old shape and produced two
+              dead radios behind a confident UI.
+            </p>
+          </div>
+          <p>
+            One boundary is worth stating from the other direction:
+            <code>addVerifiedContact</code> seeds the peer registry but
+            deliberately does <strong>not</strong> touch the peer store. Being a
+            contact is not evidence of being nearby, and the Mesh tab must keep
+            meaning "in range right now". Chapter 14 is the long version of that
+            distinction.
+          </p>
+
+          <h2 id="numbers">The numbers</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>What it is</th><th>Why</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>6,349</td><td>Lines in <code>mesh-service.ts</code></td><td>Composition root for eleven engines and three transports. Largest file in the repository; named as a review finding.</td></tr>
+                <tr><td>1</td><td>Instances per process</td><td>It owns hardware handles and the identity. Two instances would mean two advertisers under one peer ID.</td></tr>
+                <tr><td>19</td><td>Packet types dispatched</td><td>The full protocol surface. Anything not in the switch is dropped, which is how forward compatibility works.</td></tr>
+                <tr><td>51</td><td>Public methods</td><td>The whole contract the feature layer may use.</td></tr>
+                <tr><td>~60</td><td>Owned fields</td><td>Six groups; see the inventory above.</td></tr>
+                <tr><td>150 ms</td><td>Radio stop grace</td><td>A GATT write clears within a connection interval. Long enough for the LEAVE to leave, short enough to be invisible.</td></tr>
+                <tr><td>10</td><td>Store and preference subscriptions</td><td>Each one has a stored unsubscribe handle, so <code>dispose</code> can be complete.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="breaks">What breaks it</h2>
+          <ul>
+            <li>
+              <strong>A refused GATT write treated as a disconnect.</strong> This
+              was a real bug with a wide blast radius. The stack refuses writes
+              for ordinary reasons: its queue is full, the GATT server is
+              mid-setup, another transfer has the link busy. Deleting the link
+              from the link registry is unrecoverable, because nothing
+              re-adds a link except a fresh connect event, which never comes for
+              a link that stayed up. One transient refusal removed a healthy
+              neighbour permanently, so the phone reported zero links and the
+              composer marked every later message failed, on a working radio next
+              to a listening peer. Only the disconnect event may tear a link
+              down.
+            </li>
+            <li>
+              <strong>A subscription that outlives the instance.</strong> Every
+              <code>*Unsub</code> handle exists for this. A callback firing
+              against a disposed service reaches a wiped identity.
+            </li>
+            <li>
+              <strong>A panic wipe landing in an await gap.</strong> Startup is
+              full of awaits, and a wipe can happen in any of them. The guard is
+              the wipe generation counter: capture it, re-check after every
+              await, and abandon the work if it changed. Without it, startup
+              resurrects the identity the wipe destroyed.
+            </li>
+            <li>
+              <strong>Two instances.</strong> Only possible through a bug in the
+              init path, and it would produce two advertisers under one peer ID,
+              duplicate announces, and a session table split across objects.
+              <code>initMeshService</code> disposes the outgoing instance before
+              constructing the new one specifically to make this impossible.
+            </li>
+          </ul>
+
+          <h2 id="removed">If you removed it</h2>
+          <p>
+            There would be no application. Every engine underneath is real and
+            tested, and not one of them can send a message on its own: the codec
+            has no radio, the router has no keys, the courier store has no
+            transport. The wiring is not incidental to the system, it
+            <em>is</em> the system. The realistic version of this question is
+            "what if it were split", and the answer is in the review chapter: a
+            worthwhile refactor, low risk if done by cohesive handler group, and
+            not a correctness problem today.
+          </p>
+
+          <h2 id="alt">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Shape</th><th>How it would look</th><th>Why not here</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Dependency injection container</td>
+                  <td>A registry resolves engines by token; handlers declare what they need</td>
+                  <td>Moves the wiring into a runtime graph that no longer type-checks statically. In a codebase whose main safety property is exhaustive TypeScript, that is a real loss for an ergonomic gain.</td>
+                </tr>
+                <tr>
+                  <td>Event bus</td>
+                  <td>Engines publish and subscribe; nothing holds anything</td>
+                  <td>Every ordering bug in the lifecycle section becomes invisible. "The LEAVE must reach the wire before the radios come down" is not expressible as two independent subscribers.</td>
+                </tr>
+                <tr>
+                  <td>Actor model</td>
+                  <td>Each engine owns a mailbox and its own state; the service becomes a supervisor</td>
+                  <td>The right answer at a much larger scale, and how a server-side version of this would be built. On one phone, with one JavaScript thread, it buys isolation nobody needs and costs a message-passing layer around every field read.</td>
+                </tr>
+                <tr>
+                  <td>Split by line count</td>
+                  <td>Six files of a thousand lines each</td>
+                  <td>Produces either a giant context parameter or circular imports, with no reduction in coupling. Splitting by cohesive state is the version worth doing.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Defend a 6,349 line file to a reviewer who has already decided it is technical debt.</span>
+              <span class="a">Agree with the discomfort and then separate two claims. The claim "this file is too long to read comfortably" is true and is recorded as a review finding. The claim "this length is caused by mixing responsibilities" is false: the responsibilities are already separated into eleven engines under <code>src/core/mesh</code>, each independently unit tested without a phone. What remains is wiring, and wiring is exactly the thing that cannot be split without either passing a large context object into every handler or creating circular imports. The improvement worth making is extracting cohesive groups that share a narrow slice of state, such as voice or the Nostr bridge, not a mechanical split by line count.</span>
+            </li>
+            <li>
+              <span class="q">Why does <code>initMeshService</code> call <code>dispose()</code> on the outgoing instance rather than <code>stop()</code>?</span>
+              <span class="a">Because it is a replacement, not a pause. <code>stop()</code> takes the radios down but leaves every timer's teardown on a 150 ms grace, leaves the WiFi retry ladder running, and leaves the object holding the old identity's private keys on its <code>identity</code> field. Any of those firing against the new instance is a bug, and the WiFi one is a security bug: a pending attach could reopen a socket under an identity that no longer exists. <code>dispose()</code> drops the grace, stops the ladder, and releases the radio.</span>
+            </li>
+            <li>
+              <span class="q">A message is sent to a peer with a live direct link and an established session, and the write returns without error. Why is it still queued?</span>
+              <span class="a">Because a successful write means the bytes left this radio, which is not delivery. The far side may have restarted and discarded its session, in which case the packet is silently undecryptable while the sender shows a tick. Nothing counts as delivered without an authenticated acknowledgement, which is also bitchat's rule. All three receipt paths clear the entry and a receipt arrives well inside the flush interval, so the cost is a queue entry that lives a few seconds.</span>
+            </li>
+            <li>
+              <span class="q">Trace an inbound fragment belonging to a file addressed to this device. Where does it get relayed?</span>
+              <span class="a">Nowhere. <code>handleRaw</code> checks the recipient before touching the assembler, and a fragment addressed to us is fed straight in without a relay. Fragments carry their parent's recipient ID, so a DM attachment is directed at exactly one device; relaying anyway meant the receiver rebroadcast every fragment of a file it was itself the destination for, which for a large file is the entire transfer duplicated onto the air. Once the assembly completes, the inner packet re-enters at <code>routePacket</code> and is never flooded a second time.</span>
+            </li>
+            <li>
+              <span class="q">Why does the service write to zustand stores rather than calling into components?</span>
+              <span class="a">Because it makes the entire protocol runnable with no renderer. The multi-device simulations construct several isolated module registries in one Jest process, each with its own mesh service, wire them to a fake radio fabric and a single fake clock, and assert on store contents. That is only possible because nothing in the send or receive path touches React. It is also what keeps the presentation layer free of protocol logic, so a screen cannot accidentally change routing behaviour.</span>
+            </li>
+            <li>
+              <span class="q">Why must a refused BLE write never remove the link?</span>
+              <span class="a">Because refusal and disconnection are different events with different meanings, and only one of them is recoverable. Links are added to the link registry exclusively by a native connect event, so a link removed while it is still physically up is never re-added, and the phone believes it has no neighbours. The observed failure was one phone panic-wiping and two bystanders silently losing the ability to talk to each other. Refusals are ordinary and transient: a full queue, a busy transfer, a GATT server mid-setup. The disconnect event owns teardown, and the fragment relay path already followed that rule.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>

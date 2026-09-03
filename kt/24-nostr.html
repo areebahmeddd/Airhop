@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Airhop KT chapter 24: Nostr. Events, relays, NIPs, gift wrap, geohash rooms, proof of work." />
+    <title>24 Nostr · Airhop KT</title>
+    <link rel="stylesheet" href="assets/kt.css" />
+  </head>
+  <body>
+    <div class="kt-shell">
+      <aside class="kt-side"></aside>
+      <main class="kt-main">
+        <div class="kt-body">
+          <p class="kt-kicker">Chapter 24 · The internet layer</p>
+          <h1>Nostr</h1>
+          <p class="kt-lede">
+            When the internet is available, Airhop uses it without owning any of
+            it. Nostr is the smallest protocol that makes that possible: signed
+            JSON objects, dumb servers, and no accounts anywhere.
+          </p>
+
+          <div class="toc">
+            <ol>
+              <li><a href="#plain">In plain words</a></li>
+              <li><a href="#what">What Nostr is</a></li>
+              <li><a href="#event">The event</a></li>
+              <li><a href="#relays">Relays and the wire protocol</a></li>
+              <li><a href="#kinds">Kinds Airhop uses</a></li>
+              <li><a href="#giftwrap">Gift wrap, layer by layer</a></li>
+              <li><a href="#nip44">The cipher is not the published NIP-44</a></li>
+              <li><a href="#geohash">Geohash channels</a></li>
+              <li><a href="#relaysel">Relay selection</a></li>
+              <li><a href="#pow">Proof of work</a></li>
+              <li><a href="#leaks">What a relay learns anyway</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
+              <li><a href="#drills">Drills</a></li>
+            </ol>
+          </div>
+
+          <h2 id="plain">In plain words</h2>
+          <div class="eli5">
+            <p class="box-title">Explain it to a ten year old</p>
+            <p>
+              Imagine a wall in a town square where anyone can pin a note. Every
+              note has a wax seal that proves who wrote it and that nobody has
+              changed a word. There are hundreds of these walls in different
+              towns, all run by different people, none of them in charge. You pin
+              your note to five walls at once, so if one wall burns down your note
+              still exists. If a note is private, you put it in a locked box
+              first, and then put that box inside another box with a fake sender
+              name on it, so even the person who owns the wall does not know who
+              it is from or who it is for.
+            </p>
+          </div>
+
+          <h2 id="what">What Nostr is</h2>
+          <p>
+            "Notes and Other Stuff Transmitted by Relays". It is deliberately one
+            of the smallest useful protocols in existence: an event format, a
+            signature scheme, and a WebSocket message set. That is all.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Consequence for Airhop</th></tr></thead>
+              <tbody>
+                <tr><td>Identity is a secp256k1 key pair</td><td>No accounts, no registration, no phone number. Matches Airhop's identity model exactly, and the Nostr key is derived from the same root.</td></tr>
+                <tr><td>Relays are dumb</td><td>They store and forward signed blobs. They do not run application logic, so there is nothing to compromise into misbehaving.</td></tr>
+                <tr><td>Relays are independent</td><td>No federation protocol, no peering, no shared state. A relay going away is invisible if you were using several.</td></tr>
+                <tr><td>Clients publish to many relays</td><td>Redundancy is the client's job. Airhop publishes to 3 to 5 and takes the first acknowledgement.</td></tr>
+                <tr><td>Everything is signed</td><td>A relay cannot forge or alter an event. The worst a hostile relay can do is drop.</td></tr>
+                <tr><td>Anyone can run a relay</td><td>The set is not a permissioned list. If every relay in the bundled CSV disappeared, someone could run one this afternoon.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop uses Nostr as a <strong>message transport</strong>, not as a
+            social network. There are no profile events, no follow lists, no
+            feeds. The relay set is a delivery mechanism the way SMTP relays are
+            a delivery mechanism.
+          </p>
+
+          <h2 id="event">The event</h2>
+          <pre class="code">
+  {
+    "id":         "&lt;32 byte hex&gt;",     // sha256 of the serialised event
+    "pubkey":     "&lt;32 byte hex&gt;",     // x-only secp256k1, BIP-340
+    "created_at": 1735689600,           // unix SECONDS (not ms, unlike the mesh)
+    "kind":       14,                   // what this event is
+    "tags":       [["p","&lt;pubkey&gt;"]],  // indexed metadata
+    "content":    "...",                // the payload, often ciphertext
+    "sig":        "&lt;64 byte hex&gt;"      // BIP-340 Schnorr over id
+  }
+
+  id = SHA-256(JSON.stringify([
+         0, pubkey, created_at, kind, tags, content
+       ]))
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Note</th></tr></thead>
+              <tbody>
+                <tr><td><code>id</code></td><td>Content-derived, so an event has one identity everywhere and duplicates collapse naturally.</td></tr>
+                <tr><td><code>pubkey</code></td><td>x-only, 32 bytes, even-Y by BIP-340 convention. This is why Airhop normalises private keys to even Y (chapter <a href="16-primitives.html">16</a>).</td></tr>
+                <tr><td><code>created_at</code></td><td><strong>Seconds</strong>, where the mesh uses milliseconds. Mixing them up is a whole class of bug.</td></tr>
+                <tr><td><code>kind</code></td><td>The type discriminator, and it also decides storage: 1000 to 9999 regular, 10000 to 19999 replaceable (one per pubkey), <strong>20000 to 29999 ephemeral</strong> (relays do not persist them), 30000+ parameterised replaceable.</td></tr>
+                <tr><td><code>tags</code></td><td>Single-letter tags are indexed and can be filtered on. Airhop uses <code>p</code> (recipient), <code>g</code> (geohash), <code>x</code> (courier tag), <code>mid</code> (cross-transport message id), <code>t</code> (teleport marker).</td></tr>
+                <tr><td><code>sig</code></td><td>BIP-340 Schnorr, the same signature scheme Bitcoin taproot uses. Covers <code>id</code>, and <code>id</code> covers everything else.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The ephemeral range matters: Airhop's geohash channel messages (kind
+            20000) and presence heartbeats (kind 20001) are in it, so relays
+            forward them to live subscribers and do not store them. A location
+            channel therefore leaves no persistent record on any relay, which is
+            a real privacy property and also why joining a channel replays only
+            up to an hour of history from relays that happen to keep a buffer.
+          </p>
+
+          <h2 id="relays">Relays and the wire protocol</h2>
+          <pre class="ascii">
+  CLIENT ──▶ RELAY
+
+    ["EVENT", &lt;event&gt;]                        publish
+    ["REQ", "subid", &lt;filter&gt;, &lt;filter&gt;...]   subscribe
+    ["CLOSE", "subid"]                         unsubscribe
+
+  RELAY ──▶ CLIENT
+
+    ["EVENT", "subid", &lt;event&gt;]                a matching event
+    ["EOSE", "subid"]                          end of stored events; live from here
+    ["OK", &lt;id&gt;, true|false, "message"]        publish result
+    ["NOTICE", "message"]                      human readable
+    ["CLOSED", "subid", "reason"]              the relay ended the subscription
+
+  A FILTER
+
+    { "kinds": [20000], "#g": ["u4pruy"], "since": 1735689600, "limit": 200 }
+</pre>
+          <p>Airhop's client wraps <code>SimplePool</code> from <code>nostr-tools</code> with four behaviours worth knowing:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Behaviour</th><th>Value</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Publish is first-ACK-wins</td><td>8 second timeout</td><td>The event goes to every relay in the set and the promise resolves on the first OK, so no single relay is load bearing.</td></tr>
+                <tr><td>One-shot reads are time bounded</td><td>6 second ceiling</td><td>Without it, a read resolves only when every relay has sent EOSE, which never happens on a connection that went away without closing. That is exactly the case where you walk out of WiFi range mid-request, and the promise would never settle, leaving a screen loading for the rest of the session.</td></tr>
+                <tr><td>Default DM pool</td><td>5 relays</td><td>The four well-known relays (nos.lol, offchain.pub, relay.damus.io, relay.primal.net), matched host for host with bitchat.</td></tr>
+                <tr><td>Per-call relay ceiling</td><td><code>GEO_RELAY_COUNT + MAX_CUSTOM_RELAYS</code></td><td>Deliberately higher than the default pool. A geohash cell's set is the 5 nearest relays <em>plus</em> the user's custom ones appended last, so capping at 5 would trim from the tail and silently drop exactly the custom entries the user added.</td></tr>
+                <tr><td>Auto-reconnect</td><td>Built in</td><td>So that when the WebSocket implementation is swapped for Tor, connections re-open on their own, and a pool primed for Tor before Arti has bootstrapped retries until the circuit is up rather than ever falling back to the clear net.</td></tr>
+                <tr><td>The inbound pump yields</td><td>Bounded run time per batch</td><td>A burst of events must not hold the JavaScript thread and freeze the UI.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="kinds">Kinds Airhop uses</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Kind</th><th>NIP</th><th>Use</th><th>Persisted by relays</th></tr></thead>
+              <tbody>
+                <tr><td><strong>14</strong></td><td>NIP-17</td><td>DM rumor, the actual message. <strong>Never signed</strong> and never published on its own.</td><td>Never leaves the seal</td></tr>
+                <tr><td><strong>13</strong></td><td>NIP-59</td><td>Seal. The rumor encrypted to the recipient, signed by the sender's real key.</td><td>Never leaves the wrap</td></tr>
+                <tr><td><strong>1059</strong></td><td>NIP-59</td><td>Gift wrap. The seal encrypted under a throwaway key, signed by that key.</td><td>Yes, this is what is published</td></tr>
+                <tr><td><strong>20000</strong></td><td>Airhop / bitchat</td><td>Geohash channel message, tagged <code>g</code>.</td><td>No, ephemeral</td></tr>
+                <tr><td><strong>20001</strong></td><td>Airhop / bitchat</td><td>Geohash presence heartbeat.</td><td>No, ephemeral</td></tr>
+                <tr><td><strong>1401</strong></td><td>Airhop / bitchat</td><td>Courier drop, tagged <code>x</code> with the recipient tag, with a NIP-40 expiry.</td><td>Yes, until expiry</td></tr>
+                <tr><td><strong>9321</strong></td><td>NIP-61</td><td>Nutzap. Ecash proofs P2PK-locked to the recipient.</td><td>Yes</td></tr>
+                <tr><td><strong>10019</strong></td><td>NIP-61</td><td>Wallet info: trusted mints, relays, and the P2PK pubkey to lock to.</td><td>Yes, replaceable</td></tr>
+                <tr><td>17375, 7375</td><td>NIP-60</td><td>Cashu wallet state and token events. <strong>Airhop does not publish these.</strong> History stays local.</td><td>n/a</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="giftwrap">Gift wrap, layer by layer</h2>
+          <p>
+            The problem: a relay sees who published an event and who it is tagged
+            for. A naive encrypted DM hides the content and broadcasts the social
+            graph. Gift wrap (NIP-59) fixes that with three nested layers.
+          </p>
+          <pre class="ascii">
+  ┌──────────────────────────────────────────────────────────────┐
+  │  KIND 1059  GIFT WRAP                    what the relay sees │
+  │  pubkey: EPHEMERAL, thrown away after this one event         │
+  │  tags:   [["p", recipient]]                                  │
+  │  created_at: now +/- 15 minutes of jitter                    │
+  │  sig:    by the ephemeral key                                │
+  │  content: encrypt(                                           │
+  │  ┌────────────────────────────────────────────────────────┐  │
+  │  │  KIND 13  SEAL                                         │  │
+  │  │  pubkey: THE SENDER'S REAL KEY                         │  │
+  │  │  created_at: jittered                                  │  │
+  │  │  sig:    by the sender's real key  ← authentication    │  │
+  │  │  content: encrypt(                                     │  │
+  │  │  ┌──────────────────────────────────────────────────┐  │  │
+  │  │  │  KIND 14  RUMOR         UNSIGNED, deliberately   │  │  │
+  │  │  │  pubkey:     sender                              │  │  │
+  │  │  │  created_at: THE REAL SEND TIME                  │  │  │
+  │  │  │  content:    the message                         │  │  │
+  │  │  └──────────────────────────────────────────────────┘  │  │
+  │  │  ) to the recipient, from the sender's real key         │  │
+  │  └────────────────────────────────────────────────────────┘  │
+  │  ) to the recipient, from the EPHEMERAL key                  │
+  └──────────────────────────────────────────────────────────────┘
+
+  The relay learns:  a kind 1059 exists, addressed to this recipient,
+                     from a pubkey it has never seen and will never see again,
+                     at a time that is off by up to 15 minutes.
+  The relay does NOT learn: the sender, the content, or the real send time.
+</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Layer</th><th>Job</th><th>Why not merged</th></tr></thead>
+              <tbody>
+                <tr><td>Rumor, kind 14</td><td>The content and the real timestamp.</td><td><strong>Unsigned on purpose.</strong> An unsigned event cannot be published, so it can never leak by accident, and it gives deniability: the recipient cannot extract a signed statement.</td></tr>
+                <tr><td>Seal, kind 13</td><td>Authentication. Signed by the sender's real key.</td><td>This is what lets the recipient know who wrote it. Without it, anyone could send a rumor claiming any pubkey.</td></tr>
+                <tr><td>Gift wrap, kind 1059</td><td>Metadata hiding. Signed by a throwaway key.</td><td>This is the layer the relay sees. Merging it with the seal would put the sender's real key in the relay's view, which is the entire thing being hidden.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Verification order on receipt</h3>
+          <ol>
+            <li>Decrypt the gift wrap with the recipient key and the ephemeral pubkey embedded in the wrap's <code>pubkey</code> field.</li>
+            <li><strong>Verify the seal's Schnorr signature.</strong> Without this, DMs are forgeable by anyone who knows the recipient's pubkey.</li>
+            <li>Check the inner event is actually kind 13.</li>
+            <li>Decrypt the seal to reveal the rumor.</li>
+            <li><strong>Check the seal's signer matches the rumor's claimed pubkey.</strong> Otherwise a valid seal could carry a rumor attributed to someone else.</li>
+            <li>
+              <strong>Check the rumor's timestamp is plausible.</strong> The outer
+              timestamp is randomised by design, so the rumor's
+              <code>created_at</code> is the only claim about when this was sent,
+              and nothing signs it into a window. Threads sort by time, so a
+              far-future rumor pins itself to the bottom of a conversation forever
+              and a far-past one buries itself in history where it is never seen.
+              Neither breaks the crypto; both let someone choose where their
+              message lands in your timeline. The window is the subscription's
+              lookback plus 15 minutes of skew.
+            </li>
+          </ol>
+          <p>
+            The 15 minute timestamp jitter on the seal and the wrap matches
+            bitchat's <code>randomizedTimestamp</code> exactly, which keeps
+            Airhop's events indistinguishable from bitchat's to a relay. NIP-59
+            suggests up to two days; matching bitchat matters more than matching
+            the suggestion.
+          </p>
+
+          <h2 id="nip44">The cipher is not the published NIP-44</h2>
+          <div class="box bad">
+            <p class="box-title">Read this before reaching for a standard library</p>
+            <p>
+              bitchat labels its relay-DM encryption "nip44-v2" and the name is
+              misleading. It is a <strong>bitchat-specific construction</strong>,
+              not the registered NIP-44. An implementer who reads "NIP-44" and
+              uses <code>nostr-tools</code>' NIP-44 produces DMs that no bitchat
+              or Airhop peer can read, and the failure is silent at both ends.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th></th><th>Published NIP-44 v2</th><th>bitchat "nip44-v2", and Airhop</th></tr></thead>
+              <tbody>
+                <tr><td>Cipher</td><td>ChaCha20 plus HMAC-SHA256</td><td><strong>XChaCha20-Poly1305</strong>, a real AEAD with a 24 byte nonce</td></tr>
+                <tr><td>Key schedule</td><td>HKDF extract then expand, per-message salt</td><td><strong>Single-step HKDF</strong>, <code>info = "nip44-v2"</code>, no salt</td></tr>
+                <tr><td>ECDH output</td><td>x-coordinate only</td><td><strong>Compressed point, 33 bytes</strong></td></tr>
+                <tr><td>Padding</td><td>Padded to a power-of-two bucket</td><td><strong>None</strong></td></tr>
+                <tr><td>Framing</td><td>base64, version byte inside the payload</td><td><code>"v2:"</code> prefix plus <strong>base64url</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Airhop implements bitchat's construction deliberately and must keep
+            doing so. The Nostr event signature covers the encrypted content, so
+            byte-identical output is the whole of DM interoperability. The
+            envelope around it <em>is</em> NIP-17 shaped: kinds 13, 14 and 1059
+            carry their standard meanings and the layering is exactly NIP-59's.
+            Only the encryption inside each layer diverges. So "NIP-17 gift wrap"
+            elsewhere in the documentation is accurate about the structure and
+            should be read as excluding the cipher.
+          </p>
+          <p>
+            Two consequences worth naming. The missing padding means
+            <strong>ciphertext length reveals plaintext length</strong> to a
+            relay, where the published NIP-44 would hide it. And the static ECDH
+            between two long-lived identities means these DMs have
+            <strong>no forward secrecy</strong> at all (chapter
+            <a href="18-forward-secrecy.html">18</a>).
+          </p>
+          <p>
+            bitchat reached the same conclusion about its own documentation and
+            relabelled it. Airhop records it in
+            <code>PROTOCOLS.md</code> section 7.1 for the same reason.
+          </p>
+
+          <h2 id="geohash">Geohash channels</h2>
+          <p>
+            A geohash encodes a latitude and longitude pair into a short string,
+            where each additional character subdivides the cell. Two points in
+            the same cell share a prefix, which is what makes it a natural
+            channel name.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Channel</th><th>Precision</th><th>Cell size</th><th>Presence allowed</th></tr></thead>
+              <tbody>
+                <tr><td><code>#block</code></td><td>7</td><td>~153 m</td><td><strong>No</strong></td></tr>
+                <tr><td><code>#neighborhood</code></td><td>6</td><td>~1.2 km</td><td><strong>No</strong></td></tr>
+                <tr><td><code>#city</code></td><td>5</td><td>~4.9 km</td><td>Yes</td></tr>
+                <tr><td><code>#province</code></td><td>4</td><td>~39 km</td><td>Yes</td></tr>
+                <tr><td><code>#region</code></td><td>2</td><td>~1250 km</td><td>Yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Presence heartbeats are restricted to precisions 2, 4 and 5. Sending
+            a heartbeat at precision 6 or 7 would announce your position to
+            within a city block on a public relay, continuously. The app refuses
+            to do it, and that refusal is enforced in the presence module rather
+            than left to the caller.
+          </p>
+          <h3>Per-cell identities</h3>
+          <pre class="code">
+  seed = HMAC-SHA256(signingPrivKey, "airhop-geohash-seed-v1")
+
+  privkey = HMAC-SHA256(seed, utf8(geohash) || u32_be(i))
+            for i = 0, 1, 2... until the result is a valid secp256k1 scalar
+</pre>
+          <p>
+            The main Nostr key is published in every ANNOUNCE and used for DMs.
+            Reusing it for location channels would let any relay operator, or
+            anyone watching a geohash, tie a movement history to a durable
+            identity and correlate the block, city and region cells someone posts
+            in as one person. A fresh key per geohash breaks those links.
+          </p>
+          <p>
+            The derivation is deterministic, so a user keeps a stable pseudonym
+            <em>within</em> a channel across restarts while remaining unlinkable
+            <em>across</em> channels. Nothing on the wire depends on the
+            derivation, only that each cell gets its own key, so bitchat and
+            Airhop interoperate without sharing seeds. They could not anyway: the
+            seed never leaves the device.
+          </p>
+          <p>
+            Display names follow bitchat's convention: the self-asserted nickname
+            with the last 4 hex characters of the pubkey appended, or
+            <code>anon#abcd</code> with no nickname. Nicknames here are untrusted
+            decoration; the pubkey is the identity.
+          </p>
+          <h3>Teleport</h3>
+          <p>
+            A user can open any cell by entering its geohash, without being there.
+            It runs over Nostr only, since nobody in Bluetooth range is in it, and
+            its messages carry a <code>t=teleport</code> tag so other clients list
+            the sender as teleported rather than nearby. It uses the same per-cell
+            identity and relay selection.
+          </p>
+
+          <h2 id="relaysel">Relay selection</h2>
+          <p>
+            The bundled dataset is <code>assets/data/nostr_relays.csv</code>: 300
+            or so relays with latitude and longitude, produced by the
+            <code>georelays</code> toolchain (BFS discovery from a seed relay,
+            filtering for relays that actually accept kind 20000, then IP
+            geolocation against a DB-IP database).
+          </p>
+          <pre class="code">
+  closestRelaysToGeohash(geohash, decodeCenter, count = 5):
+    center = decodeCenter(geohash)              // the CELL CENTRE
+    sort by haversine distance from center,
+      ties broken by URL (not insertion order)
+    take the first `count`
+</pre>
+          <div class="box">
+            <p class="box-title">Two details that are load bearing for interop</p>
+            <p>
+              <strong>Relays are chosen by distance from the cell centre, not
+              from the user.</strong> Every participant in a cell must converge
+              on the same relay set. Selecting by personal position would give two
+              people in opposite corners of one city cell different relays, and
+              they would never see each other's messages despite being in the same
+              channel.
+            </p>
+            <p>
+              <strong>Ties break on URL.</strong> Many relays in the directory
+              share identical coordinates, so ties are common rather than exotic.
+              If they broke on insertion order, two clients with differently
+              ordered directories would pick different sets.
+            </p>
+          </div>
+          <p>
+            Relay URLs are validated strictly:
+            <code>wss://</code> or <code>https://</code> only, ASCII only, no
+            credentials, query, fragment or path, a real DNS hostname of at least
+            two labels, not a bare IP, and not <code>localhost</code>,
+            <code>.local</code> or <code>.internal</code>. That strictness is
+            deliberate and stays. Relaxing it to permit <code>ws://</code> would
+            mean permitting cleartext for the whole app on Android (its network
+            security config cannot scope an exception to an address range), which
+            includes the mint URLs that carry bearer ecash. And a
+            <code>ws://</code> public host would put gift-wrapped DMs on the open
+            internet unencrypted.
+          </p>
+          <p>
+            A user may add up to 5 custom relays. With geo-relay discovery on,
+            they are appended to the nearest set; with it off, they replace it,
+            trading interoperability for control.
+          </p>
+
+          <h2 id="pow">Proof of work</h2>
+          <p>
+            NIP-13 defines optional proof of work for Nostr: grind the event's
+            <code>nonce</code> tag until the event <code>id</code> has a required
+            number of leading zero bits. Some relays require it as a spam
+            deterrent.
+          </p>
+          <p>
+            <strong>Airhop does not implement it, in either direction.</strong>
+            That is worth understanding rather than just noting.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Argument</th><th>Assessment</th></tr></thead>
+              <tbody>
+                <tr><td>PoW would deter spam in geohash channels</td><td>True in principle. But a phone grinding hashes is a phone burning battery, and this app is meant to run in a pocket all day. The cost falls hardest on exactly the low-end devices the product targets.</td></tr>
+                <tr><td>PoW would raise the cost of a Sybil flood</td><td>On the <em>Nostr</em> side only. The mesh is where Sybil floods actually happen, and PoW there would be worse: a flood costs the attacker one grind per identity, while every honest phone pays a grind per message.</td></tr>
+                <tr><td>Some relays require PoW to accept an event</td><td>Real, and it means Airhop silently cannot publish to those relays. The mitigation is publishing to 5 relays and taking the first acknowledgement, so one demanding relay is invisible.</td></tr>
+                <tr><td>bitchat does not implement it either</td><td>So adding it unilaterally would produce events with a nonce tag bitchat ignores, which is harmless, and would not raise the bar for anyone.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The honest summary: PoW is a reasonable anti-spam tool for a public
+            posting network and a poor fit for a battery-constrained offline-first
+            messenger. If relay-side PoW requirements become widespread, the
+            correct response is to grind only for the specific relays that demand
+            it, at the lowest difficulty they accept, and only when charging.
+          </p>
+
+          <h2 id="leaks">What a relay learns anyway</h2>
+          <p>Gift wrap is strong. It is not complete.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Leak</th><th>Mitigated by</th><th>Residual</th></tr></thead>
+              <tbody>
+                <tr><td>Your IP address</td><td>Tor, when enabled</td><td>Off by default, so by default a relay sees your IP and can geolocate you roughly.</td></tr>
+                <tr><td>That <em>somebody</em> is messaging this recipient</td><td>Nothing</td><td>The <code>p</code> tag is necessary for delivery. A relay sees the recipient of every gift wrap.</td></tr>
+                <tr><td>Message size</td><td>Nothing</td><td>bitchat's cipher does not pad, so ciphertext length reveals plaintext length.</td></tr>
+                <tr><td>Timing</td><td>15 minute jitter on the outer timestamps</td><td>A relay still sees when the connection delivered the event, which is not jittered.</td></tr>
+                <tr><td>Which geohash cells you are in</td><td>Per-cell identities, coarse precisions for presence</td><td>A relay serving a cell sees every pubkey posting in it. Cross-cell correlation is broken; within-cell observation is not.</td></tr>
+                <tr><td>Your relay set</td><td>Nothing</td><td>Which relays you connect to is itself a fingerprint, and a geohash-derived relay set narrows your location.</td></tr>
+                <tr><td>Your courier tags</td><td>Nothing</td><td>Kind 1401 drops are tagged with the recipient tag, which anyone who heard that peer's announce can compute.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The design's honest position is that Nostr is the
+            <strong>weaker</strong> of the two transports for metadata, and that
+            it is used only where Bluetooth cannot reach. That is why the internet
+            layer is an extension rather than the foundation, and why the internet
+            toggle exists at all.
+          </p>
+
+          <h2 id="alternatives">Alternatives</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Protocol</th><th>Verdict</th><th>Reason</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Matrix</strong></td><td>Rejected</td><td>Requires a homeserver, which is a single point of failure and a party that holds your account. Federated but not serverless.</td></tr>
+                <tr><td><strong>XMPP</strong></td><td>Rejected</td><td>Also an always-on server, plus a complex extension ecosystem and a limited offline story.</td></tr>
+                <tr><td><strong>Signal protocol and service</strong></td><td>Rejected</td><td>Signal owns the relay infrastructure and requires a phone number, so it is not permissionless.</td></tr>
+                <tr><td><strong>SimpleX</strong></td><td>Close second</td><td>No persistent identifiers at all, which is genuinely stronger than Nostr on metadata. But no BLE mesh story, a smaller ecosystem, and fewer independent relays.</td></tr>
+                <tr><td><strong>IPFS or a DHT</strong></td><td>Rejected</td><td>DHT participation is itself a strong identifier, latency is poor, and mobile support is weak.</td></tr>
+                <tr><td><strong>Nostr</strong></td><td><strong>Chosen</strong></td><td>Permissionless keypair identity, 300+ independent relays, NIP-17 gift wrap for DMs, NIP-61 for payments, and bitchat had already validated the choice, which matters because interoperability was a hard requirement.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="box">
+            <p class="box-title">If you removed the Nostr layer</p>
+            <p>
+              Airhop would still work as a Bluetooth mesh messenger with local
+              rooms, DMs, files, voice and offline payments. What would disappear:
+              location channels beyond Bluetooth range, DMs to anyone not
+              currently nearby, the mesh bridge between islands, nutzaps, courier
+              relay drops, and any way to reach a contact in another city. It is
+              the difference between a venue-scale tool and one that also works
+              between cities when there happens to be a network.
+            </p>
+          </div>
+
+          <h2 id="drills">Drills</h2>
+          <ul class="drill">
+            <li>
+              <span class="q">Why three layers rather than just encrypting the message?</span>
+              <span class="a">Each layer does a different job. The rumor holds the content and the true timestamp and is deliberately unsigned, so it can never be published by accident and gives deniability. The seal is signed by the sender's real key, which is the only thing that lets the recipient authenticate them. The gift wrap is signed by a throwaway key, which is what hides the sender from the relay. Merge the seal and the wrap and the relay sees the sender's real key, which is the whole point of the exercise.</span>
+            </li>
+            <li>
+              <span class="q">Someone says "just use nostr-tools' NIP-44". What happens?</span>
+              <span class="a">Every DM you send becomes unreadable to every bitchat and Airhop peer, and every one you receive fails to decrypt, with no error message that says why. bitchat's "nip44-v2" is a different construction: XChaCha20-Poly1305 rather than ChaCha20 plus HMAC, single-step HKDF with no salt, a compressed 33 byte ECDH output rather than x-only, no padding, and a <code>"v2:"</code> plus base64url framing. Since the event signature covers the encrypted content, byte-identical output is the entire interoperability story.</span>
+            </li>
+            <li>
+              <span class="q">Why are relays picked by distance to the cell centre rather than to the user?</span>
+              <span class="a">Because publisher and subscriber must independently arrive at the same relay set or the channel silently drops traffic. Two people in opposite corners of one city cell would pick different nearest relays if selection used their own positions, publish to relays the other never subscribed to, and never see each other. Ties break on URL rather than insertion order for the same reason, since many directory entries share coordinates.</span>
+            </li>
+            <li>
+              <span class="q">Why does Airhop not implement NIP-13 proof of work?</span>
+              <span class="a">Because grinding hashes on a phone costs battery, and the cost falls hardest on the low-end devices this product targets. It would deter Nostr spam but do nothing about the mesh, where floods actually happen, and where PoW would be actively worse: an attacker pays once per identity while every honest phone pays once per message. The practical cost of not having it is that relays which require PoW silently refuse Airhop events, which is masked by publishing to five relays and taking the first acknowledgement.</span>
+            </li>
+            <li>
+              <span class="q">A relay operator wants to know what they can learn about a user. What is the honest answer?</span>
+              <span class="a">Without Tor: your IP, and therefore roughly where you are. Which recipients you send gift wraps to, since the <code>p</code> tag is necessary for delivery. The size of every message, since bitchat's cipher does not pad. Which geohash cells you post in, if they serve those cells. Which relays you connect to, which is itself a fingerprint. What they cannot learn: message content, who sent any given gift wrap, or that two of your geohash pseudonyms belong to one person.</span>
+            </li>
+            <li>
+              <span class="q">Why are location channel messages kind 20000 rather than something in the persistent range?</span>
+              <span class="a">Because 20000 to 29999 is the ephemeral range: relays forward to live subscribers and do not store. That means a location channel leaves no durable record on any relay, which is the right default for a channel scoped to a physical place. The cost is that joining replays at most an hour of history from relays that happen to keep a buffer, and there is no guarantee even of that.</span>
+            </li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script src="assets/kt.js"></script>
+  </body>
+</html>
