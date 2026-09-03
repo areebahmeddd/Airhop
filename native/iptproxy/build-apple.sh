@@ -13,9 +13,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-SRC_DIR="$REPO_ROOT/.native-build/iptproxy-src/iptproxy/IPtProxy.go"
+FETCHED="$REPO_ROOT/.native-build/iptproxy-src/iptproxy"
 FRAMEWORKS_DIR="$REPO_ROOT/ios/Frameworks"
 XCFRAMEWORK="$FRAMEWORKS_DIR/IPtProxy.xcframework"
+
+# See build-android.sh: Go records local module paths in build info and
+# -trimpath does not reach them, so the build runs from a fixed path.
+BUILD_ROOT=/tmp/airhop-iptproxy
+SRC_DIR="$BUILD_ROOT/IPtProxy.go"
 
 # shellcheck disable=SC1091
 source "$REPO_ROOT/native/arti/TOOLCHAIN.env"
@@ -42,7 +47,7 @@ export GOTOOLCHAIN=local
 actual_go="$(go env GOVERSION)"
 [ "$actual_go" = "go$GO_VERSION" ] || fail "go is $actual_go, TOOLCHAIN.env pins go$GO_VERSION"
 
-[ -d "$SRC_DIR" ] || fail "sources are missing; run native/iptproxy/fetch-sources.sh first"
+[ -d "$FETCHED" ] || fail "sources are missing; run native/iptproxy/fetch-sources.sh first"
 
 # ---- Toolchain ------------------------------------------------------------
 
@@ -60,6 +65,12 @@ if [ "${1:-}" = "--clean" ]; then
   info "Removing previous build output"
   rm -rf "$XCFRAMEWORK" "$GOBIN"
 fi
+
+rm -rf "$BUILD_ROOT"
+mkdir -p "$BUILD_ROOT"
+cp -R "$FETCHED/." "$BUILD_ROOT/"
+# Dropped so Go cannot stamp VCS information from a checkout that is not ours.
+rm -rf "$BUILD_ROOT/.git"
 
 cd "$SRC_DIR"
 

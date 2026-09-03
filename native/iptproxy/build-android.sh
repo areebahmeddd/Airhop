@@ -11,9 +11,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-SRC_DIR="$REPO_ROOT/.native-build/iptproxy-src/iptproxy/IPtProxy.go"
+FETCHED="$REPO_ROOT/.native-build/iptproxy-src/iptproxy"
 LIBS_DIR="$REPO_ROOT/android/app/libs"
 AAR="$LIBS_DIR/IPtProxy.aar"
+
+# Go records the main module and every local `replace` target in the binary's
+# build info by absolute path, and -trimpath does not reach those. Built from
+# the checkout, that bakes in whoever built it and makes the output differ
+# between machines. Building from a fixed path outside the repository is what
+# keeps the result identical everywhere and free of anyone's home directory.
+BUILD_ROOT=/tmp/airhop-iptproxy
+SRC_DIR="$BUILD_ROOT/IPtProxy.go"
 
 # shellcheck disable=SC1091
 source "$REPO_ROOT/native/arti/TOOLCHAIN.env"
@@ -52,7 +60,7 @@ ndk_revision="$(sed -n 's/^Pkg.Revision *= *//p' "$ANDROID_NDK_HOME/source.prope
 [ -f "$ANDROID_HOME/platforms/android-$ANDROID_PLATFORM_API/android.jar" ] \
   || fail "no android.jar for API $ANDROID_PLATFORM_API under $ANDROID_HOME"
 
-[ -d "$SRC_DIR" ] || fail "sources are missing; run native/iptproxy/fetch-sources.sh first"
+[ -d "$FETCHED" ] || fail "sources are missing; run native/iptproxy/fetch-sources.sh first"
 
 READELF="$(ls "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-readelf 2>/dev/null | head -1 || true)"
 [ -x "$READELF" ] || fail "llvm-readelf not found under the NDK; cannot verify segment alignment"
@@ -68,6 +76,12 @@ export LC_ALL=C.UTF-8
 GOBIN="$REPO_ROOT/.native-build/go-bin"
 export GOBIN
 export PATH="$GOBIN:$PATH"
+
+rm -rf "$BUILD_ROOT"
+mkdir -p "$BUILD_ROOT"
+cp -R "$FETCHED/." "$BUILD_ROOT/"
+# Dropped so Go cannot stamp VCS information from a checkout that is not ours.
+rm -rf "$BUILD_ROOT/.git"
 
 cd "$SRC_DIR"
 
@@ -154,7 +168,9 @@ for abi in "${EXPECTED_ABIS[@]}"; do
 
   # An absolute path from a developer's disk is both a reproducibility failure
   # and a small leak about whoever built it.
-  if strings "$lib" | grep -Eq '/home/[a-z]|/Users/|[A-Za-z]:[\][^ ]+[\]'; then
+  leaked="$(strings "$lib" | grep -E '/home/[a-z]|/Users/' | sort -u | head -5 || true)"
+  if [ -n "$leaked" ]; then
+    printf '%s\n' "$leaked" >&2
     fail "$abi: a build-machine path survived into the library"
   fi
 
