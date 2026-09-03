@@ -114,6 +114,7 @@ PODS:
   - hermes-engine (250829098.0.17):
     - hermes-engine/Pre-built (= 250829098.0.17)
   - hermes-engine/Pre-built (250829098.0.17)
+  - IPtProxy (5.5.1)
   - MMKVCore (2.4.0)
   - NitroMmkv (4.3.2):
     - hermes-engine
@@ -2326,6 +2327,7 @@ DEPENDENCIES:
   - ExpoVideo (from `../node_modules/expo-video/ios/ExpoVideo.podspec`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
+  - IPtProxy (from `./`)
   - NitroMmkv (from `../node_modules/react-native-mmkv`)
   - NitroModules (from `../node_modules/react-native-nitro-modules`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -2479,6 +2481,8 @@ EXTERNAL SOURCES:
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-v250829098.0.17
+  IPtProxy:
+    :path: "./"
   NitroMmkv:
     :path: "../node_modules/react-native-mmkv"
   NitroModules:
@@ -2643,7 +2647,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  Arti: 33ba8afb8f5fcd0ce740d2eabd86a920ea308a4a
+  Arti: 2143376d0ee664650017b9c1b3038c621cb6a414
   EXApplication: bbd517d50878ca1d121fb3843392beb210181e28
   EXConstants: 799577d2516460afb4b57874d6823a62327ce5c7
   Expo: e174d0ecd763a050d7c8a25a0a8b5dadc43158e8
@@ -2675,6 +2679,7 @@ SPEC CHECKSUMS:
   ExpoVideo: fad16dd734258a757b78c6287988ab7beb4e2f16
   FBLazyVector: 2138c6c2ab66c31bf5754dc18097fbc498a49c7f
   hermes-engine: 63c5db7d529c36335fada6582fd293ae2a105d77
+  IPtProxy: 7a21aaa88722bfa4d95c30ea43a32db15fbc5a18
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
   NitroMmkv: 85a251e15c39d7c95fe58cf40786fa126b8d143c
   NitroModules: 38f8754287858ff1294e43fd43f614a664e54050
@@ -2758,6 +2763,6 @@ SPEC CHECKSUMS:
   RNWorklets: 43af89f696342f91118a2f1f3a879056e2f47331
   Yoga: 18b74b3ade30bebc1904004dfaceae1dd02a330a
 
-PODFILE CHECKSUM: ba40024dca81c7d95cc19fb419289c854be1e770
+PODFILE CHECKSUM: a6c17b6726a483493d9e7f32b59bab9af3e3a79d
 
 COCOAPODS: 1.17.0
