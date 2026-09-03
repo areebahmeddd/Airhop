@@ -1,6 +1,6 @@
 # Airhop's embedded Tor client
 
-One Rust crate, compiled twice: a static library linked into the iOS app and a shared object loaded by the Android app. Both expose the same five operations, so "Tor is on" means the same thing on either phone and there is one implementation to fix when it does not.
+One Rust crate, compiled twice: a static library linked into the iOS app and a shared object loaded by the Android app. Both expose the same operations, so "Tor is on" means the same thing on either phone and there is one implementation to fix when it does not.
 
 The app gets a SOCKS5 listener on `127.0.0.1:39050` and a status word. There is no `tor` binary, no `torrc`, no control port, and no third-party app to install.
 
@@ -72,7 +72,7 @@ Run the container build twice from clean and confirm `SHA256SUMS.android` does n
 
 **Features.** `rustls`, not `native-tls`, so there is no OpenSSL and no dependence on the platform trust store beneath the circuit. `compression` is an upstream default that `default-features = false` would otherwise drop, and it matters on mobile: uncompressed directory downloads cost bandwidth.
 
-**`bridge-client` and `pt-client` are compiled in but never configured.** Bridges are a later phase; having the code present means that phase is a configuration and UI change, not another binary rebuild across six architecture slices.
+**Bridges are an argument to `start`, not a setter beside it.** They are fixed when the client is constructed, so a setter could be called afterwards and silently do nothing, and anything that cleared it would let a later start take a direct route for a user who asked not to have one. The transports themselves live in [`native/iptproxy`](../iptproxy); this crate only receives the loopback ports they landed on.
 
 **Panics abort.** Unwinding across an FFI boundary is undefined behaviour, and aborting is the one option that is sound without wrapping every entry point in `catch_unwind`. A panic in a Tor client is a bug worth a crash report.
 

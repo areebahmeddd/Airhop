@@ -22,12 +22,21 @@ import Network
 // error codes.
 //
 // Bound by symbol rather than through a bridging header, which keeps the Xcode
-// target free of a modulemap for five functions. A missing symbol is a link
+// target free of a modulemap for a handful of functions. A missing symbol is a link
 // error; what the linker cannot catch is one present in a device slice and
 // absent from a simulator slice, which build-apple.sh checks for.
 
 @_silgen_name("airhop_tor_start")
 private func airhop_tor_start(_ dataDir: UnsafePointer<CChar>, _ socksPort: UInt16) -> Int32
+
+@_silgen_name("airhop_tor_start_with_bridges")
+private func airhop_tor_start_with_bridges(
+    _ dataDir: UnsafePointer<CChar>,
+    _ socksPort: UInt16,
+    _ bridgeLines: UnsafePointer<CChar>?,
+    _ obfs4Port: UInt16,
+    _ snowflakePort: UInt16
+) -> Int32
 
 @_silgen_name("airhop_tor_stop")
 private func airhop_tor_stop() -> Int32
@@ -58,18 +67,23 @@ struct ArtiStatus {
     let running: Bool
     let ready: Bool
     let blocked: Bool
+    /// Circuits run through a bridge rather than a public relay. The two differ
+    /// in what an observer on this network can see, so the app says which.
+    let bridged: Bool
     let progress: Int
 
     // Mirrors AIRHOP_TOR_STATUS_* in native/arti/src/lib.rs.
     private static let bitRunning: Int32 = 1 << 0
     private static let bitReady: Int32 = 1 << 1
     private static let bitBlocked: Int32 = 1 << 2
+    private static let bitBridged: Int32 = 1 << 3
     private static let progressShift: Int32 = 8
 
     init(packed: Int32) {
         running = packed & Self.bitRunning != 0
         ready = packed & Self.bitReady != 0
         blocked = packed & Self.bitBlocked != 0
+        bridged = packed & Self.bitBridged != 0
         progress = Int((packed >> Self.progressShift) & 0xFF)
     }
 

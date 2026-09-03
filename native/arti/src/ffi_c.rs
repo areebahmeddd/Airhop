@@ -1,9 +1,9 @@
 //! The C ABI, consumed by `ios/Airhop/AirhopTorManager.swift`.
 //!
-//! Five functions and one plain struct: no callbacks, no
-//! allocation that crosses the boundary and therefore no free function to pair
-//! with one. Swift polls `airhop_tor_status`, which is a lock and a memcpy, and
-//! the manager decides everything else.
+//! A small set of functions and one plain struct. There are no callbacks or
+//! allocations that cross the FFI boundary, so no corresponding free function
+//! is required. Swift polls `airhop_tor_status`, which acquires a lock and
+//! copies the status, while the manager handles all other decisions.
 //!
 //! The header is generated from this file by cbindgen (`cbindgen.toml`) rather
 //! than hand-written, so the two cannot drift.
@@ -30,6 +30,54 @@ pub unsafe extern "C" fn airhop_tor_start(data_dir: *const c_char, socks_port: u
     crate::start(dir, socks_port)
 }
 
+/// Start Tor through the bridges in `bridge_lines`, a newline-separated list in
+/// standard Tor format. An empty or null list is a direct connection, the same
+/// as [`airhop_tor_start`].
+///
+/// `obfs4_port` and `snowflake_port` are where the app already has each
+/// transport listening on loopback, or `0` when it does not. A line naming a
+/// transport whose port is `0` is refused rather than started without it.
+///
+/// Returns `0` once the listener is accepting, or one of the `AIRHOP_TOR_ERR_*`
+/// codes. A bad line stops the start: nothing binds and nothing bootstraps.
+///
+/// # Safety
+///
+/// `data_dir` must be a non-null, NUL-terminated C string, and `bridge_lines`
+/// either null or the same. Both must stay valid for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn airhop_tor_start_with_bridges(
+    data_dir: *const c_char,
+    socks_port: u16,
+    bridge_lines: *const c_char,
+    obfs4_port: u16,
+    snowflake_port: u16,
+) -> c_int {
+    if data_dir.is_null() {
+        return crate::AIRHOP_TOR_ERR_DATA_DIR;
+    }
+    let Ok(dir) = unsafe { CStr::from_ptr(data_dir) }.to_str() else {
+        return crate::AIRHOP_TOR_ERR_DATA_DIR;
+    };
+    let lines = if bridge_lines.is_null() {
+        ""
+    } else {
+        match unsafe { CStr::from_ptr(bridge_lines) }.to_str() {
+            Ok(s) => s,
+            Err(_) => return crate::AIRHOP_TOR_ERR_BRIDGE_LINE,
+        }
+    };
+    crate::start_with_bridges(
+        dir,
+        socks_port,
+        lines,
+        crate::TransportPorts {
+            obfs4: obfs4_port,
+            snowflake: snowflake_port,
+        },
+    )
+}
+
 /// Stop Tor, drop its client and release the port. Returns `0`, or
 /// `AIRHOP_TOR_ERR_NOT_RUNNING` when there was nothing to stop.
 #[no_mangle]
@@ -50,6 +98,7 @@ pub extern "C" fn airhop_tor_set_dormant(dormant: bool) -> c_int {
 ///   bit  0      running
 ///   bit  1      ready
 ///   bit  2      blocked
+///   bit  3      bridged
 ///   bits 8..15  progress, 0 to 100
 /// ```
 ///

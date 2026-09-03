@@ -96,6 +96,7 @@ done
 # JNI entry points declared by ArtiNative.kt.
 EXPECTED_SYMBOLS=(
   Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStart
+  Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStartWithBridges
   Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStop
   Java_org_onemindlabs_airhop_tor_ArtiNative_nativeSetDormant
   Java_org_onemindlabs_airhop_tor_ArtiNative_nativeStatus

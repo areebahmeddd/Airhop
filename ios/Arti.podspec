@@ -7,9 +7,9 @@ Pod::Spec.new do |s|
 
     Built from native/arti by native/arti/build-apple.sh, not vendored from
     upstream: the Rust source, the pinned toolchain and the checksum manifest
-    all live in this repository. Exposes a five-function C ABI (airhop_tor_start,
-    airhop_tor_stop, airhop_tor_set_dormant, airhop_tor_status,
-    airhop_tor_summary) consumed by AirhopTorManager.swift through @_silgen_name.
+    all live in this repository. Exposes a C ABI consumed by
+    AirhopTorManager.swift through @_silgen_name; build-apple.sh holds the list
+    of entry points and fails when one is missing from any slice.
 
     The header beside the library is generated from native/arti/src/ffi_c.rs by
     cbindgen, so it cannot disagree with the Rust it describes.

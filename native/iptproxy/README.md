@@ -73,6 +73,6 @@ Run the container build twice from clean and confirm `SHA256SUMS.android` does n
 ## References
 
 - [IPtProxy](https://github.com/tladesignz/IPtProxy)
-- [Pluggable transport specification](https://spec.torproject.org/pt-spec/)
 - [Snowflake](https://snowflake.torproject.org)
+- [Pluggable transport specification](https://spec.torproject.org/pt-spec/)
 - [Arti bridge configuration](https://tpo.pages.torproject.net/core/doc/rust/arti_client/config/struct.BridgeConfigBuilder.html)

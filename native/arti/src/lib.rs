@@ -49,7 +49,10 @@ use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tor_rtcompat::PreferredRuntime;
 
+mod bridges;
 mod socks;
+
+pub use bridges::TransportPorts;
 
 pub mod ffi_c;
 
@@ -75,6 +78,12 @@ pub const AIRHOP_TOR_ERR_CLIENT: i32 = -4;
 pub const AIRHOP_TOR_ERR_BIND: i32 = -5;
 /// Nothing is running, so there was nothing to do.
 pub const AIRHOP_TOR_ERR_NOT_RUNNING: i32 = -6;
+/// A bridge line could not be parsed.
+pub const AIRHOP_TOR_ERR_BRIDGE_LINE: i32 = -7;
+/// A bridge line names a transport Airhop does not ship, or one whose local
+/// proxy is not running, or carries more settings than a SOCKS5 handshake
+/// can pass to it.
+pub const AIRHOP_TOR_ERR_BRIDGE_TRANSPORT: i32 = -8;
 
 /// How far along Tor is, and whether it is going anywhere.
 ///
@@ -99,6 +108,10 @@ pub struct Status {
     /// Arti's own description of the current stage, for display and logs. Never
     /// parsed.
     pub summary: String,
+    /// Circuits are being built through a bridge rather than a public relay.
+    /// Reported so the app can say which of the two it has, since they differ in
+    /// what an observer on this network can see.
+    pub bridged: bool,
 }
 
 /// Bit layout of the packed status word both FFI surfaces return.
@@ -107,6 +120,7 @@ pub struct Status {
 ///   bit  0      running
 ///   bit  1      ready
 ///   bit  2      blocked
+///   bit  3      bridged
 ///   bits 8..15  progress, 0 to 100
 /// ```
 ///
@@ -121,6 +135,7 @@ pub struct Status {
 pub const AIRHOP_TOR_STATUS_RUNNING: i32 = 1 << 0;
 pub const AIRHOP_TOR_STATUS_READY: i32 = 1 << 1;
 pub const AIRHOP_TOR_STATUS_BLOCKED: i32 = 1 << 2;
+pub const AIRHOP_TOR_STATUS_BRIDGED: i32 = 1 << 3;
 pub const AIRHOP_TOR_STATUS_PROGRESS_SHIFT: i32 = 8;
 
 /// The current status, packed for the FFI. See [`AIRHOP_TOR_STATUS_RUNNING`].
@@ -135,6 +150,9 @@ pub fn packed_status() -> i32 {
     }
     if status.blocked {
         packed |= AIRHOP_TOR_STATUS_BLOCKED;
+    }
+    if status.bridged {
+        packed |= AIRHOP_TOR_STATUS_BRIDGED;
     }
     packed | ((status.progress as i32) << AIRHOP_TOR_STATUS_PROGRESS_SHIFT)
 }
@@ -174,11 +192,31 @@ fn state() -> &'static Mutex<Option<Running>> {
     STATE.get_or_init(|| Mutex::new(None))
 }
 
-/// Start Tor and bind a SOCKS5 listener on `127.0.0.1:socks_port`.
+/// Start Tor with a direct connection to a public relay.
 ///
 /// Returns once the listener is accepting, which is before bootstrap completes.
 /// Poll [`status`] for the rest.
 pub fn start(data_dir: &str, socks_port: u16) -> i32 {
+    start_with_bridges(data_dir, socks_port, "", TransportPorts::default())
+}
+
+/// Start Tor and bind a SOCKS5 listener on `127.0.0.1:socks_port`, reaching the
+/// network through `bridge_lines` when any are given.
+///
+/// Bridges are fixed when the client is constructed, so they are an argument
+/// rather than a setter beside it: a setter could be called afterwards and
+/// silently do nothing, and anything clearing it would let the next start take a
+/// direct route for a user who asked not to have one.
+///
+/// Fails rather than falling back. A line that does not parse, names a transport
+/// Airhop does not ship, or names one whose port is 0 stops the start before
+/// anything binds or bootstraps.
+pub fn start_with_bridges(
+    data_dir: &str,
+    socks_port: u16,
+    bridge_lines: &str,
+    transport_ports: TransportPorts,
+) -> i32 {
     let mut guard = match state().lock() {
         Ok(g) => g,
         // A previous panic poisoned the lock. There is no safe way to reason
@@ -211,7 +249,14 @@ pub fn start(data_dir: &str, socks_port: u16) -> i32 {
         Err(_) => return AIRHOP_TOR_ERR_RUNTIME,
     };
 
-    let config = match TorClientConfigBuilder::from_directories(state_dir, cache_dir).build() {
+    let mut config_builder = TorClientConfigBuilder::from_directories(state_dir, cache_dir);
+    // Before the runtime is spent on anything: a bad line is the caller's to fix
+    // and there is nothing to tear down yet.
+    let bridged = match bridges::apply(&mut config_builder, bridge_lines, transport_ports) {
+        Ok(bridged) => bridged,
+        Err(code) => return code,
+    };
+    let config = match config_builder.build() {
         Ok(c) => c,
         Err(_) => return AIRHOP_TOR_ERR_CLIENT,
     };
@@ -248,6 +293,7 @@ pub fn start(data_dir: &str, socks_port: u16) -> i32 {
             progress: 0,
             blocked: false,
             summary: "Starting".to_owned(),
+            bridged,
         };
     });
 
