@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "En son sürüm",
   "home.hero.title": "İnternetsiz çalışan mesajlaşma.",
   "home.hero.body":
-    "Yakındaki telefonlar bir Bluetooth mesh ağı kurar ve mesajlarınızı uçtan uca şifreli olarak yedi sekmeye kadar iletir. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Yakındaki telefonlar bir Bluetooth mesh ağı kurar ve mesajlarınızı uçtan uca şifreli olarak iletir. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Sunucu yok",
   "home.hero.body.no_accounts": "hesap yok",
   "home.hero.body.no_tracking": "takip yok",

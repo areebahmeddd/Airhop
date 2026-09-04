@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "უახლესი გამოშვება",
   "home.hero.title": "შეტყობინებები, რომლებიც ინტერნეტის გარეშე მუშაობს.",
   "home.hero.body":
-    "ახლომდებარე ტელეფონები ბლუთუზ-მეშს ქმნიან და თქვენს შეტყობინებებს შვიდ ბიჯამდე გადასცემენ, ბოლოდან ბოლომდე დაშიფრულად. {no_servers}, {no_accounts}, {no_tracking}.",
+    "ახლომდებარე ტელეფონები ბლუთუზ-მეშს ქმნიან და თქვენს შეტყობინებებს ბოლოდან ბოლომდე დაშიფრულად გადასცემენ. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "სერვერების გარეშე",
   "home.hero.body.no_accounts": "ანგარიშების გარეშე",
   "home.hero.body.no_tracking": "თვალყურის დევნების გარეშე",

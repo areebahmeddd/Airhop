@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "آخرین نسخه",
   "home.hero.title": "پیام‌رسانی که بدون اینترنت کار می‌کند.",
   "home.hero.body":
-    "گوشی‌های نزدیک یک شبکهٔ مش Bluetooth می‌سازند و پیام‌های شما را تا هفت پرش جابه‌جا می‌کنند، با رمزنگاری سرتاسری. {no_servers}، {no_accounts}، {no_tracking}.",
+    "گوشی‌های نزدیک یک شبکهٔ مش Bluetooth می‌سازند و پیام‌های شما را جابه‌جا می‌کنند، با رمزنگاری سرتاسری. {no_servers}، {no_accounts}، {no_tracking}.",
   "home.hero.body.no_servers": "بدون سرور",
   "home.hero.body.no_accounts": "بدون حساب کاربری",
   "home.hero.body.no_tracking": "بدون ردیابی",

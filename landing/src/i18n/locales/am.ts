@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "የቅርብ ጊዜ ልቀት",
   "home.hero.title": "ያለ ኢንተርኔት የሚሠራ የመልእክት ልውውጥ።",
   "home.hero.body":
-    "በአቅራቢያ ያሉ ስልኮች የ Bluetooth መረብ ይመሠርታሉ፤ መልእክቶችዎን እስከ ሰባት ዝላይ ድረስ ከጫፍ እስከ ጫፍ ተመስጥረው ያስተላልፋሉ። {no_servers}፣ {no_accounts}፣ {no_tracking}።",
+    "በአቅራቢያ ያሉ ስልኮች የ Bluetooth መረብ ይመሠርታሉ፤ መልእክቶችዎን ከጫፍ እስከ ጫፍ ተመስጥረው ያስተላልፋሉ። {no_servers}፣ {no_accounts}፣ {no_tracking}።",
   "home.hero.body.no_servers": "አገልጋዮች የሉም",
   "home.hero.body.no_accounts": "መለያዎች የሉም",
   "home.hero.body.no_tracking": "ክትትል የለም",

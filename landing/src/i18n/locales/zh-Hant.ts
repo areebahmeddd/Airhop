@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "最新版本",
   "home.hero.title": "沒有網路也能用的即時通訊。",
   "home.hero.body":
-    "附近的手機組成 Bluetooth 網狀網路，以端對端加密將你的訊息轉送最多七跳。{no_servers}、{no_accounts}、{no_tracking}。",
+    "附近的手機組成 Bluetooth 網狀網路，以端對端加密轉送你的訊息。{no_servers}、{no_accounts}、{no_tracking}。",
   "home.hero.body.no_servers": "沒有伺服器",
   "home.hero.body.no_accounts": "沒有帳號",
   "home.hero.body.no_tracking": "沒有追蹤",

@@ -41,7 +41,7 @@ export const strings = {
   "home.hero.release": "Latest release",
   "home.hero.title": "Messaging that works without the internet.",
   "home.hero.body":
-    "Nearby phones form a Bluetooth mesh and relay your messages up to seven hops, end to end encrypted. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Nearby phones form a Bluetooth mesh and relay your messages, end to end encrypted. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "No servers",
   "home.hero.body.no_accounts": "no accounts",
   "home.hero.body.no_tracking": "no tracking",

@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "أحدث إصدار",
   "home.hero.title": "مراسلة تعمل بلا إنترنت.",
   "home.hero.body":
-    "الهواتف القريبة تكوّن شبكة Bluetooth متشابكة وتنقل رسائلك حتى سبع قفزات، مشفّرة من طرف إلى طرف. {no_servers}، {no_accounts}، {no_tracking}.",
+    "الهواتف القريبة تكوّن شبكة Bluetooth متشابكة وتنقل رسائلك مشفّرة من طرف إلى طرف. {no_servers}، {no_accounts}، {no_tracking}.",
   "home.hero.body.no_servers": "بلا خوادم",
   "home.hero.body.no_accounts": "بلا حسابات",
   "home.hero.body.no_tracking": "بلا تتبّع",

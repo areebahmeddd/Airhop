@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "최신 릴리스",
   "home.hero.title": "인터넷 없이도 되는 메시징.",
   "home.hero.body":
-    "가까운 휴대폰들이 Bluetooth 메시를 이루어, 종단 간 암호화된 상태로 최대 일곱 홉까지 메시지를 전달합니다. {no_servers}, {no_accounts}, {no_tracking}.",
+    "가까운 휴대폰들이 Bluetooth 메시를 이루어, 종단 간 암호화된 상태로 메시지를 전달합니다. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "서버 없음",
   "home.hero.body.no_accounts": "계정 없음",
   "home.hero.body.no_tracking": "추적 없음",

@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "नवीनतम रिलीज़",
   "home.hero.title": "ऐसी मैसेजिंग जो इंटरनेट के बिना चलती है।",
   "home.hero.body":
-    "आसपास के फ़ोन मिलकर एक Bluetooth मेश बनाते हैं और आपके संदेश सात हॉप तक आगे पहुँचाते हैं, एंड-टू-एंड एन्क्रिप्टेड। {no_servers}, {no_accounts}, {no_tracking}।",
+    "आसपास के फ़ोन मिलकर एक Bluetooth मेश बनाते हैं और आपके संदेश आगे पहुँचाते हैं, एंड-टू-एंड एन्क्रिप्टेड। {no_servers}, {no_accounts}, {no_tracking}।",
   "home.hero.body.no_servers": "कोई सर्वर नहीं",
   "home.hero.body.no_accounts": "कोई खाता नहीं",
   "home.hero.body.no_tracking": "कोई ट्रैकिंग नहीं",

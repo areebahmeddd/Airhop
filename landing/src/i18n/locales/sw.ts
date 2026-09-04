@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Toleo jipya zaidi",
   "home.hero.title": "Ujumbe unaofanya kazi bila intaneti.",
   "home.hero.body":
-    "Simu zilizo karibu huunda mtandao wa mesh wa Bluetooth na kupitisha ujumbe wako hadi hatua saba, umefichwa kutoka mwanzo hadi mwisho. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Simu zilizo karibu huunda mtandao wa mesh wa Bluetooth na kupitisha ujumbe wako, umefichwa kutoka mwanzo hadi mwisho. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Hakuna seva",
   "home.hero.body.no_accounts": "hakuna akaunti",
   "home.hero.body.no_tracking": "hakuna ufuatiliaji",

@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Famoahana farany",
   "home.hero.title": "Hafatra mandeha tsy misy Internet.",
   "home.hero.body":
-    "Miforona harato Bluetooth ny findy akaiky ary mampita ny hafatrao hatramin'ny dingana fito, voafono tanteraka. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Miforona harato Bluetooth ny findy akaiky ary mampita ny hafatrao, voafono tanteraka. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Tsy misy mpizara",
   "home.hero.body.no_accounts": "tsy misy kaonty",
   "home.hero.body.no_tracking": "tsy misy fanarahan-dia",

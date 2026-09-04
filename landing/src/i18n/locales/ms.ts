@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Keluaran terkini",
   "home.hero.title": "Pemesejan yang berfungsi tanpa internet.",
   "home.hero.body":
-    "Telefon berdekatan membentuk rangkaian mesh Bluetooth dan menyampaikan mesej anda sehingga tujuh lompatan, disulitkan hujung ke hujung. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Telefon berdekatan membentuk rangkaian mesh Bluetooth dan menyampaikan mesej anda, disulitkan hujung ke hujung. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Tiada pelayan",
   "home.hero.body.no_accounts": "tiada akaun",
   "home.hero.body.no_tracking": "tiada penjejakan",

@@ -284,79 +284,59 @@ jobs:
             dist/airhop.aab.intoto.jsonl
           if-no-files-found: error
           retention-days: 90
-
-  # Placeholder for the future iOS release pipeline.
-  # Requires macos-26, fastlane, and Apple signing credentials.
-  #
-  # fastlane manages signing, archiving, and TestFlight upload.
-  # setup_ci provisions an ephemeral CI keychain for code signing.
-  #
-  # Remaining setup:
-  # - Add the repository secrets listed below.
-  # - Add the fastlane configuration (Fastfile, Appfile, and Gemfile).
-  # - Register the app in App Store Connect.
-  #
-  # Secrets:
-  #   APPLE_TEAM_ID
-  #   APPLE_CERT_P12_BASE64
-  #   APPLE_CERT_PASSWORD
-  #   APPLE_PROVISIONING_PROFILE
-  #   APPSTORE_ISSUER_ID
-  #   APPSTORE_KEY_ID
-  #   APPSTORE_PRIVATE_KEY
-  #
-  # ios-release:
-  #   name: iOS Release
-  #   runs-on: macos-26
-  #   timeout-minutes: 45
-  #   needs: release
-  #
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  #       with:
-  #         ref: ${{ needs.release.outputs.tag }}
-  #
-  #     - name: Update app version from tag
-  #       env:
-  #         VERSION: ${{ needs.release.outputs.version }}
-  #       run: |
-  #         set -euo pipefail
-  #         IOS_BUILD=$(( ${VERSION%%.*} * 10000 \
-  #           + $(echo "${VERSION}" | cut -d. -f2) * 100 \
-  #           + $(echo "${VERSION}" | cut -d. -f3) ))
-  #         sed -i '' -E "s/(MARKETING_VERSION = )[^;]*(;)/\1${VERSION}\2/" ios/Airhop.xcodeproj/project.pbxproj
-  #         sed -i '' -E "s/(CURRENT_PROJECT_VERSION = )[^;]*(;)/\1${IOS_BUILD}\2/" ios/Airhop.xcodeproj/project.pbxproj
-  #         grep -q "MARKETING_VERSION = ${VERSION};" ios/Airhop.xcodeproj/project.pbxproj
-  #         grep -q "CURRENT_PROJECT_VERSION = ${IOS_BUILD};" ios/Airhop.xcodeproj/project.pbxproj
-  #
-  #     - name: Set up JavaScript toolchain
-  #       uses: ./.github/actions/setup-js
-  #
-  #     - name: Install CocoaPods dependencies
-  #       run: npx pod-install
-  #
-  #     - name: Install fastlane
-  #       run: bundle install
-  #
-  #     - name: Build and upload to TestFlight
-  #       env:
-  #         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-  #         APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
-  #         APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
-  #         APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
-  #         APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-  #         APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
-  #         APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
-  #       run: bundle exec fastlane ios release
-  #
-  #     - name: Upload IPA as build artifact
-  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  #       with:
-  #         name: airhop-testflight-ipa
-  #         path: ios/build/Airhop.ipa
-  #         if-no-files-found: error
-  #         retention-days: 90
+ 
+  ios-release:
+    name: iOS Release
+    runs-on: macos-26
+    timeout-minutes: 45
+    needs: release
+  
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+  
+      - name: Update app version from tag
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          IOS_BUILD=$(( ${VERSION%%.*} * 10000 \
+            + $(echo "${VERSION}" | cut -d. -f2) * 100 \
+            + $(echo "${VERSION}" | cut -d. -f3) ))
+          sed -i '' -E "s/(MARKETING_VERSION = )[^;]*(;)/\1${VERSION}\2/" ios/Airhop.xcodeproj/project.pbxproj
+          sed -i '' -E "s/(CURRENT_PROJECT_VERSION = )[^;]*(;)/\1${IOS_BUILD}\2/" ios/Airhop.xcodeproj/project.pbxproj
+          grep -q "MARKETING_VERSION = ${VERSION};" ios/Airhop.xcodeproj/project.pbxproj
+          grep -q "CURRENT_PROJECT_VERSION = ${IOS_BUILD};" ios/Airhop.xcodeproj/project.pbxproj
+  
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
+  
+      - name: Install CocoaPods dependencies
+        run: npx pod-install
+  
+      - name: Install fastlane
+        run: bundle install
+  
+      - name: Build and upload to TestFlight
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: bundle exec fastlane ios release
+  
+      - name: Upload IPA as build artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: airhop-testflight-ipa
+          path: ios/build/Airhop.ipa
+          if-no-files-found: error
+          retention-days: 90
 
   sbom:
     name: Generate SBOM
