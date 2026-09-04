@@ -81,6 +81,17 @@ cbindgen --config "$SCRIPT_DIR/cbindgen.toml" \
 grep -q "airhop_tor_start" "$BUILD_DIR/include/arti.h" \
   || fail "cbindgen produced a header with no entry points"
 
+# ---- Test -----------------------------------------------------------------
+#
+# The same step build-android.sh runs, so a client that cannot start is caught on
+# whichever platform is built first rather than on a phone.
+
+info "Running the crate's tests on the host"
+(
+  cd "$SCRIPT_DIR"
+  cargo test --locked
+)
+
 # ---- Build ----------------------------------------------------------------
 
 # Rust's llvm-nm can read the LLVM bitcode embedded by the matching Rust toolchain.

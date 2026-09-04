@@ -281,48 +281,6 @@ export default function ConnectivityGroup({
           }
         />
         <GroupDivider />
-        {/* A drill-in, not a switch. Tor carries a second choice, how it
-            reaches the network, and a row that both toggles and navigates is
-            two controls in one place. The value keeps the answer visible
-            without opening the screen. */}
-        <SettingLinkRow
-          icon="globe"
-          label={T("settings.conn.tor")}
-          description={T("settings.conn.tor_desc")}
-          control={<Text style={styles.settingValue}>{torSummary()}</Text>}
-          onPress={onOpenTor}
-        />
-        {/* iOS only, and the reason is a platform limit rather than a policy.
-            There, Tor is wired into the Nostr WebSocket alone, so a Cashu mint
-            request is a plain fetch that would bypass it entirely and hand the
-            mint this device's IP alongside the proofs being swapped. Rather
-            than leak silently, mint calls are refused while Tor is on unless
-            the user opts in here.
-
-            Android needs no such switch. The proxy is installed into the HTTP
-            client every socket is built from, so mint traffic is already
-            covered by the Tor toggle itself and there is nothing to opt into.
-
-            No confirm sheet on this one: it only appears while Tor is on, it
-            is a qualifier on the row above rather than a feature of its own,
-            and its description already states both sides. */}
-        {Platform.OS === "ios" && torEnabled && (
-          <>
-            <GroupDivider />
-            <SettingRow
-              icon="alert-triangle"
-              label={T("settings.conn.mint_clearnet")}
-              description={T("settings.conn.mint_clearnet_desc")}
-              control={
-                <SettingSwitch
-                  value={allowMintOverClearnet}
-                  onValueChange={setAllowMintOverClearnet}
-                />
-              }
-            />
-          </>
-        )}
-        <GroupDivider />
         <SettingRow
           icon="git-merge"
           label={T("settings.conn.bridge")}
@@ -362,14 +320,10 @@ export default function ConnectivityGroup({
           </>
         )}
         <GroupDivider />
-        {/* Last in the box: the only row whose switch buys nothing for the
-            phone holding it, since the gateway spends your data and battery so
-            somebody else's phone can reach the channels.
-
-            "cast", not "radio": the hub's own Network & Relays row is a radio
-            tower, and two rows a thumb apart wearing the same glyph read as the
-            same subject. A gateway is a phone handing its connection to another
-            phone beside it, which is what cast draws. */}
+        {/* Last of the switches, and the only one that buys the phone holding
+            it nothing: it spends your data and battery so another phone can
+            reach the channels. "cast" rather than "radio", which the hub's own
+            Network & Relays row already wears. */}
         <SettingRow
           icon="cast"
           label={T("settings.conn.gateway")}
@@ -382,6 +336,38 @@ export default function ConnectivityGroup({
             />
           }
         />
+        <GroupDivider />
+        {/* Closes the group, below the switches rather than among them: it is
+            the one row that drills in, and Tor qualifies how everything above
+            reaches the internet rather than being another thing to turn on.
+            The value keeps the answer visible without opening the screen. */}
+        <SettingLinkRow
+          icon="globe"
+          label={T("settings.conn.tor")}
+          description={T("settings.conn.tor_desc")}
+          control={<Text style={styles.settingValue}>{torSummary()}</Text>}
+          onPress={onOpenTor}
+        />
+        {/* iOS only, a platform limit rather than a policy: Tor there wraps
+            the Nostr socket alone, so a mint request would bypass it and hand
+            the mint this device's IP. Refused unless opted in. Android proxies
+            every socket, so it has nothing to opt into. */}
+        {Platform.OS === "ios" && torEnabled && (
+          <>
+            <GroupDivider />
+            <SettingRow
+              icon="alert-triangle"
+              label={T("settings.conn.mint_clearnet")}
+              description={T("settings.conn.mint_clearnet_desc")}
+              control={
+                <SettingSwitch
+                  value={allowMintOverClearnet}
+                  onValueChange={setAllowMintOverClearnet}
+                />
+              }
+            />
+          </>
+        )}
       </View>
 
       {/* The one confirm sheet, shared by all four switches in both

@@ -3,7 +3,6 @@ import { useRichText } from "@/i18n/rich-text";
 import { REPO_LINKS, STORE_LINKS } from "@/lib/links";
 import {
   ArrowRight,
-  Boxes,
   ChevronDown,
   Download,
   Globe,
@@ -12,6 +11,7 @@ import {
   Play,
   Smartphone,
   Terminal,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -47,10 +47,10 @@ const DOWNLOAD_GROUPS: DownloadGroup[] = [
         href: STORE_LINKS.playStore,
       },
       {
-        label: "F-Droid",
-        descriptionKey: "home.hero.option.f_droid",
-        icon: Boxes,
-        href: STORE_LINKS.fDroid,
+        label: "Zapstore",
+        descriptionKey: "home.hero.option.zapstore",
+        icon: Zap,
+        href: STORE_LINKS.zapstore,
       },
       {
         label: "APK",

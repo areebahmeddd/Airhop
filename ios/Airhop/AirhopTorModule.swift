@@ -52,8 +52,16 @@ final class AirhopTorModule: RCTEventEmitter {
         Task { @MainActor in
             let manager = AirhopTorManager.shared
             manager.enableAutoStart(bridgeLines: bridgeLines as String)
-            manager.startIfNeeded()
-            resolve(nil)
+            // Resolved from the completion so the promise means "the native
+            // client answered", as it does on Android. tor-routing.ts holds its
+            // start marker across exactly this window.
+            manager.startIfNeeded { started in
+                if started {
+                    resolve(nil)
+                } else {
+                    reject("tor_start_failed", "the Tor client did not start", nil)
+                }
+            }
         }
     }
 

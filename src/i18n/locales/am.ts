@@ -1676,6 +1676,7 @@ export const strings: Strings = {
     "Tor ለመገናኘት ከአንድ ደቂቃ በላይ እየወሰደ ነው። በርቶ ይቀጥላል፤ መሞከሩንም ይቀጥላል፤ የሜሽ ትሩ መቼ እያመራ እንደሆነ ወይም ይህ አውታረ መረብ እያገደው እንደሆነ ይነግርሃል።",
   "settings.conn.tor_failed":
     "Tor ሊጀመር አልቻለም። መተግበሪያው የአውታረ መረብ መዳረሻ እንዳለው አረጋግጥ።",
+  "settings.tor.status": "የTor ሁኔታ",
   "settings.tor.connection": "ግንኙነት",
   "settings.tor.mode_off": "ቀጥታ",
   "settings.tor.mode_off_desc":
@@ -1683,14 +1684,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Tor እንደሚጠቀሙ ይደብቃል፣ እና ድልድዮች በታገዱበት ቦታም ይሠራል። ለመገናኘት በጣም ቀርፋፋ።",
-  "settings.tor.mode_obfs4": "ድልድይ",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Tor እንደሚጠቀሙ ይደብቃል። ከ Snowflake ይፈጥናል፣ ግን እነዚህ ድልድዮች ይፋዊ ናቸው እና አንዳንድ አውታረ መረቦች ያግዷቸዋል።",
   "settings.tor.mode_custom": "ብጁ ድልድዮች",
   "settings.tor.mode_custom_desc":
     "ከ bridges.torproject.org ያገኟቸውን ድልድዮች ይጠቀሙ። ሌሎቹ ሲወድቁ ይህን ይሞክሩ።",
   "settings.tor.custom_placeholder": "በአንድ መስመር አንድ የድልድይ መስመር ይለጥፉ",
+  "settings.tor.custom_apply_hint": "ለመገናኘት ከሳጥኑ ውጭ ይንኩ።",
   "settings.tor.custom_empty": "መጀመሪያ ቢያንስ አንድ የድልድይ መስመር ያክሉ።",
+  "settings.tor.recovered":
+    "መተግበሪያው እንዳይጀምር ስላደረገ Tor ጠፍቷል። እንደገና ለመሞከር መልሰው ያብሩት።",
   "settings.conn.mint_clearnet": "የሚንት ትራፊክ በክፍት አውታረ መረብ ላይ ይፈቀድ",
   "settings.conn.mint_clearnet_desc":
     "በiOS ላይ Tor የሚሸፍነው Nostr ን ብቻ ነው። የሚንት ጥያቄዎችን ለማገድ አጥፍተህ ተወው፤ በሁለቱም መንገድ በሜሽ ላይ ecash መሥራቱን ይቀጥላል።",

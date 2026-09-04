@@ -1779,6 +1779,7 @@ export const strings: Strings = {
     "Tor ਨੂੰ ਜੁੜਨ ਵਿੱਚ ਇੱਕ ਮਿੰਟ ਤੋਂ ਵੱਧ ਲੱਗ ਰਿਹਾ ਹੈ। ਇਹ ਚਾਲੂ ਰਹਿੰਦਾ ਹੈ ਅਤੇ ਕੋਸ਼ਿਸ਼ ਕਰਦਾ ਰਹਿੰਦਾ ਹੈ; ਮੈਸ਼ ਟੈਬ ਦੱਸ ਦੇਵੇਗਾ ਕਿ ਇਹ ਕਦੋਂ ਰਾਊਟ ਕਰ ਰਿਹਾ ਹੈ, ਜਾਂ ਜੇ ਇਹ ਨੈੱਟਵਰਕ ਇਸ ਨੂੰ ਰੋਕ ਰਿਹਾ ਹੈ।",
   "settings.conn.tor_failed":
     "Tor ਸ਼ੁਰੂ ਨਹੀਂ ਹੋ ਸਕਿਆ। ਪੱਕਾ ਕਰੋ ਕਿ ਐਪ ਕੋਲ ਨੈੱਟਵਰਕ ਦੀ ਪਹੁੰਚ ਹੈ।",
+  "settings.tor.status": "Tor ਸਥਿਤੀ",
   "settings.tor.connection": "ਕਨੈਕਸ਼ਨ",
   "settings.tor.mode_off": "ਸਿੱਧਾ",
   "settings.tor.mode_off_desc":
@@ -1786,14 +1787,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "ਲੁਕਾਉਂਦਾ ਹੈ ਕਿ ਤੁਸੀਂ Tor ਵਰਤ ਰਹੇ ਹੋ, ਅਤੇ ਜਿੱਥੇ ਬ੍ਰਿਜ ਬੰਦ ਹਨ ਉੱਥੇ ਵੀ ਚੱਲਦਾ ਹੈ। ਜੁੜਨ ਵਿੱਚ ਸਭ ਤੋਂ ਹੌਲੀ।",
-  "settings.tor.mode_obfs4": "ਬ੍ਰਿਜ",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "ਲੁਕਾਉਂਦਾ ਹੈ ਕਿ ਤੁਸੀਂ Tor ਵਰਤ ਰਹੇ ਹੋ। Snowflake ਤੋਂ ਤੇਜ਼, ਪਰ ਇਹ ਬ੍ਰਿਜ ਜਨਤਕ ਹਨ ਅਤੇ ਕੁਝ ਨੈੱਟਵਰਕ ਇਨ੍ਹਾਂ ਨੂੰ ਰੋਕਦੇ ਹਨ।",
   "settings.tor.mode_custom": "ਆਪਣੇ ਬ੍ਰਿਜ",
   "settings.tor.mode_custom_desc":
     "bridges.torproject.org ਤੋਂ ਲਏ ਬ੍ਰਿਜ ਵਰਤੋ। ਬਾਕੀ ਨਾ ਚੱਲਣ ਤਾਂ ਇਹ ਅਜ਼ਮਾਓ।",
   "settings.tor.custom_placeholder": "ਹਰ ਲਾਈਨ ਵਿੱਚ ਇੱਕ ਬ੍ਰਿਜ ਲਾਈਨ ਚਿਪਕਾਓ",
+  "settings.tor.custom_apply_hint": "ਕਨੈਕਟ ਕਰਨ ਲਈ ਬਾਕਸ ਤੋਂ ਬਾਹਰ ਟੈਪ ਕਰੋ।",
   "settings.tor.custom_empty": "ਪਹਿਲਾਂ ਘੱਟੋ-ਘੱਟ ਇੱਕ ਬ੍ਰਿਜ ਲਾਈਨ ਸ਼ਾਮਲ ਕਰੋ।",
+  "settings.tor.recovered":
+    "Tor ਬੰਦ ਕਰ ਦਿੱਤਾ ਗਿਆ ਕਿਉਂਕਿ ਇਸ ਨਾਲ ਐਪ ਚਾਲੂ ਨਹੀਂ ਹੋ ਰਹੀ ਸੀ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰਨ ਲਈ ਇਸਨੂੰ ਫਿਰ ਚਾਲੂ ਕਰੋ।",
   "settings.conn.mint_clearnet": "ਮਿੰਟ ਦੀ ਆਵਾਜਾਈ ਖੁੱਲ੍ਹੇ ਨੈੱਟ ’ਤੇ ਜਾਣ ਦਿਓ",
   "settings.conn.mint_clearnet_desc":
     "iOS ’ਤੇ Tor ਸਿਰਫ਼ Nostr ਨੂੰ ਢਕਦਾ ਹੈ। ਮਿੰਟ ਦੀਆਂ ਬੇਨਤੀਆਂ ਰੋਕਣ ਲਈ ਇਸ ਨੂੰ ਬੰਦ ਰਹਿਣ ਦਿਓ; ਮੈਸ਼ ’ਤੇ ecash ਕਿਸੇ ਵੀ ਹਾਲਤ ਵਿੱਚ ਚੱਲਦਾ ਰਹਿੰਦਾ ਹੈ।",

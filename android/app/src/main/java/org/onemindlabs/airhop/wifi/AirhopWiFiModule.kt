@@ -205,6 +205,11 @@ class AirhopWiFiModule(
     // Active bidirectional socket links. Key = linkID (generated on connect).
     private val links = ConcurrentHashMap<String, LinkState>()
     private val linkCounter = AtomicInteger(0)
+
+    // Which set of sessions is current. Bumped by teardown, so one we closed
+    // ourselves is told apart from one dropped under us: both arrive as the same
+    // callback, and only the second is a reason to re-attach.
+    private val sessionGeneration = AtomicInteger(0)
     private val ioExecutor = Executors.newCachedThreadPool()
 
     // Every registered network callback, so stopWiFi and invalidate can hand
@@ -295,9 +300,21 @@ class AirhopWiFiModule(
 
         localToken = ByteArray(TOKEN_BYTES).also { SecureRandom().nextBytes(it) }
 
+        val generation = sessionGeneration.get()
         try {
             manager.attach(object : AttachCallback() {
                 override fun onAttached(session: WifiAwareSession) {
+                    // Stopped while the attach was in flight. Adopting it now
+                    // leaves a live Aware session publishing behind a module
+                    // that believes it holds none.
+                    if (generation != sessionGeneration.get()) {
+                        session.close()
+                        promise.reject(
+                            "WIFI_AWARE_UNAVAILABLE",
+                            "Stopped while attaching",
+                        )
+                        return
+                    }
                     Log.d(TAG, "WiFi Aware attached")
                     // Re-checked rather than relied on from the guard above:
                     // lint cannot follow an API level check across a callback
@@ -374,6 +391,7 @@ class AirhopWiFiModule(
     // Shared by stopWiFi and invalidate. Ordered so nothing is left holding a
     // resource that outlives the thing that would have released it.
     private fun teardown() {
+        sessionGeneration.incrementAndGet()
         for (callback in networkCallbacks) {
             runCatching { connectivityManager.unregisterNetworkCallback(callback) }
         }
@@ -449,6 +467,24 @@ class AirhopWiFiModule(
     // SecurityException the attach path checks is the rarer case.
     private fun reportDiscoveryRefused(which: String) {
         Log.e(TAG, "WiFi Aware $which config refused")
+        reportUnavailable()
+    }
+
+    // The framework tore a discovery session down under us, which it does not
+    // report as the radio becoming unavailable. Nothing else notices: the attach
+    // handle stays healthy with nothing published or subscribed behind it, so
+    // every later start resolves at once having done nothing. Samsungs reach it
+    // by toggling Bluetooth, which shares a chip with Aware.
+    //
+    // Ignored once the generation has moved, since teardown closes these
+    // sessions itself and gets the same callback for it.
+    private fun reportSessionTerminated(which: String, generation: Int) {
+        if (generation != sessionGeneration.get()) return
+        Log.w(TAG, "WiFi Aware $which session terminated by the framework")
+        reportUnavailable()
+    }
+
+    private fun reportUnavailable() {
         teardown()
         lastReportedAvailable = false
         emitEvent(EVT_AVAILABILITY_CHANGED, WritableNativeMap().apply {
@@ -583,6 +619,7 @@ class AirhopWiFiModule(
             .setServiceSpecificInfo(localToken)
             .build()
 
+        val generation = sessionGeneration.get()
         try {
             session.publish(config, object : DiscoverySessionCallback() {
                 override fun onSessionConfigFailed() {
@@ -595,8 +632,8 @@ class AirhopWiFiModule(
                 }
 
                 override fun onSessionTerminated() {
-                    Log.d(TAG, "Publish session terminated")
                     publishSession = null
+                    reportSessionTerminated("publish", generation)
                 }
 
                 override fun onMessageReceived(peerHandle: PeerHandle, message: ByteArray) {
@@ -631,6 +668,7 @@ class AirhopWiFiModule(
             .setServiceName(SERVICE_NAME)
             .build()
 
+        val generation = sessionGeneration.get()
         try {
             session.subscribe(config, object : DiscoverySessionCallback() {
                 override fun onSessionConfigFailed() {
@@ -681,12 +719,12 @@ class AirhopWiFiModule(
                 }
 
                 override fun onSessionTerminated() {
-                    Log.d(TAG, "Subscribe session terminated")
                     subscribeSession = null
-                    dialledPeers.clear()
                     // Both hold handles from the session that just ended, and a
                     // fresh one issues fresh handles for the same peers.
+                    dialledPeers.clear()
                     initiatedPeers.clear()
+                    reportSessionTerminated("subscribe", generation)
                 }
             }, null)
             return true

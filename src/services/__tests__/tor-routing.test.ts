@@ -56,6 +56,13 @@ const mockSetTorEnabled = jest.fn((next: boolean) => {
   mockTorEnabled = next;
 });
 
+// Tracked rather than stubbed: the launch path reads this back, so a mock that
+// forgets the value cannot exercise the recovery at all.
+let mockTorStartPending = false;
+const mockSetTorStartPending = jest.fn((next: boolean) => {
+  mockTorStartPending = next;
+});
+
 let torStatusListener: ((s: unknown) => void) | null = null;
 const mockRemoveListener = jest.fn();
 
@@ -136,6 +143,10 @@ jest.mock("@store/settings-store", () => ({
       },
       setTorBridgeMode: mockSetTorBridgeMode,
       setTorBridgeLines: mockSetTorBridgeLines,
+      get torStartPending() {
+        return mockTorStartPending;
+      },
+      setTorStartPending: mockSetTorStartPending,
     }),
   },
 }));
@@ -167,6 +178,7 @@ beforeEach(async () => {
   mockBridgeMode = "off";
   mockBridgeLines = "";
   mockNostrBlocked = false;
+  mockTorStartPending = false;
   mockStartTor.mockResolvedValue(undefined);
   mockStopTor.mockResolvedValue(undefined);
   mockAwaitTorReady.mockResolvedValue(true);
@@ -288,6 +300,83 @@ describe("disabling Tor on Android", () => {
     await setTorRouting(false);
 
     expect(enabledWhenStopped).toBe(false);
+  });
+});
+
+// The marker that keeps a broken Tor client from making Airhop unopenable.
+//
+// `torEnabled` is written before the native client exists so a relaunch during a
+// bootstrap comes back on Tor rather than on the clear net. Without the marker
+// that ordering replays a fatal native failure on every launch, and the user's
+// only way out is deleting their keys.
+describe("surviving a Tor client that kills the process", () => {
+  test("the start window is marked before the call and cleared after it", async () => {
+    mockTorEnabled = false;
+    let pendingDuringStart = false;
+    mockStartTor.mockImplementation(async () => {
+      pendingDuringStart = mockTorStartPending;
+    });
+
+    await setTorRouting(true);
+
+    expect(pendingDuringStart).toBe(true);
+    expect(mockTorStartPending).toBe(false);
+  });
+
+  test("a start that fails cleanly leaves no marker behind", async () => {
+    // A rejected start is a failure the app handled and survived. Left set, it
+    // would disable Tor on the next launch for a crash that never happened.
+    mockTorEnabled = false;
+    mockStartTor.mockRejectedValue(new Error("no library"));
+
+    await setTorRouting(true);
+
+    expect(mockTorStartPending).toBe(false);
+  });
+
+  test("a marker left by the previous process turns Tor off instead of retrying", () => {
+    mockTorEnabled = true;
+    mockTorStartPending = true;
+
+    primeTorRoutingOnStartup();
+
+    expect(mockStartTor).not.toHaveBeenCalled();
+    expect(mockTorEnabled).toBe(false);
+    // Kept, because it is what tells the Tor screen to explain itself. Reverting
+    // a privacy choice silently is the one outcome this must not produce.
+    expect(mockTorStartPending).toBe(true);
+  });
+
+  test("recovering leaves the internet half working rather than gated", () => {
+    mockTorEnabled = true;
+    mockTorStartPending = true;
+
+    primeTorRoutingOnStartup();
+
+    expect(mockSetTorBootstrap).toHaveBeenCalledWith("idle");
+    expect(mockSetNostrBlockedByTor).not.toHaveBeenCalledWith(true);
+    expect(isTorRoutingActive()).toBe(false);
+  });
+
+  test("turning Tor on again really tries again", async () => {
+    mockTorEnabled = true;
+    mockTorStartPending = true;
+    primeTorRoutingOnStartup();
+    jest.clearAllMocks();
+
+    await setTorRouting(true);
+
+    expect(mockStartTor).toHaveBeenCalledTimes(1);
+    expect(mockTorEnabled).toBe(true);
+    expect(mockTorStartPending).toBe(false);
+  });
+
+  test("turning Tor off clears a marker for a start that is no longer wanted", async () => {
+    mockTorStartPending = true;
+
+    await setTorRouting(false);
+
+    expect(mockTorStartPending).toBe(false);
   });
 });
 

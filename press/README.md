@@ -38,12 +38,12 @@ Copy lives in [lib/copy.mjs](lib/copy.mjs).
 out/
   screenshots/
     ios/{light,dark}/       1290x2796  App Store
-    android/{light,dark}/   1080x1920  Play and F-Droid
+    android/{light,dark}/   1080x1920  Play and Zapstore
   graphics/
     feature-graphic/{light,dark}/
       feature-graphic.png   1024x500   centred mark. Ship this one
       feature-graphic-device.png       alternate, carries a device
-    icon-512.png            512x512    Play and F-Droid
+    icon-512.png            512x512    Play and Zapstore
   social/{light,dark}/
     og-1200x630.png                    Open Graph, Twitter large card
     x-header-1500x500.png              X profile header
@@ -62,7 +62,8 @@ Ship one theme. Light is the default; dark is there if you want it.
 `supportsTablet` is `false` in `app.json`, so no iPad sizes are produced. Turn
 it on and add a 2064x2752 target to `PHONE_TARGETS` in [build.mjs](build.mjs).
 
-F-Droid wants the Android set under fastlane's filenames:
+Stores that read a fastlane tree want the Android set under fastlane's own
+filenames:
 
 ```bash
 node press/build.mjs --fastlane=./fastlane/metadata/android
@@ -198,11 +199,11 @@ Play Console
 - [ ] Declare nearby-devices and location, and why. Android requires location
       for BLE scanning; it is not used to locate anyone
 
-F-Droid
+Zapstore
 
 - [ ] Build with `--fastlane=<path to fastlane/metadata/android>`
 - [ ] `en-US/short_description.txt` and `en-US/full_description.txt`
-- [ ] F-Droid builds from source, so the listing follows a tagged release
+- [ ] Zapstore publishes from a tagged release, so the listing follows it
 
 Social
 

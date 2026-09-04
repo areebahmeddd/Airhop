@@ -48,7 +48,7 @@ class MainApplication : Application(), ReactApplication {
     // Installing the factory does not route anything through Tor. It only puts
     // the decision somewhere AirhopTorProxy can change later, and the default is
     // a direct connection, which is what a user with Tor off expects.
-    AirhopTorProxy.install()
+    AirhopTorProxy.install(this)
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {

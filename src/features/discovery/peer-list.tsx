@@ -1,9 +1,11 @@
 // Peer list screen: Mesh tab.
-// Shows nearby peers discovered via signed ANNOUNCE broadcasts, on either
-// the radar view (default) or a flat list. Tap a peer to open their detail
-// sheet (message / send sats), with no separate "add contact" step, since a
-// visible peer is already reachable. Peer data is populated from the BLE
-// service (wired in v0.7+).
+//
+// Everyone a signed ANNOUNCE has been heard from, on the radar (default) or a
+// flat list. One list whatever carried it: the store is fed by mesh-service,
+// which binds a peer to a link without recording which transport it was.
+//
+// Tapping a peer opens their detail sheet with no separate "add contact" step,
+// since a peer visible here is already reachable.
 
 import { Feather } from "@expo/vector-icons";
 import { t, useT, useTPlural } from "@i18n";

@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "சட்டம்",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "கட்டமைப்பு",
   "footer.link.blogs": "வலைப்பதிவு",
   "footer.link.faq": "அடிக்கடி கேட்கப்படும் கேள்விகள்",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT உரிமம் · இலவசம், திறந்த மூலம் · bitchat உடன் இணக்கம்",
   "home.hero.group.mobile": "கைபேசி",
   "home.hero.group.desktop": "கணினி",
-  "home.hero.option.f_droid": "திறந்த மூல பட்டியல்",
+  "home.hero.option.zapstore": "Nostr இல் கையொப்பமிடப்பட்டது",
   "home.hero.option.apk": "நேரடிப் பதிவிறக்கம்",
   "home.hero.option.soon": "விரைவில்",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "ஒவ்வொரு அமர்வும் சரிபார்க்கப்பட்ட கைகுலுக்கலுக்கு {noise} நெறிமுறையைப் பயன்படுத்துகிறது. சேமிக்கப்பட்ட செய்திகள் {ratchet} வழிமுறையைப் பயன்படுத்துகின்றன; அதாவது பிற்பாடு உங்கள் சாதனம் சமரசம் செய்யப்பட்டாலும், உங்கள் பழைய செய்திகள் படிக்க இயலாதவையாகவே இருக்கும். அவசர அழிப்பு அனைத்துச் சாவிகளையும் செய்திகளையும் ஒரு நொடிக்குள் அழிக்கிறது.",
   "home.about.body.internet":
-    "நீங்களும் உங்கள் தொடர்பும் Bluetooth எல்லைக்கு வெளியே இருக்கும்போது, {nostr} மறுபரப்பிகள் இணையம் வழியாகப் பாலமாகச் செயல்படுகின்றன; {nip17} வடிவில் பொதிந்த நேரடிச் செய்திகள் பயன்படுத்தப்படுகின்றன, எனவே இருவரும் இணையத்தில் இருக்கும்போது மெஷ் உலகளவில் விரிகிறது. {tor} ஆதரவு iOS மற்றும் Android இரண்டிலும் {arti} வழியாக உள்ளது.",
+    "நீங்களும் உங்கள் தொடர்பும் Bluetooth எல்லைக்கு வெளியே இருக்கும்போது, {nostr} மறுபரப்பிகள் இணையம் வழியாகப் பாலமாகச் செயல்படுகின்றன; {nip17} வடிவில் பொதிந்த நேரடிச் செய்திகள் பயன்படுத்தப்படுகின்றன, எனவே இருவரும் இணையத்தில் இருக்கும்போது மெஷ் உலகளவில் விரிகிறது. {tor} ஆதரவு iOS மற்றும் Android இரண்டிலும் {arti} வழியாக உள்ளது; Tor-ஐத் தடுக்கும் நெட்வொர்க்குகளுக்கு {obfs4} மற்றும் {snowflake} பாலங்களும் உள்ளன.",
   "home.about.optional.title": "Airhop இல் நீங்கள் இயக்கக்கூடிய விருப்ப அம்சங்கள் உள்ளன:",
   "home.about.optional.payments.label": "இணையமில்லா கட்டணங்கள்:",
   "home.about.optional.payments.body":

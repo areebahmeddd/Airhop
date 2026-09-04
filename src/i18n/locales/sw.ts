@@ -1825,6 +1825,7 @@ export const strings: Strings = {
     "Tor inachukua zaidi ya dakika moja kuunganisha. Inabaki imewashwa na inaendelea kujaribu; kichupo cha Mesh kitasema itakapokuwa inaelekeza, au kama mtandao huu unaizuia.",
   "settings.conn.tor_failed":
     "Tor haikuweza kuanza. Hakikisha programu ina ufikiaji wa mtandao.",
+  "settings.tor.status": "Hali ya Tor",
   "settings.tor.connection": "Muunganisho",
   "settings.tor.mode_off": "Moja kwa moja",
   "settings.tor.mode_off_desc":
@@ -1832,7 +1833,7 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Huficha kuwa unatumia Tor, na hufanya kazi hata pale madaraja yamezuiwa. Polepole zaidi kuunganisha.",
-  "settings.tor.mode_obfs4": "Daraja",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Huficha kuwa unatumia Tor. Haraka kuliko Snowflake, lakini madaraja haya ni ya umma na baadhi ya mitandao huyazuia.",
   "settings.tor.mode_custom": "Madaraja yako",
@@ -1840,7 +1841,10 @@ export const strings: Strings = {
     "Tumia madaraja uliyopata kutoka bridges.torproject.org. Jaribu hili pale mengine yanaposhindwa.",
   "settings.tor.custom_placeholder":
     "Bandika mstari mmoja wa daraja kwa kila mstari",
+  "settings.tor.custom_apply_hint": "Gusa nje ya kisanduku ili kuunganisha.",
   "settings.tor.custom_empty": "Ongeza angalau mstari mmoja wa daraja kwanza.",
+  "settings.tor.recovered":
+    "Tor imezimwa kwa sababu ilizuia programu isianze. Iwashe tena ili ujaribu upya.",
   "settings.conn.mint_clearnet": "Ruhusu trafiki ya mint kupitia mtandao wazi",
   "settings.conn.mint_clearnet_desc":
     "Tor kwenye iOS hufunika Nostr pekee. Iache imezimwa ili kuzuia maombi ya mint; ecash kupitia mesh huendelea kufanya kazi vyovyote vile.",

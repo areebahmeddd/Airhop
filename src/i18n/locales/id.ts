@@ -1810,6 +1810,7 @@ export const strings: Strings = {
     "Tor butuh lebih dari semenit untuk menyambung. Ia tetap menyala dan terus mencoba; tab Mesh akan memberi tahu saat perutean berjalan, atau kalau jaringan ini memblokirnya.",
   "settings.conn.tor_failed":
     "Tor tidak bisa dinyalakan. Pastikan aplikasi punya akses jaringan.",
+  "settings.tor.status": "Status Tor",
   "settings.tor.connection": "Koneksi",
   "settings.tor.mode_off": "Langsung",
   "settings.tor.mode_off_desc":
@@ -1817,14 +1818,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Menyembunyikan bahwa Anda memakai Tor, dan tetap bekerja di tempat bridge diblokir. Paling lambat terhubung.",
-  "settings.tor.mode_obfs4": "Bridge",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Menyembunyikan bahwa Anda memakai Tor. Lebih cepat dari Snowflake, tetapi bridge ini publik dan sebagian jaringan memblokirnya.",
   "settings.tor.mode_custom": "Bridge sendiri",
   "settings.tor.mode_custom_desc":
     "Pakai bridge dari bridges.torproject.org. Coba ini bila yang lain gagal.",
   "settings.tor.custom_placeholder": "Tempel satu baris bridge per baris",
+  "settings.tor.custom_apply_hint": "Ketuk di luar kotak untuk menyambung.",
   "settings.tor.custom_empty": "Tambahkan setidaknya satu baris bridge dahulu.",
+  "settings.tor.recovered":
+    "Tor dimatikan karena membuat aplikasi gagal dibuka. Aktifkan lagi untuk mencoba kembali.",
   "settings.conn.mint_clearnet":
     "Izinkan lalu lintas mint lewat jaringan terbuka",
   "settings.conn.mint_clearnet_desc":

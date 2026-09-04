@@ -1787,6 +1787,7 @@ export const strings: Strings = {
     "اتصال Tor بیش از یک دقیقه طول کشیده است. روشن می‌ماند و تلاش را ادامه می‌دهد؛ زبانهٔ مش خواهد گفت کِی مسیردهی برقرار شده، یا اینکه این شبکه جلویش را گرفته است.",
   "settings.conn.tor_failed":
     "Tor راه نیفتاد. مطمئن شوید برنامه به شبکه دسترسی دارد.",
+  "settings.tor.status": "وضعیت Tor",
   "settings.tor.connection": "اتصال",
   "settings.tor.mode_off": "مستقیم",
   "settings.tor.mode_off_desc":
@@ -1794,14 +1795,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "پنهان می‌کند که از Tor استفاده می‌کنید و جایی که پل‌ها مسدودند هم کار می‌کند. کندترین در اتصال.",
-  "settings.tor.mode_obfs4": "پل",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "پنهان می‌کند که از Tor استفاده می‌کنید. سریع‌تر از Snowflake، اما این پل‌ها عمومی‌اند و برخی شبکه‌ها آنها را مسدود می‌کنند.",
   "settings.tor.mode_custom": "پل‌های دلخواه",
   "settings.tor.mode_custom_desc":
     "از پل‌هایی که از bridges.torproject.org گرفته‌اید استفاده کنید. وقتی بقیه کار نکردند این را امتحان کنید.",
   "settings.tor.custom_placeholder": "در هر خط یک خط پل را بچسبانید",
+  "settings.tor.custom_apply_hint": "برای اتصال، بیرون کادر را لمس کنید.",
   "settings.tor.custom_empty": "ابتدا دست‌کم یک خط پل اضافه کنید.",
+  "settings.tor.recovered":
+    "Tor خاموش شد، چون مانع اجرای برنامه می‌شد. برای تلاش دوباره آن را روشن کنید.",
   "settings.conn.mint_clearnet": "اجازه به ترافیک ضراب‌خانه روی شبکهٔ باز",
   "settings.conn.mint_clearnet_desc":
     "Tor روی iOS تنها Nostr را پوشش می‌دهد. برای مسدود کردن درخواست‌های ضراب‌خانه خاموش بگذارید؛ در هر حال ecash روی مش کار می‌کند.",

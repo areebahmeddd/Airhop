@@ -1795,6 +1795,7 @@ export const strings: Strings = {
     "Tor'un bağlanması bir dakikadan uzun sürüyor. Açık kalır ve denemeyi sürdürür; Mesh sekmesi yönlendirmenin başladığını ya da bu ağın engellediğini söyleyecek.",
   "settings.conn.tor_failed":
     "Tor başlatılamadı. Uygulamanın ağ erişimi olduğundan emin ol.",
+  "settings.tor.status": "Tor durumu",
   "settings.tor.connection": "Bağlantı",
   "settings.tor.mode_off": "Doğrudan",
   "settings.tor.mode_off_desc":
@@ -1802,14 +1803,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Tor kullandığınızı gizler ve köprülerin engellendiği yerlerde de çalışır. Bağlanması en yavaş olan.",
-  "settings.tor.mode_obfs4": "Köprü",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Tor kullandığınızı gizler. Snowflake'ten hızlıdır, ancak bu köprüler herkese açıktır ve bazı ağlar engeller.",
   "settings.tor.mode_custom": "Kendi köprüleriniz",
   "settings.tor.mode_custom_desc":
     "bridges.torproject.org adresinden aldığınız köprüleri kullanın. Diğerleri işe yaramazsa bunu deneyin.",
   "settings.tor.custom_placeholder": "Her satıra bir köprü satırı yapıştırın",
+  "settings.tor.custom_apply_hint": "Bağlanmak için kutunun dışına dokunun.",
   "settings.tor.custom_empty": "Önce en az bir köprü satırı ekleyin.",
+  "settings.tor.recovered":
+    "Tor kapatıldı, çünkü uygulamanın açılmasını engelliyordu. Yeniden denemek için tekrar açın.",
   "settings.conn.mint_clearnet":
     "Darphane trafiğine açık ağ üzerinden izin ver",
   "settings.conn.mint_clearnet_desc":

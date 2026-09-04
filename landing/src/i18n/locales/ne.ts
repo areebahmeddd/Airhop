@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "कानुनी",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "संरचना",
   "footer.link.blogs": "ब्लग",
   "footer.link.faq": "बारम्बार सोधिने प्रश्न",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT इजाजतपत्र · निःशुल्क र खुला स्रोत · bitchat सँग मिल्ने",
   "home.hero.group.mobile": "मोबाइल",
   "home.hero.group.desktop": "डेस्कटप",
-  "home.hero.option.f_droid": "खुला स्रोत सूची",
+  "home.hero.option.zapstore": "Nostr मा हस्ताक्षरित",
   "home.hero.option.apk": "सिधा डाउनलोड",
   "home.hero.option.soon": "चाँडै आउँदै",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "हरेक सत्रले प्रमाणित ह्यान्डसेकका लागि {noise} प्रोटोकल प्रयोग गर्छ। भण्डारण गरिएका सन्देशहरूले {ratchet} एल्गोरिदम प्रयोग गर्छन्; अर्थात् पछि तपाईंको उपकरण जोखिममा परे पनि विगतका सन्देशहरू पढ्न नसकिने नै रहन्छन्। आपत्कालीन मेटाइले सबै साँचो र सन्देश एक सेकेन्डभित्रै नष्ट गर्छ।",
   "home.about.body.internet":
-    "तपाईं र तपाईंको सम्पर्क Bluetooth को पहुँचबाहिर हुँदा {nostr} रिलेहरूले इन्टरनेटमार्फत पुलको काम गर्छन्, र {nip17} ढाँचामा बेरिएका सिधा सन्देशहरू प्रयोग हुन्छन्; त्यसैले दुवै जना अनलाइन हुँदा मेस विश्वभर फैलिन्छ। {tor} को सहयोग iOS र Android दुवैमा {arti} मार्फत उपलब्ध छ।",
+    "तपाईं र तपाईंको सम्पर्क Bluetooth को पहुँचबाहिर हुँदा {nostr} रिलेहरूले इन्टरनेटमार्फत पुलको काम गर्छन्, र {nip17} ढाँचामा बेरिएका सिधा सन्देशहरू प्रयोग हुन्छन्; त्यसैले दुवै जना अनलाइन हुँदा मेस विश्वभर फैलिन्छ। {tor} को सहयोग iOS र Android दुवैमा {arti} मार्फत उपलब्ध छ, र Tor रोक्ने सञ्जालका लागि {obfs4} र {snowflake} ब्रिजहरू पनि छन्।",
   "home.about.optional.title": "Airhop मा तपाईंले चाहेमा खोल्न सकिने वैकल्पिक सुविधाहरू छन्:",
   "home.about.optional.payments.label": "अफलाइन भुक्तानी:",
   "home.about.optional.payments.body":

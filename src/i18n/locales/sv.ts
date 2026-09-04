@@ -1790,6 +1790,7 @@ export const strings: Strings = {
     "Tor tar mer än en minut på sig att ansluta. Det förblir påslaget och fortsätter försöka; Mesh-fliken säger till när trafiken dirigeras om, eller om nätverket blockerar det.",
   "settings.conn.tor_failed":
     "Tor kunde inte startas. Kontrollera att appen har nätverksåtkomst.",
+  "settings.tor.status": "Tor-status",
   "settings.tor.connection": "Anslutning",
   "settings.tor.mode_off": "Direkt",
   "settings.tor.mode_off_desc":
@@ -1797,14 +1798,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Döljer att du använder Tor och fungerar där bryggor är blockerade. Långsammast att ansluta.",
-  "settings.tor.mode_obfs4": "Brygga",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Döljer att du använder Tor. Snabbare än Snowflake, men dessa bryggor är offentliga och vissa nätverk blockerar dem.",
   "settings.tor.mode_custom": "Egna bryggor",
   "settings.tor.mode_custom_desc":
     "Använd bryggor från bridges.torproject.org. Prova detta när de andra inte fungerar.",
   "settings.tor.custom_placeholder": "Klistra in en bryggrad per rad",
+  "settings.tor.custom_apply_hint": "Tryck utanför rutan för att ansluta.",
   "settings.tor.custom_empty": "Lägg först till minst en bryggrad.",
+  "settings.tor.recovered":
+    "Tor stängdes av eftersom appen inte startade med det på. Slå på det igen för att försöka på nytt.",
   "settings.conn.mint_clearnet": "Tillåt mint-trafik över öppna nätet",
   "settings.conn.mint_clearnet_desc":
     "Tor på iOS täcker bara Nostr. Lämna av för att blockera mint-förfrågningar; ecash över meshen fungerar oavsett.",

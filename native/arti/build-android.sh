@@ -69,6 +69,21 @@ if [ "${1:-}" = "--clean" ]; then
   rm -rf "$SCRIPT_DIR/target"
 fi
 
+# ---- Test -----------------------------------------------------------------
+#
+# Before the ABIs: a client that cannot start is not worth cross compiling three
+# times. The checks after the build read the finished library rather than calling
+# it, so a crate that aborts on its first `start` passes every one of them.
+#
+# The dev profile, because cargo compiles test harnesses with unwinding whatever
+# the profile says.
+
+info "Running the crate's tests on the host"
+(
+  cd "$SCRIPT_DIR"
+  cargo test --locked
+)
+
 # ---- Build ----------------------------------------------------------------
 
 for target in "${!ABI_FOR_TARGET[@]}"; do

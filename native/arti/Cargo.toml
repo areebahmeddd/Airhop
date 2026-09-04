@@ -39,6 +39,25 @@ tor-rtcompat = { version = "0.46", default-features = false, features = [
     "rustls",
 ] }
 
+# The rustls cryptographic provider, chosen here because arti does not choose:
+# tor-rtcompat takes rustls with no provider feature and requires the
+# application to install one. With neither `ring` nor `aws-lc-rs` enabled
+# anywhere in the graph, rustls panics inside `TorClient::builder`.
+#
+# `ring` rather than the `aws-lc-rs` upstream recommends. aws-lc-rs would add a
+# hybrid post-quantum handshake, but needs cmake and libclang in the container
+# for three Android ABIs and two Apple slices; ring builds with the NDK clang
+# cargo-ndk already supplies and is in the graph anyway under rustls-webpki.
+#
+# lib.rs also calls `install_default` explicitly: feature unification is
+# something a later dependency change can undo silently.
+rustls = { version = "0.23", default-features = false, features = [
+    "ring",
+    "std",
+    "tls12",
+    "logging",
+] }
+
 tokio = { version = "1", default-features = false, features = [
     "rt-multi-thread",
     "net",
@@ -56,7 +75,10 @@ jni = "0.21"
 opt-level = "z"
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+# Unwinding, with every FFI entry point wrapped in `catch_panic` (lib.rs).
+# Aborting would take the mesh, the wallet and the courier store with it, none
+# of which depend on Tor. The unwind tables cost a little size.
+panic = "unwind"
 strip = "symbols"
 
 # Apple uses a staticlib, so rustc does not perform the final link or run LTO.

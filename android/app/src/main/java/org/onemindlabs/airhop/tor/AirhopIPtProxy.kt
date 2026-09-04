@@ -76,7 +76,9 @@ object AirhopIPtProxy {
                 try {
                     // No upstream proxy: Arti is the only thing dialling these.
                     controller.start(transport.id, "")
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
+                    // Throwable: a libgojni load or link failure arrives as an
+                    // Error, and uncaught on this worker it kills the process.
                     Log.w(TAG, "${transport.id} did not start: ${e.message}")
                     stopLocked()
                     return null
@@ -112,7 +114,14 @@ object AirhopIPtProxy {
     private fun stopLocked() {
         val controller = this.controller ?: return
         for (transport in running) {
-            controller.stop(transport.id)
+            // One that throws must not strand the others: a half-done stop leaves
+            // a transport this object thinks is running, and the next start would
+            // skip it and hand Arti a stale port.
+            try {
+                controller.stop(transport.id)
+            } catch (e: Throwable) {
+                Log.w(TAG, "${transport.id} did not stop: ${e.message}")
+            }
         }
         running.clear()
     }
@@ -126,16 +135,17 @@ object AirhopIPtProxy {
         // Logging off. The log records bridge addresses, which is the most
         // incriminating thing this device could write down, and nothing reads it.
         //
-        // gomobile exposes the Go constructor as a Java one, so a Go-side nil
-        // cannot surface as null here. It throws instead, and a failure to build
-        // the controller has to stop the start rather than reach Arti.
+        // First line to touch the generated binding, so gomobile's static
+        // initialiser loads libgojni here. A Go-side nil surfaces as a throw
+        // rather than null, and a missing or rejected library as an Error, which
+        // is why this catches Throwable. Either has to stop the start rather
+        // than reach Arti.
         val created = try {
             Controller(dir.absolutePath, false, false, "ERROR", null)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.w(TAG, "controller did not initialise: ${e.message}")
             return null
         }
-
 
         controller = created
         return created

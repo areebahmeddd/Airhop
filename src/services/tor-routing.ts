@@ -21,7 +21,10 @@
 // This is the single choke point for the Tor decision, so the socket factory,
 // the native client and the persisted preference cannot drift apart.
 
-import NativeAirhopTor, { subscribeTorStatus } from "@bridge/NativeAirhopTor";
+import NativeAirhopTor, {
+  subscribeTorStatus,
+  type Spec as TorModule,
+} from "@bridge/NativeAirhopTor";
 import { isTorSocketNativeAvailable } from "@bridge/NativeAirhopTorSocket";
 import { setTorTeardown } from "@core/nostr/tor-teardown-handle";
 import { OBFS4_BRIDGE_LINES, SNOWFLAKE_BRIDGE_LINES } from "@data/bridges";
@@ -143,6 +146,22 @@ function bridgeLinesForStart(): string {
 
 function needsBridgeLines(): boolean {
   return useSettingsStore.getState().torBridgeMode !== "off";
+}
+
+// Every start goes through here, so the window between asking the native client
+// to start and it answering is always marked. See `torStartPending` in
+// settings-store for what that buys.
+//
+// `finally`, not a success path: a rejected start is a failure the app handled
+// and survived, which is not what the marker records.
+async function startNativeTor(native: TorModule): Promise<void> {
+  const { setTorStartPending } = useSettingsStore.getState();
+  setTorStartPending(true);
+  try {
+    await native.startTor(bridgeLinesForStart());
+  } finally {
+    setTorStartPending(false);
+  }
 }
 
 // Arti reports its own progress and whether it has stopped making any. Without
@@ -277,7 +296,7 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
     useSettingsStore.getState().setTorEnabled(true);
     // Native points its own HTTP client at the proxy inside startTor, before the
     // client is even built, so there is no window on either platform.
-    await NativeAirhopTor.startTor(bridgeLinesForStart());
+    await startNativeTor(NativeAirhopTor);
     getMeshService()?.restartNostr();
 
     const ready = await NativeAirhopTor.awaitTorReady(
@@ -317,6 +336,9 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
 async function disableTorRouting(): Promise<void> {
   stopWatchingTorBootstrap();
   installDirectSocket();
+  // Nothing is starting, so the marker has nothing left to warn about. It also
+  // clears the notice a previous recovery left on the Tor screen.
+  useSettingsStore.getState().setTorStartPending(false);
   // Nobody is asking for Tor, so nothing may be held down in its name. This is
   // also the way out of the blocked state, which is why that state needs no
   // rescue of its own: turning Tor off brings the internet half back. Written
@@ -338,7 +360,20 @@ async function disableTorRouting(): Promise<void> {
 // initialized, so the very first relay pool is built on the right socket path.
 // There is no mesh rebuild here: the mesh has not started yet.
 export function primeTorRoutingOnStartup(): void {
-  if (!useSettingsStore.getState().torEnabled) return;
+  const settings = useSettingsStore.getState();
+
+  // A start that never answered, from a process that is gone. Trying again is
+  // what turns one native crash into an app that cannot be opened, so Tor goes
+  // off instead and the marker stays for the Tor screen to explain. The mesh
+  // comes up on the direct socket, as it does for anyone with Tor off.
+  if (settings.torStartPending) {
+    settings.setTorEnabled(false);
+    setTorActive(false);
+    setTorBootstrap("idle");
+    return;
+  }
+
+  if (!settings.torEnabled) return;
 
   if (NativeAirhopTor == null) {
     // The preference is on but Tor is unavailable in this build. Leave the
@@ -359,7 +394,7 @@ export function primeTorRoutingOnStartup(): void {
   // "starting" for the whole session with nothing behind it. The native side
   // rejects only when Tor cannot run at all rather than merely not being ready:
   // no library for this ABI, or an unwritable state directory.
-  void NativeAirhopTor.startTor(bridgeLinesForStart()).catch(() => {
+  void startNativeTor(NativeAirhopTor).catch(() => {
     setTorActive(false);
     setTorBootstrap("blocked");
   });
@@ -385,6 +420,9 @@ export function applyInternetAvailability(enabled: boolean): void {
   writeNostrBlocked(false);
   setTorActive(false);
   setTorBootstrap("idle");
+  // Not a preference: it describes a start that is about to be stopped, and
+  // leaving it set would disable Tor on the next launch for no reason.
+  useSettingsStore.getState().setTorStartPending(false);
   void NativeAirhopTor?.stopTor().catch(() => {});
 }
 

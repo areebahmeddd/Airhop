@@ -149,6 +149,11 @@ class AirhopLANModule(
     // stops the moment it is off. Held for as long as the transport runs.
     private var multicastLock: WifiManager.MulticastLock? = null
 
+    // Which set of listeners is current. Bumped by teardown, so one we stopped
+    // ourselves is told apart from one dropped under us: both arrive as the same
+    // callback, and only the second is a reason to restart.
+    private val sessionGeneration = AtomicInteger(0)
+
     // Resolves run one at a time below API 34.
     //
     // NsdManager.resolveService is documented as one outstanding resolve per
@@ -213,7 +218,12 @@ class AirhopLANModule(
         promise.resolve(null)
     }
 
+    // Synchronized because reporting a dead publish or browse calls this from an
+    // NsdManager callback, which can meet stopLAN arriving on the bridge thread.
+    // Reentrant, so the call in startLAN's own failure path is unaffected.
+    @Synchronized
     private fun teardown() {
+        sessionGeneration.incrementAndGet()
         val nsd = nsdManager()
         registrationListener?.let { runCatching { nsd?.unregisterService(it) } }
         registrationListener = null
@@ -267,6 +277,24 @@ class AirhopLANModule(
             false
         }
 
+    // mDNS stopped working under us: the publish was refused, or the system
+    // dropped the browse. Torn down here rather than waiting for the
+    // controller's stopLAN, which is a bridge hop away: a start landing in that
+    // window would find `instanceName` still set and resolve as already running
+    // over a dead transport.
+    //
+    // Ignored once the generation has moved, since teardown stops these
+    // listeners itself and gets the same callbacks for it.
+    private fun reportUnavailable(reason: String, generation: Int) {
+        if (generation != sessionGeneration.get()) return
+        Log.w(TAG, "LAN $reason")
+        teardown()
+        emitEvent(
+            EVT_AVAILABILITY_CHANGED,
+            WritableNativeMap().apply { putBoolean("available", false) },
+        )
+    }
+
     private fun acquireMulticastLock() {
         if (multicastLock != null) return
         multicastLock = try {
@@ -319,6 +347,7 @@ class AirhopLANModule(
     // ---- Discovery -----------------------------------------------------------
 
     private fun registerService(nsd: NsdManager, name: String) {
+        val generation = sessionGeneration.get()
         val info = NsdServiceInfo().apply {
             serviceName = name
             serviceType = SERVICE_TYPE
@@ -330,7 +359,7 @@ class AirhopLANModule(
             }
 
             override fun onRegistrationFailed(info: NsdServiceInfo, errorCode: Int) {
-                Log.e(TAG, "Publish refused: $errorCode")
+                reportUnavailable("publish refused: $errorCode", generation)
             }
 
             override fun onServiceUnregistered(info: NsdServiceInfo) = Unit
@@ -341,6 +370,7 @@ class AirhopLANModule(
     }
 
     private fun startDiscovery(nsd: NsdManager) {
+        val generation = sessionGeneration.get()
         val listener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) = Unit
 
@@ -358,14 +388,12 @@ class AirhopLANModule(
                 )
             }
 
-            override fun onDiscoveryStopped(serviceType: String) = Unit
+            override fun onDiscoveryStopped(serviceType: String) {
+                reportUnavailable("browse stopped", generation)
+            }
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Log.e(TAG, "Browse refused: $errorCode")
-                emitEvent(
-                    EVT_AVAILABILITY_CHANGED,
-                    WritableNativeMap().apply { putBoolean("available", false) },
-                )
+                reportUnavailable("browse refused: $errorCode", generation)
             }
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit

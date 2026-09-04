@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Jurídico",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Arquitetura",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "Perguntas frequentes",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Licença MIT · Livre e de código aberto · Funciona com o bitchat",
   "home.hero.group.mobile": "Celular",
   "home.hero.group.desktop": "Computador",
-  "home.hero.option.f_droid": "Catálogo de código aberto",
+  "home.hero.option.zapstore": "Assinado no Nostr",
   "home.hero.option.apk": "Download direto",
   "home.hero.option.soon": "Em breve",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Cada sessão usa o protocolo {noise} para um handshake autenticado. As mensagens armazenadas usam o algoritmo {ratchet}, ou seja, mesmo que seu dispositivo seja comprometido depois, suas mensagens antigas continuam ilegíveis. A limpeza de pânico destrói todas as chaves e mensagens em menos de um segundo.",
   "home.about.body.internet":
-    "Quando você e um contato estão fora do alcance do Bluetooth, os relays do {nostr} servem de ponte pela internet, usando mensagens diretas embrulhadas no formato {nip17}, então a rede mesh se estende globalmente sempre que vocês dois estiverem on-line. O suporte a {tor} está disponível no iOS e no Android, via {arti}.",
+    "Quando você e um contato estão fora do alcance do Bluetooth, os relays do {nostr} servem de ponte pela internet, usando mensagens diretas embrulhadas no formato {nip17}, então a rede mesh se estende globalmente sempre que vocês dois estiverem on-line. O suporte a {tor} está disponível no iOS e no Android, via {arti}, com bridges {obfs4} e {snowflake} para redes que bloqueiam o Tor.",
   "home.about.optional.title": "O Airhop tem recursos opcionais que você pode ativar:",
   "home.about.optional.payments.label": "Pagamentos offline:",
   "home.about.optional.payments.body":

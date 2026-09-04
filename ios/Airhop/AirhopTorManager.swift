@@ -180,9 +180,29 @@ public final class AirhopTorManager: ObservableObject {
     /// No-op when `allowAutoStart` is false or the app is backgrounded. Whether
     /// a client exists is asked of Arti rather than tracked here, so this is
     /// safe to call from several places at once.
-    public func startIfNeeded() {
-        guard allowAutoStart, isAppForeground else { return }
-        guard !ArtiStatus.current.running else { return }
+    ///
+    /// `completion` is called once the native start has answered, which is what
+    /// `AirhopTorModule.startTor` resolves on. `false` means one thing: a start
+    /// was attempted and failed. Already running, or no start attempted, is
+    /// `true`, because the caller has nothing to unwind.
+    ///
+    /// Calling it before the native side answers would clear `torStartPending`
+    /// in `tor-routing.ts` while the client was still being built, leaving iOS
+    /// without the marker Android has.
+    ///
+    /// Nil for the internal callers, the path monitor and the foreground resume,
+    /// which want the attempt made and have nobody to answer.
+    public func startIfNeeded(completion: (@MainActor (Bool) -> Void)? = nil) {
+        guard allowAutoStart, isAppForeground else {
+            // Nothing attempted, so nothing to report as failed. The next
+            // foreground calls this again.
+            completion?(true)
+            return
+        }
+        guard !ArtiStatus.current.running else {
+            completion?(true)
+            return
+        }
 
         attemptEpoch &+= 1
         let epoch = attemptEpoch
@@ -191,6 +211,7 @@ public final class AirhopTorManager: ObservableObject {
 
         guard let dir = dataDirectoryURL()?.path else {
             failAttempt(epoch)
+            completion?(false)
             return
         }
         try? FileManager.default.createDirectory(
@@ -211,7 +232,10 @@ public final class AirhopTorManager: ObservableObject {
             // drop the bridge and take a direct route for a user who asked not
             // to have one.
             guard let ports = AirhopIPtProxy.shared.start(AirhopTransport.named(in: lines)) else {
-                await MainActor.run { self?.failAttempt(epoch) }
+                await MainActor.run {
+                    self?.failAttempt(epoch)
+                    completion?(false)
+                }
                 return
             }
             let rc = dir.withCString { dirPtr in
@@ -231,7 +255,14 @@ public final class AirhopTorManager: ObservableObject {
                 AirhopIPtProxy.shared.stop()
             }
             await MainActor.run {
-                guard let self, epoch == self.attemptEpoch else { return }
+                guard let self, epoch == self.attemptEpoch else {
+                    // Superseded by a later attempt, which owns the outcome.
+                    // Reported as success: the path monitor bumps the epoch on a
+                    // network change, and failing here would have the JS side
+                    // turn Tor off underneath the attempt that replaced this one.
+                    completion?(true)
+                    return
+                }
                 // Already running is a success. startIfNeeded reads the
                 // status before dispatching, so the JS toggle and the path
                 // monitor arriving together both see a stopped client and both
@@ -242,6 +273,7 @@ public final class AirhopTorManager: ObservableObject {
                     // sits on "starting" for the whole session over a client
                     // that does not exist.
                     self.failAttempt(epoch)
+                    completion?(false)
                     return
                 }
                 // The listener is bound by the time start returns, so there is
@@ -251,6 +283,7 @@ public final class AirhopTorManager: ObservableObject {
                 // with it.
                 self.startStatusPoll(epoch)
                 self.startPathMonitorIfNeeded()
+                completion?(true)
             }
         }
     }

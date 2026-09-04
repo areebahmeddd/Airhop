@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "ข้อกฎหมาย",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "สถาปัตยกรรม",
   "footer.link.blogs": "บล็อก",
   "footer.link.faq": "คำถามที่พบบ่อย",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "สัญญาอนุญาต MIT · ฟรีและโอเพนซอร์ส · ใช้ร่วมกับ bitchat ได้",
   "home.hero.group.mobile": "มือถือ",
   "home.hero.group.desktop": "เดสก์ท็อป",
-  "home.hero.option.f_droid": "แคตตาล็อกโอเพนซอร์ส",
+  "home.hero.option.zapstore": "ลงนามบน Nostr",
   "home.hero.option.apk": "ดาวน์โหลดโดยตรง",
   "home.hero.option.soon": "เร็ว ๆ นี้",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "ทุกเซสชันใช้โปรโตคอล {noise} สำหรับการจับมือที่ยืนยันตัวตน ข้อความที่เก็บไว้ใช้อัลกอริทึม {ratchet} กล่าวคือแม้เครื่องของคุณจะถูกเจาะในภายหลัง ข้อความเก่าก็ยังอ่านไม่ได้ การล้างฉุกเฉินจะทำลายกุญแจและข้อความทั้งหมดภายในไม่ถึงหนึ่งวินาที",
   "home.about.body.internet":
-    "เมื่อคุณกับผู้ติดต่ออยู่นอกระยะ Bluetooth รีเลย์ของ {nostr} จะทำหน้าที่เป็นสะพานผ่านอินเทอร์เน็ต โดยใช้ข้อความส่วนตัวที่ห่อในรูปแบบ {nip17} เครือข่ายเมชจึงขยายไปทั่วโลกเมื่อทั้งสองฝ่ายออนไลน์ การรองรับ {tor} มีทั้งบน iOS และ Android ผ่าน {arti}",
+    "เมื่อคุณกับผู้ติดต่ออยู่นอกระยะ Bluetooth รีเลย์ของ {nostr} จะทำหน้าที่เป็นสะพานผ่านอินเทอร์เน็ต โดยใช้ข้อความส่วนตัวที่ห่อในรูปแบบ {nip17} เครือข่ายเมชจึงขยายไปทั่วโลกเมื่อทั้งสองฝ่ายออนไลน์ การรองรับ {tor} มีทั้งบน iOS และ Android ผ่าน {arti} และมีบริดจ์ {obfs4} และ {snowflake} สำหรับเครือข่ายที่บล็อก Tor",
   "home.about.optional.title": "Airhop มีคุณสมบัติเสริมที่คุณเปิดใช้เองได้:",
   "home.about.optional.payments.label": "การชำระเงินออฟไลน์:",
   "home.about.optional.payments.body":

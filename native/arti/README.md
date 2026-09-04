@@ -53,6 +53,7 @@ A local Android build without Docker works for development, but `build-android.s
 
 Neither script trusts its toolchain:
 
+- **That the client starts.** `cargo test` runs the lifecycle test in `src/lib.rs` on the host before any ABI is cross compiled. Everything else on this list reads the finished library rather than calling it, so a crate that aborts on its first `start` passes all of them.
 - **Exported symbols.** Every entry point the Swift and Kotlin sides bind, in every slice. A symbol present in one architecture and missing from another is what a partial rebuild produces, and the linker only catches it when somebody happens to build for that architecture.
 - **16 KiB page alignment** (Android). Google Play requires it. Read back with `llvm-readelf`, never assumed from the toolchain default.
 - **No build-machine paths.** An absolute path from a developer's disk inside a shipped binary is both a reproducibility failure and a small leak about whoever built it.
@@ -74,7 +75,9 @@ Run the container build twice from clean and confirm `SHA256SUMS.android` does n
 
 **Bridges are an argument to `start`, not a setter beside it.** They are fixed when the client is constructed, so a setter could be called afterwards and silently do nothing, and anything that cleared it would let a later start take a direct route for a user who asked not to have one. The transports themselves live in [`native/iptproxy`](../iptproxy); this crate only receives the loopback ports they landed on.
 
-**Panics abort.** Unwinding across an FFI boundary is undefined behaviour, and aborting is the one option that is sound without wrapping every entry point in `catch_unwind`. A panic in a Tor client is a bug worth a crash report.
+**A cryptographic provider is chosen here.** rustls needs one and arti does not pick: `tor-rtcompat` takes rustls with no provider feature and requires the application to install one, or rustls panics inside `TorClient::builder`. `ring` rather than the `aws-lc-rs` upstream prefers, because aws-lc-rs needs cmake and libclang inside the container for three Android ABIs and two Apple slices, while ring builds with the NDK clang and is already in the graph under `rustls-webpki`. The hybrid post-quantum handshake aws-lc-rs would add is tracked separately. Both the cargo feature and an explicit `install_default` are set, because feature unification is something a later dependency change can undo silently.
+
+**Panics are caught, not aborted.** Unwinding across an FFI boundary is undefined behaviour, so every entry point runs inside `catch_panic`, which returns `AIRHOP_TOR_ERR_PANIC` and puts the message in the status summary. Aborting is the simpler way to be sound and the wrong trade: it takes the Bluetooth mesh, the wallet and the courier store with it, none of which depend on Tor.
 
 **The listener binds before bootstrap.** `start` returns only once the port is accepting, so a caller that gets `AIRHOP_TOR_OK` may dial immediately. This is also why neither platform needs to probe the port to find out whether it is up.
 

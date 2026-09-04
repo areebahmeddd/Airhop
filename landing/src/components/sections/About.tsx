@@ -83,6 +83,12 @@ function Internet() {
       ),
       tor: <TextLink href="https://torproject.org">Tor</TextLink>,
       arti: <TextLink href="https://gitlab.torproject.org/tpo/core/arti">Arti</TextLink>,
+      obfs4: (
+        <TextLink href="https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/obfs4">
+          obfs4
+        </TextLink>
+      ),
+      snowflake: <TextLink href="https://snowflake.torproject.org">Snowflake</TextLink>,
     }),
     [],
   );

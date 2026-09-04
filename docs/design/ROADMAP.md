@@ -6,37 +6,44 @@
 
 ### Gap 1: Unified Codebase
 
-**bitchat:** iOS and Android are separate native codebases that drift. The Android v0.7 fragment size mismatch (500B vs 150B) broke iOS-Android compatibility for months with no one noticing.  
+**bitchat:** iOS and Android are separate native codebases that drift. The Android v0.7 fragment size mismatch (500B vs 150B) broke iOS-Android compatibility for months with no one noticing.
+
 **Airhop:** Single TypeScript protocol stack. A protocol bug surfaces on both platforms simultaneously, and fixes apply simultaneously.
 
 ### Gap 2: Transports Beyond Bluetooth
 
-**bitchat:** Bluetooth only in practice, around 18 KiB/s. Android has WiFi Aware behind a debug flag that is off by default, iOS has none, and neither platform can use an ordinary WiFi network.  
+**bitchat:** Bluetooth only in practice, around 18 KiB/s. Android has WiFi Aware behind a debug flag that is off by default, iOS has none, and neither platform can use an ordinary WiFi network.
+
 **Airhop:** Two transports beside Bluetooth, picked per link, with Bluetooth as the fallback that always works. WiFi Aware ships enabled on both platforms as the fast path between two Androids or two iPhones; Apple requires a paired data path Android cannot complete, so it never crosses platforms. LAN closes that gap with mDNS discovery and plain TCP links, carrying the same packets the radio carries. It stays off until the user turns it on, since announcing yourself on a network is visible to everyone on it.
 
 ### Gap 3: Reaching the Network Where Tor Is Blocked
 
 **bitchat:** Routes internet traffic through Tor, with no bridges and no pluggable transports. The first hop is a publicly listed relay, so a network that blocks Tor blocks bitchat's internet half outright, and deep packet inspection sees Tor in use.
+
 **Airhop:** The same embedded Arti, plus obfs4 and Snowflake compiled into the app. A bridge is an unlisted entry point and the transport in front of it disguises the connection, so Tor keeps working where it is blocked and stops being visible where it is watched. Off by default, since a bridge costs speed and only earns it on such a network. Built-in lines are synced from the Tor Project rather than frozen at release.
 
 ### Gap 4: Double Ratchet for Offline Mail
 
-**bitchat:** Courier envelopes use Noise X, which is one-way. If the recipient's long-term key is ever compromised, every piece of mail still waiting for them is readable.  
+**bitchat:** Courier envelopes use Noise X, which is one-way. If the recipient's long-term key is ever compromised, every piece of mail still waiting for them is readable.
+
 **Airhop:** Signal's Double Ratchet for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Bundles travel signed over the mesh and never touch Nostr, and an envelope seals to a one-time prekey, never the long-term key, so waiting mail survives that key leaking later.
 
 ### Gap 5: Files and Video
 
-**bitchat:** Size caps per file type, checked as a packet is decoded: 1 MiB for files, 512 KiB for photos and voice notes. Video crosses the wire but neither platform plays it. Android shows a type badge, iOS shows nothing useful at all.  
+**bitchat:** Size caps per file type, checked as a packet is decoded: 1 MiB for files, 512 KiB for photos and voice notes. Video crosses the wire but neither platform plays it. Android shows a type badge, iOS shows nothing useful at all.
+
 **Airhop:** Matches the caps and does not raise them. bitchat rejects an oversized packet while decoding it, so a higher ceiling breaks interop in both directions. One packet per file, a MIME allow-list, magic bytes checked against the extension, and the fragment layer splits it for the radio. Video rides that path and plays inline on both platforms; a bitchat peer sees an ordinary file. There is no live video: Bluetooth is too slow, WiFi Aware cannot cross platforms, and LAN needs both peers on one network with it switched on.
 
 ### Gap 6: Cashu Wallet
 
-**bitchat:** A Cashu token decoder. It recognises a token in a message and shows what it is worth. There is no balance, no mint, no way to spend it.  
+**bitchat:** A Cashu token decoder. It recognises a token in a message and shows what it is worth. There is no balance, no mint, no way to spend it.
+
 **Airhop:** A full wallet in its own tab: encrypted proof storage, per-mint accounts, Lightning in and out, Nutzaps, and a BIP-39 recovery phrase. Tokens are plain strings, so value moves device to device over Bluetooth with no server in the middle, and a bitchat peer still sees an ordinary token.
 
 ### Gap 7: Non-Technical UX
 
-**bitchat:** The protocol work is excellent. The app around it is hard to use.  
+**bitchat:** The protocol work is excellent. The app around it is hard to use.
+
 **Airhop:** This is priority one, and something we focused on from day 0. It follows the conventions Apple's Human Interface Guidelines and Material Design agree on, so it behaves the way people expect a messaging app to, and it reads in 35 languages.
 
 ## 2. System Architecture

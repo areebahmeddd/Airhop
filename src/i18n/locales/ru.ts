@@ -1813,6 +1813,7 @@ export const strings: Strings = {
     "Tor подключается дольше минуты. Он остаётся включённым и продолжает попытки; вкладка «Сеть» сообщит, когда маршрутизация заработает или если эта сеть её блокирует.",
   "settings.conn.tor_failed":
     "Не удалось запустить Tor. Убедитесь, что у приложения есть доступ к сети.",
+  "settings.tor.status": "Состояние Tor",
   "settings.tor.connection": "Подключение",
   "settings.tor.mode_off": "Напрямую",
   "settings.tor.mode_off_desc":
@@ -1820,14 +1821,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Скрывает использование Tor и работает там, где мосты заблокированы. Подключается медленнее всего.",
-  "settings.tor.mode_obfs4": "Мост",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Скрывает использование Tor. Быстрее Snowflake, но эти мосты общедоступны и часть сетей их блокирует.",
   "settings.tor.mode_custom": "Свои мосты",
   "settings.tor.mode_custom_desc":
     "Используйте мосты с bridges.torproject.org. Попробуйте, когда остальное не работает.",
   "settings.tor.custom_placeholder": "Вставьте по одной строке моста в строке",
+  "settings.tor.custom_apply_hint": "Нажмите вне поля, чтобы подключиться.",
   "settings.tor.custom_empty": "Сначала добавьте хотя бы одну строку моста.",
+  "settings.tor.recovered":
+    "Tor отключён: из-за него приложение не запускалось. Включите снова, чтобы повторить попытку.",
   "settings.conn.mint_clearnet":
     "Разрешить трафик к монетному двору по открытой сети",
   "settings.conn.mint_clearnet_desc":

@@ -1817,6 +1817,7 @@ export const strings: Strings = {
     "Tor łączy się dłużej niż minutę. Zostaje włączony i próbuje dalej; zakładka Mesh powie, kiedy trasuje ruch albo czy ta sieć go blokuje.",
   "settings.conn.tor_failed":
     "Nie udało się uruchomić Tor. Upewnij się, że aplikacja ma dostęp do sieci.",
+  "settings.tor.status": "Status Tor",
   "settings.tor.connection": "Połączenie",
   "settings.tor.mode_off": "Bezpośrednie",
   "settings.tor.mode_off_desc":
@@ -1824,14 +1825,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Ukrywa, że używasz Tor, i działa tam, gdzie mostki są blokowane. Łączy się najwolniej.",
-  "settings.tor.mode_obfs4": "Mostek",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Ukrywa, że używasz Tor. Szybsze niż Snowflake, ale te mostki są publiczne i część sieci je blokuje.",
   "settings.tor.mode_custom": "Własne mostki",
   "settings.tor.mode_custom_desc":
     "Użyj mostków z bridges.torproject.org. Spróbuj tego, gdy pozostałe zawiodą.",
   "settings.tor.custom_placeholder": "Wklej jedną linię mostka w wierszu",
+  "settings.tor.custom_apply_hint": "Dotknij poza polem, aby połączyć.",
   "settings.tor.custom_empty": "Najpierw dodaj co najmniej jedną linię mostka.",
+  "settings.tor.recovered":
+    "Tor został wyłączony, bo uniemożliwiał uruchomienie aplikacji. Włącz go ponownie, aby spróbować jeszcze raz.",
   "settings.conn.mint_clearnet": "Zezwól na ruch do mennicy przez otwartą sieć",
   "settings.conn.mint_clearnet_desc":
     "Tor na iOS obejmuje tylko Nostr. Zostaw wyłączone, żeby blokować zapytania do mennicy; ecash przez sieć mesh działa tak czy inaczej.",

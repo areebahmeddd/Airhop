@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "আইনি",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "আর্কিটেকচার",
   "footer.link.blogs": "ব্লগ",
   "footer.link.faq": "সাধারণ প্রশ্ন",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT লাইসেন্স · বিনামূল্যে ও ওপেন সোর্স · bitchat-এর সাথে চলে",
   "home.hero.group.mobile": "মোবাইল",
   "home.hero.group.desktop": "ডেস্কটপ",
-  "home.hero.option.f_droid": "ওপেন সোর্স ক্যাটালগ",
+  "home.hero.option.zapstore": "Nostr-এ স্বাক্ষরিত",
   "home.hero.option.apk": "সরাসরি ডাউনলোড",
   "home.hero.option.soon": "শীঘ্রই আসছে",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "প্রতিটি সেশন প্রমাণীকৃত হ্যান্ডশেকের জন্য {noise} প্রোটোকল ব্যবহার করে। জমানো বার্তা {ratchet} অ্যালগরিদম ব্যবহার করে, তাই পরে আপনার ডিভাইস অন্যের হাতে পড়লেও আগের বার্তাগুলো অপাঠ্যই থাকে। প্যানিক ওয়াইপ এক সেকেন্ডের কমে সব কী আর বার্তা ধ্বংস করে দেয়।",
   "home.about.body.internet":
-    "আপনি আর কোনো পরিচিতি ব্লুটুথের নাগালের বাইরে থাকলে {nostr} রিলে ইন্টারনেট সেতুর কাজ করে, {nip17} ধাঁচের মোড়ানো সরাসরি বার্তা দিয়ে, ফলে আপনারা দুজন অনলাইনে থাকলেই মেশ বিশ্বজুড়ে ছড়িয়ে যায়। iOS আর Android দুটিতেই {arti} দিয়ে {tor} সমর্থন আছে।",
+    "আপনি আর কোনো পরিচিতি ব্লুটুথের নাগালের বাইরে থাকলে {nostr} রিলে ইন্টারনেট সেতুর কাজ করে, {nip17} ধাঁচের মোড়ানো সরাসরি বার্তা দিয়ে, ফলে আপনারা দুজন অনলাইনে থাকলেই মেশ বিশ্বজুড়ে ছড়িয়ে যায়। iOS আর Android দুটিতেই {arti} দিয়ে {tor} সমর্থন আছে, আর Tor আটকে দেয় এমন নেটওয়ার্কের জন্য {obfs4} ও {snowflake} ব্রিজ আছে।",
   "home.about.optional.title": "Airhop-এ কিছু ঐচ্ছিক সুবিধা আছে, যা আপনি চালু করতে পারেন:",
   "home.about.optional.payments.label": "অফলাইন পেমেন্ট:",
   "home.about.optional.payments.body":

@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Rechtliches",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Architektur",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "FAQ",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT-Lizenz · Frei und quelloffen · Funktioniert mit bitchat",
   "home.hero.group.mobile": "Mobil",
   "home.hero.group.desktop": "Desktop",
-  "home.hero.option.f_droid": "Open-Source-Katalog",
+  "home.hero.option.zapstore": "Auf Nostr signiert",
   "home.hero.option.apk": "Direkter Download",
   "home.hero.option.soon": "Demnächst",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Jede Sitzung nutzt das {noise}-Protokoll für einen authentifizierten Handshake. Gespeicherte Nachrichten nutzen den {ratchet}-Algorithmus, das heißt, selbst wenn dein Gerät später kompromittiert wird, bleiben deine früheren Nachrichten unlesbar. Die Notlöschung vernichtet alle Schlüssel und Nachrichten in unter einer Sekunde.",
   "home.about.body.internet":
-    "Wenn du und ein Kontakt außerhalb der Bluetooth-Reichweite seid, dienen {nostr}-Relays als Brücke über das Internet, mit gift-wrapped Direktnachrichten im {nip17}-Format. So reicht das Mesh weltweit, sobald ihr beide online seid. {tor} wird auf iOS und Android unterstützt, über {arti}.",
+    "Wenn du und ein Kontakt außerhalb der Bluetooth-Reichweite seid, dienen {nostr}-Relays als Brücke über das Internet, mit gift-wrapped Direktnachrichten im {nip17}-Format. So reicht das Mesh weltweit, sobald ihr beide online seid. {tor} wird auf iOS und Android unterstützt, über {arti}, mit {obfs4}- und {snowflake}-Bridges für Netze, die Tor blockieren.",
   "home.about.optional.title": "Airhop hat optionale Funktionen, die du aktivieren kannst:",
   "home.about.optional.payments.label": "Offline-Zahlungen:",
   "home.about.optional.payments.body":

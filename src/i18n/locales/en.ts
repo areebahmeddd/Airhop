@@ -1799,6 +1799,7 @@ export const strings = {
     "Tor is taking longer than a minute to connect. It stays on and keeps trying; the Mesh tab will say when it is routing, or if this network is blocking it.",
   "settings.conn.tor_failed":
     "Could not start Tor. Ensure the app has network access.",
+  "settings.tor.status": "Tor status",
   "settings.tor.connection": "Connection",
   "settings.tor.mode_off": "Direct",
   "settings.tor.mode_off_desc":
@@ -1806,14 +1807,17 @@ export const strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "Hides that you use Tor, and keeps working where bridges are blocked. Slowest to connect.",
-  "settings.tor.mode_obfs4": "Bridge",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Hides that you use Tor. Faster than Snowflake, but these bridges are public and some networks block them.",
   "settings.tor.mode_custom": "Custom bridges",
   "settings.tor.mode_custom_desc":
     "Use bridges you got from bridges.torproject.org. Try this when the others fail.",
   "settings.tor.custom_placeholder": "Paste one bridge line per line",
+  "settings.tor.custom_apply_hint": "Tap outside the box to connect.",
   "settings.tor.custom_empty": "Add at least one bridge line first.",
+  "settings.tor.recovered":
+    "Tor was turned off because it stopped the app from starting. Turn it back on to try again.",
   "settings.conn.mint_clearnet": "Allow mint traffic over clear net",
   "settings.conn.mint_clearnet_desc":
     "Tor on iOS only covers Nostr. Leave off to block mint requests; ecash over the mesh keeps working either way.",

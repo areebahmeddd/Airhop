@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "ਕਾਨੂੰਨੀ",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "ਬਣਤਰ",
   "footer.link.blogs": "ਬਲੌਗ",
   "footer.link.faq": "ਅਕਸਰ ਪੁੱਛੇ ਸਵਾਲ",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "MIT ਲਾਇਸੰਸ · ਮੁਫ਼ਤ ਅਤੇ ਖੁੱਲ੍ਹਾ ਸਰੋਤ · bitchat ਨਾਲ ਚੱਲਦਾ ਹੈ",
   "home.hero.group.mobile": "ਮੋਬਾਈਲ",
   "home.hero.group.desktop": "ਡੈਸਕਟਾਪ",
-  "home.hero.option.f_droid": "ਖੁੱਲ੍ਹੇ ਸਰੋਤ ਦਾ ਕੈਟਾਲਾਗ",
+  "home.hero.option.zapstore": "Nostr ਉੱਤੇ ਦਸਤਖ਼ਤ ਕੀਤਾ",
   "home.hero.option.apk": "ਸਿੱਧਾ ਡਾਊਨਲੋਡ",
   "home.hero.option.soon": "ਜਲਦੀ ਆ ਰਿਹਾ ਹੈ",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "ਹਰ ਸੈਸ਼ਨ ਪ੍ਰਮਾਣਿਤ ਹੈਂਡਸ਼ੇਕ ਲਈ {noise} ਪ੍ਰੋਟੋਕੋਲ ਵਰਤਦਾ ਹੈ। ਸੰਭਾਲੇ ਸੁਨੇਹੇ {ratchet} ਐਲਗੋਰਿਦਮ ਵਰਤਦੇ ਹਨ, ਇਸ ਲਈ ਜੇ ਬਾਅਦ ਵਿੱਚ ਤੁਹਾਡਾ ਡੀਵਾਈਸ ਕਿਸੇ ਹੋਰ ਦੇ ਹੱਥ ਲੱਗ ਵੀ ਜਾਵੇ ਤਾਂ ਤੁਹਾਡੇ ਪੁਰਾਣੇ ਸੁਨੇਹੇ ਅਣਪੜ੍ਹੇ ਹੀ ਰਹਿੰਦੇ ਹਨ। ਸੰਕਟ ਸਫ਼ਾਈ ਇੱਕ ਸਕਿੰਟ ਤੋਂ ਵੀ ਘੱਟ ਵਿੱਚ ਸਾਰੀਆਂ ਕੁੰਜੀਆਂ ਅਤੇ ਸੁਨੇਹੇ ਤਬਾਹ ਕਰ ਦਿੰਦੀ ਹੈ।",
   "home.about.body.internet":
-    "ਜਦੋਂ ਤੁਸੀਂ ਅਤੇ ਕੋਈ ਸੰਪਰਕ ਬਲੂਟੁੱਥ ਦੀ ਪਹੁੰਚ ਤੋਂ ਬਾਹਰ ਹੋਵੋ, ਤਾਂ {nostr} ਰਿਲੇ ਇੰਟਰਨੈੱਟ ਪੁਲ ਦਾ ਕੰਮ ਕਰਦੇ ਹਨ, {nip17} ਵਾਂਗ ਲਪੇਟੇ ਸਿੱਧੇ ਸੁਨੇਹਿਆਂ ਨਾਲ, ਇਸ ਲਈ ਜਦੋਂ ਵੀ ਤੁਸੀਂ ਦੋਵੇਂ ਆਨਲਾਈਨ ਹੋਵੋ ਮੈਸ਼ ਦੁਨੀਆ ਭਰ ਤੱਕ ਫੈਲ ਜਾਂਦਾ ਹੈ। {tor} ਦਾ ਸਮਰਥਨ iOS ਅਤੇ Android ਦੋਵਾਂ ’ਤੇ {arti} ਰਾਹੀਂ ਮੌਜੂਦ ਹੈ।",
+    "ਜਦੋਂ ਤੁਸੀਂ ਅਤੇ ਕੋਈ ਸੰਪਰਕ ਬਲੂਟੁੱਥ ਦੀ ਪਹੁੰਚ ਤੋਂ ਬਾਹਰ ਹੋਵੋ, ਤਾਂ {nostr} ਰਿਲੇ ਇੰਟਰਨੈੱਟ ਪੁਲ ਦਾ ਕੰਮ ਕਰਦੇ ਹਨ, {nip17} ਵਾਂਗ ਲਪੇਟੇ ਸਿੱਧੇ ਸੁਨੇਹਿਆਂ ਨਾਲ, ਇਸ ਲਈ ਜਦੋਂ ਵੀ ਤੁਸੀਂ ਦੋਵੇਂ ਆਨਲਾਈਨ ਹੋਵੋ ਮੈਸ਼ ਦੁਨੀਆ ਭਰ ਤੱਕ ਫੈਲ ਜਾਂਦਾ ਹੈ। {tor} ਦਾ ਸਮਰਥਨ iOS ਅਤੇ Android ਦੋਵਾਂ ’ਤੇ {arti} ਰਾਹੀਂ ਮੌਜੂਦ ਹੈ, ਅਤੇ Tor ਨੂੰ ਰੋਕਣ ਵਾਲੇ ਨੈੱਟਵਰਕਾਂ ਲਈ {obfs4} ਅਤੇ {snowflake} ਬ੍ਰਿਜ ਵੀ ਹਨ।",
   "home.about.optional.title": "Airhop ਵਿੱਚ ਕੁਝ ਵਿਕਲਪਿਕ ਸਹੂਲਤਾਂ ਹਨ ਜੋ ਤੁਸੀਂ ਚਾਲੂ ਕਰ ਸਕਦੇ ਹੋ:",
   "home.about.optional.payments.label": "ਬਿਨਾਂ ਇੰਟਰਨੈੱਟ ਭੁਗਤਾਨ:",
   "home.about.optional.payments.body":

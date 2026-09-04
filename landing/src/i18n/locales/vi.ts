@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Pháp lý",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Kiến trúc",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "Câu hỏi thường gặp",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Giấy phép MIT · Miễn phí và mã nguồn mở · Tương thích bitchat",
   "home.hero.group.mobile": "Di động",
   "home.hero.group.desktop": "Máy tính",
-  "home.hero.option.f_droid": "Kho ứng dụng mã nguồn mở",
+  "home.hero.option.zapstore": "Được ký trên Nostr",
   "home.hero.option.apk": "Tải trực tiếp",
   "home.hero.option.soon": "Sắp có",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Mỗi phiên dùng giao thức {noise} cho bước bắt tay có xác thực. Tin nhắn đã lưu dùng thuật toán {ratchet}, tức là ngay cả khi thiết bị của bạn bị xâm nhập về sau, những tin nhắn cũ vẫn không đọc được. Xóa khẩn cấp hủy mọi khóa và tin nhắn trong chưa đầy một giây.",
   "home.about.body.internet":
-    "Khi bạn và người liên hệ ở ngoài tầm Bluetooth, các relay {nostr} đóng vai trò cầu nối qua internet, dùng tin nhắn trực tiếp được bọc theo định dạng {nip17}, nhờ vậy mạng mesh vươn ra toàn cầu mỗi khi cả hai đều trực tuyến. Hỗ trợ {tor} có trên cả iOS và Android, qua {arti}.",
+    "Khi bạn và người liên hệ ở ngoài tầm Bluetooth, các relay {nostr} đóng vai trò cầu nối qua internet, dùng tin nhắn trực tiếp được bọc theo định dạng {nip17}, nhờ vậy mạng mesh vươn ra toàn cầu mỗi khi cả hai đều trực tuyến. Hỗ trợ {tor} có trên cả iOS và Android, qua {arti}, kèm bridge {obfs4} và {snowflake} cho những mạng chặn Tor.",
   "home.about.optional.title": "Airhop có những tính năng tùy chọn mà bạn có thể bật:",
   "home.about.optional.payments.label": "Thanh toán ngoại tuyến:",
   "home.about.optional.payments.body":

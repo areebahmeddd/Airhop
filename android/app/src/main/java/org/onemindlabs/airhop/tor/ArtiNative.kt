@@ -62,6 +62,9 @@ object ArtiNative {
     const val ERR_NOT_RUNNING = -6
     const val ERR_BRIDGE_LINE = -7
     const val ERR_BRIDGE_TRANSPORT = -8
+    // Caught at the FFI boundary rather than aborting the process. The reason is
+    // in summary(); the app treats it as any other start failure.
+    const val ERR_PANIC = -9
 
     // An ABI the library was not packaged for must degrade to "Tor unavailable"
     // rather than taking the process down the first time somebody opens Settings.

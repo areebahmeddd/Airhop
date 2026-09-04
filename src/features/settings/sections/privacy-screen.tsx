@@ -120,7 +120,9 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Tor routing (optional)",
     paragraphs: [
-      "Airhop routes internet traffic through Tor using Arti, embedded in the app on both platforms with no separate app to install. When enabled, **relay operators cannot observe your IP address.** Tor is off by default.",
+      "Airhop can route its internet traffic through Tor, using Arti built into the app. There is nothing separate to install. With Tor on, **relay operators cannot see your IP address.** Coverage differs by platform: on Android, Tor covers every connection the app makes. On iOS, it covers only the Nostr connections. Tor is off by default.",
+      "Tor hides your address from the relay, but not the fact that you are using Tor. On a direct connection the first hop goes to a publicly listed relay, so whoever runs your network can see Tor in use, and may block it. Bridges close that. A bridge is an unlisted entry point, and obfs4 or Snowflake sits in front of it so the connection looks like random noise or ordinary web traffic rather than Tor. Both are built into the app, and bridges are off by default.",
+      "A bridge replaces the public relay your connection would normally start from, so it sees your address instead of that relay. Snowflake adds a volunteer's browser in front of the bridge, which sees the same. Neither can read what you send. **This project operates no bridge and no volunteer proxy**, and the built-in bridge addresses come from the Tor Project.",
     ],
   },
   {

@@ -24,7 +24,7 @@ export const STORE_LINKS = {
   appStore: "https://apps.apple.com/app/airhop/id000000000",
   testFlight: "https://testflight.apple.com/join/airhop",
   playStore: "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop",
-  fDroid: "https://f-droid.org/en/packages/org.onemindlabs.airhop",
+  zapstore: "https://zapstore.dev/apps/org.onemindlabs.airhop",
 } as const;
 
 export const REPO_LINKS = {

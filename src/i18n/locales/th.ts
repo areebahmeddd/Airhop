@@ -1750,6 +1750,7 @@ export const strings: Strings = {
     "Tor ใช้เวลาเชื่อมต่อนานกว่าหนึ่งนาที มันยังเปิดอยู่และพยายามต่อไป แท็บเมชจะบอกเมื่อมันกำหนดเส้นทางได้แล้ว หรือเมื่อเครือข่ายนี้กำลังบล็อกมันอยู่",
   "settings.conn.tor_failed":
     "เริ่ม Tor ไม่สำเร็จ ตรวจสอบว่าแอปเข้าถึงเครือข่ายได้",
+  "settings.tor.status": "สถานะ Tor",
   "settings.tor.connection": "การเชื่อมต่อ",
   "settings.tor.mode_off": "ตรง",
   "settings.tor.mode_off_desc":
@@ -1757,14 +1758,17 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "ซ่อนว่าคุณใช้ Tor และยังทำงานได้ในที่ที่บริดจ์ถูกบล็อก เชื่อมต่อช้าที่สุด",
-  "settings.tor.mode_obfs4": "บริดจ์",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "ซ่อนว่าคุณใช้ Tor เร็วกว่า Snowflake แต่บริดจ์เหล่านี้เป็นสาธารณะและบางเครือข่ายบล็อกไว้",
   "settings.tor.mode_custom": "บริดจ์ของคุณเอง",
   "settings.tor.mode_custom_desc":
     "ใช้บริดจ์ที่ได้จาก bridges.torproject.org ลองวิธีนี้เมื่อวิธีอื่นไม่ได้ผล",
   "settings.tor.custom_placeholder": "วางบรรทัดบริดจ์หนึ่งบรรทัดต่อหนึ่งแถว",
+  "settings.tor.custom_apply_hint": "แตะนอกกล่องเพื่อเชื่อมต่อ",
   "settings.tor.custom_empty": "เพิ่มบรรทัดบริดจ์อย่างน้อยหนึ่งบรรทัดก่อน",
+  "settings.tor.recovered":
+    "ปิด Tor แล้ว เพราะทำให้แอปเปิดไม่ได้ เปิดอีกครั้งเพื่อลองใหม่",
   "settings.conn.mint_clearnet":
     "อนุญาตการรับส่งข้อมูลกับมินต์ผ่านเครือข่ายเปิด",
   "settings.conn.mint_clearnet_desc":

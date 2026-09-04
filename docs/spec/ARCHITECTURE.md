@@ -686,6 +686,19 @@ path. A request made before a circuit exists fails rather than falling back, so
 protection starts when the user consents rather than when the circuit finishes
 forming.
 
+Failing closed is about traffic. Failing safe is a separate promise about the
+rest of the app: a bug in the Tor client must cost the user Tor and nothing else.
+Two things carry it. Every FFI entry point runs inside a `catch_unwind`, so a
+panic in Arti returns an error code rather than terminating a process that is
+also running the Bluetooth mesh, the wallet and the courier store. And
+`torStartPending` is written across the native start and read back at launch, so
+a failure severe enough to end the process is not replayed by the next launch:
+Tor comes up off, the Tor screen says why, and the mesh starts normally. Without
+it, persisting the preference before the client exists (which is what stops a
+relaunch mid-bootstrap from landing on the clear net) would turn one native crash
+into an app that cannot be opened, whose only remedy is deleting the user's
+keys.
+
 Tor covers internet traffic only. BLE, WiFi Aware and LAN are local radios and
 have nothing to route.
 

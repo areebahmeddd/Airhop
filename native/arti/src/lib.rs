@@ -30,15 +30,13 @@
 //! view of how far along it is and why it is stuck. Nothing here infers state
 //! from log text.
 //!
-//! Panics abort instead of unwinding (see `panic = "abort"` in Cargo.toml).
-//! Unwinding across an FFI boundary is undefined behaviour, and aborting is the
-//! one option that is sound without wrapping every entry point in
-//! `catch_unwind`. A panic in a Tor client is a bug worth a crash report, not
-//! something to swallow.
+//! Panics never cross the FFI boundary. Every entry point goes through
+//! [`catch_panic`], which returns an error code instead of aborting: Tor is the
+//! app's optional internet half, and a bug in it must not take the mesh down.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use arti_client::config::TorClientConfigBuilder;
@@ -84,6 +82,43 @@ pub const AIRHOP_TOR_ERR_BRIDGE_LINE: i32 = -7;
 /// proxy is not running, or carries more settings than a SOCKS5 handshake
 /// can pass to it.
 pub const AIRHOP_TOR_ERR_BRIDGE_TRANSPORT: i32 = -8;
+/// A panic was caught at the FFI boundary. The call did nothing; the reason is
+/// in the status summary.
+pub const AIRHOP_TOR_ERR_PANIC: i32 = -9;
+
+/// Run an FFI entry point, returning `fallback` if it panics.
+///
+/// Unwinding across an FFI boundary is undefined behaviour. Aborting prevents
+/// that too and is the wrong trade here: an abort takes the Bluetooth mesh, the
+/// wallet and the courier store with it, none of which depend on Tor.
+///
+/// Reported, not swallowed. `blocked` accompanies the message so the app stops
+/// waiting on a client that will not make progress.
+pub(crate) fn catch_panic<T>(fallback: T, f: impl FnOnce() -> T) -> T {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(value) => value,
+        Err(payload) => {
+            let message = panic_text(payload.as_ref()).to_owned();
+            update_status(|s| {
+                s.ready = false;
+                s.blocked = true;
+                s.summary = format!("Internal error: {message}");
+            });
+            fallback
+        }
+    }
+}
+
+/// The message from a panic payload. `panic!` produces one of these two types.
+fn panic_text(payload: &(dyn std::any::Any + Send)) -> &str {
+    if let Some(s) = payload.downcast_ref::<&'static str>() {
+        s
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.as_str()
+    } else {
+        "panic"
+    }
+}
 
 /// How far along Tor is, and whether it is going anywhere.
 ///
@@ -192,6 +227,44 @@ fn state() -> &'static Mutex<Option<Running>> {
     STATE.get_or_init(|| Mutex::new(None))
 }
 
+/// Choose the rustls cryptographic provider, once per process.
+///
+/// arti does not choose one: `tor-rtcompat` takes rustls with no provider
+/// feature and requires the application to install one. Without it rustls
+/// panics inside `TorClient::builder` rather than returning an error.
+///
+/// Called from `start` rather than exported as an initializer, so the FFI
+/// surface stays as it is and neither platform has to remember it. The `Err`
+/// means a provider is already installed, which is the outcome wanted.
+fn install_crypto_provider() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _already_installed = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
+/// Create a directory only this app can read.
+///
+/// arti refuses a state or cache directory that is group- or world-readable.
+/// The mode is explicit because the umask is not: an app's 0077 gives 0700 by
+/// accident, a host's 0022 gives 0755 and fails the check. Applied on every
+/// call, so a loose directory from an earlier build is tightened.
+fn create_private_dir(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(path)?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(path)
+    }
+}
+
 /// Start Tor and bind a SOCKS5 listener on `127.0.0.1:socks_port`, reaching the
 /// network through `bridge_lines` when any are given, and a public relay
 /// directly when there are none.
@@ -213,6 +286,9 @@ pub fn start(
     bridge_lines: &str,
     transport_ports: TransportPorts,
 ) -> i32 {
+    // Before the client is built, where rustls would otherwise panic.
+    install_crypto_provider();
+
     let mut guard = match state().lock() {
         Ok(g) => g,
         // A previous panic poisoned the lock. There is no safe way to reason
@@ -227,8 +303,7 @@ pub fn start(
     let data_dir = PathBuf::from(data_dir);
     let cache_dir = data_dir.join("cache");
     let state_dir = data_dir.join("state");
-    if std::fs::create_dir_all(&cache_dir).is_err() || std::fs::create_dir_all(&state_dir).is_err()
-    {
+    if create_private_dir(&cache_dir).is_err() || create_private_dir(&state_dir).is_err() {
         return AIRHOP_TOR_ERR_DATA_DIR;
     }
 
@@ -451,4 +526,111 @@ pub(crate) fn isolation_for(key: &str) -> IsolationToken {
     };
     *map.entry(key.to_owned())
         .or_insert_with(IsolationToken::new)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// The client and its status are process global, so these tests cannot run
+    /// beside one another. A poisoned lock is recovered: the test that panicked
+    /// has already failed, and cascading would hide which one.
+    fn exclusive() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The lifecycle the app drives, on the host.
+    ///
+    /// The build's other gates read the finished library; this one calls it.
+    /// `create_unbootstrapped_async` builds the client and binds the listener,
+    /// which is where a missing crypto provider or an unusable state directory
+    /// surfaces. No network is needed, and the bootstrap that follows is free
+    /// to fail.
+    ///
+    /// Port 0 so the kernel picks a free one, rather than colliding with a
+    /// developer's running Airhop. Only callers above the FFI must name one.
+    #[test]
+    fn the_client_starts_and_stops() {
+        let _serial = exclusive();
+        let dir = std::env::temp_dir().join(format!(
+            "airhop-tor-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.to_str().expect("temp dir is not UTF-8");
+
+        assert!(!status().running, "nothing should be running yet");
+        assert_eq!(stop(), AIRHOP_TOR_ERR_NOT_RUNNING);
+
+        assert_eq!(
+            start(path, 0, "", TransportPorts::default()),
+            AIRHOP_TOR_OK,
+            "start failed; if this is a panic, the summary says why: {}",
+            status().summary
+        );
+
+        let running = status();
+        assert!(running.running);
+        assert!(!running.ready, "ready must not be claimed before a circuit");
+        assert!(!running.bridged, "no bridge lines were given");
+
+        // The guard against two clients racing for the same port and state lock.
+        assert_eq!(
+            start(path, 0, "", TransportPorts::default()),
+            AIRHOP_TOR_ERR_ALREADY_RUNNING
+        );
+
+        assert_eq!(set_dormant(true), AIRHOP_TOR_OK);
+        assert_eq!(set_dormant(false), AIRHOP_TOR_OK);
+
+        assert_eq!(stop(), AIRHOP_TOR_OK);
+        assert!(!status().running);
+        assert_eq!(set_dormant(false), AIRHOP_TOR_ERR_NOT_RUNNING);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Fail-closed end to end, not only at the config builder: a user who asked
+    /// for a bridge must never be given a direct connection instead.
+    #[test]
+    fn a_bridge_without_its_transport_refuses_to_start() {
+        let _serial = exclusive();
+        let dir = std::env::temp_dir().join(format!(
+            "airhop-tor-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.to_str().expect("temp dir is not UTF-8");
+
+        let line = "obfs4 192.0.2.1:443 0123456789ABCDEF0123456789ABCDEF01234567 \
+            cert=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ012345 iat-mode=0";
+        assert_eq!(
+            start(path, 0, line, TransportPorts::default()),
+            AIRHOP_TOR_ERR_BRIDGE_TRANSPORT
+        );
+        assert!(!status().running, "a refused start leaves nothing behind");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A panic returns the fallback and records why, rather than unwinding into
+    /// the caller's C or JNI frame.
+    #[test]
+    fn a_panic_becomes_an_error_code() {
+        let _serial = exclusive();
+        let rc = catch_panic(AIRHOP_TOR_ERR_PANIC, || -> i32 {
+            panic!("deliberate test panic");
+        });
+        assert_eq!(rc, AIRHOP_TOR_ERR_PANIC);
+        assert!(
+            status().summary.contains("deliberate test panic"),
+            "the panic message must reach the summary, got: {}",
+            status().summary
+        );
+        // Left as it was found, so ordering between tests cannot matter.
+        update_status(|s| *s = Status::default());
+    }
 }

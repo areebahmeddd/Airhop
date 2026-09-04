@@ -140,6 +140,19 @@ interface SettingsState {
   // torEnabled is: a relaunch has to come back on the route the user chose.
   torBridgeMode: TorBridgeMode;
   torBridgeLines: string;
+  // Set before the native Tor client is asked to start and cleared when it
+  // answers. Persisted, so it survives a process that does not.
+  //
+  // torEnabled is written before the client exists so a relaunch mid-bootstrap
+  // comes back on Tor rather than on the clear net. This is what keeps that
+  // ordering safe: a native failure severe enough to end the process would
+  // otherwise be replayed by every launch after it, and the only way out of that
+  // loop is clearing app data, which is the user's keys, history and wallet.
+  //
+  // Still set at launch means the last start never finished, and tor-routing
+  // turns Tor off. Reading it beside `torEnabled` is how the Tor screen knows to
+  // say so: reverting a privacy choice silently is the one thing it must not do.
+  torStartPending: boolean;
   // Whether Cashu mint HTTP calls may go out over the clear net while Tor is
   // on. Tor covers only Nostr WebSockets on iOS, and mint calls are plain fetch,
   // so with Tor enabled a mint request would reveal this device's IP to the mint
@@ -206,6 +219,7 @@ interface SettingsState {
   setTorEnabled: (enabled: boolean) => void;
   setTorBridgeMode: (mode: TorBridgeMode) => void;
   setTorBridgeLines: (lines: string) => void;
+  setTorStartPending: (pending: boolean) => void;
   setBitcoinUnit: (unit: BitcoinUnit) => void;
   setAllowMintOverClearnet: (allowed: boolean) => void;
   setMonoFont: (font: MonoFont) => void;
@@ -240,6 +254,7 @@ const DEFAULTS = {
   torEnabled: false,
   torBridgeMode: "off" as TorBridgeMode,
   torBridgeLines: "",
+  torStartPending: false,
   allowMintOverClearnet: false,
   // Sats by default: it is the unit people actually quote amounts in, and it
   // avoids showing a new user a balance that reads 0.00000000.
@@ -350,6 +365,10 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setTorBridgeLines(lines) {
         set({ torBridgeLines: lines });
+      },
+      setTorStartPending(pending) {
+        if (get().torStartPending === pending) return;
+        set({ torStartPending: pending });
       },
       setBitcoinUnit(unit) {
         set({ bitcoinUnit: unit });

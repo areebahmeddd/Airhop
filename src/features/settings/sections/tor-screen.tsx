@@ -21,8 +21,8 @@ import { showAlert } from "@store/alert-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore, type TorBridgeMode } from "@store/settings-store";
 import BottomSheet from "@ui/components/bottom-sheet";
-import { HIT_SLOP, useThemeColors } from "@ui/theme";
-import React, { useRef, useState } from "react";
+import { FontFamily, HIT_SLOP, MIN_TOUCH, useThemeColors } from "@ui/theme";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   GroupDivider,
@@ -80,6 +80,22 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
   const internetEnabled = useSettingsStore((s) => s.internetEnabled);
   const torBootstrap = useMeshStateStore((s) => s.torBootstrap);
   const torActive = useMeshStateStore((s) => s.torActive);
+  // A start marker still set with Tor off is one that never answered: startup
+  // turned Tor off and left this for the screen to explain.
+  const startPending = useSettingsStore((s) => s.torStartPending);
+  const recovered = startPending && !torEnabled;
+
+  // Cleared on the way out, not on the way in, so the notice survives being read
+  // once and does not greet every later visit. Read fresh rather than captured:
+  // leaving mid-start would otherwise clear a marker that is still doing its job.
+  useEffect(() => {
+    return () => {
+      const settings = useSettingsStore.getState();
+      if (settings.torStartPending && !settings.torEnabled) {
+        settings.setTorStartPending(false);
+      }
+    };
+  }, []);
 
   // Local until applied, so a half-typed bridge line never reaches the client.
   const [draftLines, setDraftLines] = useState(storedLines);
@@ -93,7 +109,16 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
   // What the client is doing, said plainly. `torActive` is the only flag that
   // may claim traffic is onion routed, so nothing else here implies it.
   function statusText(): string {
+    // Ahead of the ordinary states: this one the user did not choose, and a
+    // bare "Off" would leave them to work that out for themselves.
+    if (recovered) return T("settings.tor.recovered");
     if (!torEnabled) return T("common.off");
+    // Chosen but not yet usable. setTorBridgeMode leaves the running client
+    // alone when the selected mode has no lines, so saying "routed" here would
+    // credit the selection for a circuit the previous mode is carrying.
+    if (bridgeMode === "custom" && storedLines.trim() === "") {
+      return T("settings.tor.custom_empty");
+    }
     if (torActive) return T("mesh.banner.tor");
     if (torBootstrap === "blocked") return T("mesh.banner.tor_blocked");
     return T("mesh.banner.tor_starting");
@@ -144,12 +169,18 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
     );
   }
 
+  const hasUnappliedLines = draftLines.trim() !== storedLines.trim();
+
   // Only when the text actually moved. Blurring an untouched field would
   // otherwise drop the circuit and rebuild it for nothing.
   function applyCustomLines(): void {
-    if (draftLines.trim() === storedLines.trim()) return;
+    if (!hasUnappliedLines) return;
     void run(() => setTorBridgeMode("custom", draftLines));
   }
+
+  const confirmAction = pendingOn
+    ? T("settings.conn.turn_on")
+    : T("settings.conn.turn_off");
 
   return (
     <View style={styles.container}>
@@ -178,7 +209,7 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
             <GroupDivider />
             <SettingRow
               icon="activity"
-              label={T("settings.conn.tor_short")}
+              label={T("settings.tor.status")}
               description={statusText()}
             />
           </View>
@@ -240,10 +271,22 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
             </Text>
             <View style={styles.settingsGroup}>
               <View style={styles.settingRow}>
+                {/* Monospace, like every other opaque identifier in the app: a
+                    bridge line is a fingerprint and a base64 certificate, and
+                    proportional text makes a mistyped one unfindable.
+
+                    One row tall until there is something in it. A multiline
+                    input grows with its content, so a taller floor only buys an
+                    empty box the size of the bridges it is waiting for. */}
                 <TextInput
                   style={[
                     styles.settingLabel,
-                    { flex: 1, minHeight: 96, paddingVertical: 0 },
+                    {
+                      flex: 1,
+                      minHeight: MIN_TOUCH,
+                      paddingVertical: 0,
+                      fontFamily: FontFamily.mono,
+                    },
                   ]}
                   value={draftLines}
                   onChangeText={setDraftLines}
@@ -257,8 +300,13 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
                 />
               </View>
             </View>
+            {/* Blur is what applies the lines, and nothing about a text box
+                says so. Shown only once there is an edit to apply, so it reads
+                as the next step rather than as standing advice. */}
             <Text style={styles.settingDescription}>
-              {T("settings.tor.mode_custom_desc")}
+              {hasUnappliedLines
+                ? T("settings.tor.custom_apply_hint")
+                : T("settings.tor.mode_custom_desc")}
             </Text>
           </View>
         )}
@@ -282,17 +330,6 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
         <View style={styles.sheetActions}>
           <Pressable
             style={({ pressed }) => [
-              styles.sheetBtn,
-              pressed && styles.sheetBtnPressed,
-            ]}
-            onPress={() => setConfirmVisible(false)}
-            accessibilityRole="button"
-          >
-            <Text style={styles.sheetBtnText}>{T("common.cancel")}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.sheetBtn,
               styles.sheetBtnPrimary,
               pressed && styles.sheetBtnPrimaryPressed,
             ]}
@@ -301,12 +338,20 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
               void run(() => setTorRouting(pendingOn));
             }}
             accessibilityRole="button"
+            accessibilityLabel={confirmAction}
           >
-            <Text style={[styles.sheetBtnText, styles.sheetBtnTextPrimary]}>
-              {pendingOn
-                ? T("settings.conn.turn_on")
-                : T("settings.conn.turn_off")}
-            </Text>
+            <Text style={styles.sheetBtnTextPrimary}>{confirmAction}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.sheetBtn,
+              pressed && styles.sheetBtnPressed,
+            ]}
+            onPress={() => setConfirmVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel={T("common.cancel")}
+          >
+            <Text style={styles.sheetBtnText}>{T("common.cancel")}</Text>
           </Pressable>
         </View>
       </BottomSheet>

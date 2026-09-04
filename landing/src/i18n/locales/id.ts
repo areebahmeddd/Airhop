@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Legal",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Arsitektur",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "Tanya jawab",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Berlisensi MIT · Gratis dan sumber terbuka · Bekerja dengan bitchat",
   "home.hero.group.mobile": "Ponsel",
   "home.hero.group.desktop": "Desktop",
-  "home.hero.option.f_droid": "Katalog sumber terbuka",
+  "home.hero.option.zapstore": "Ditandatangani di Nostr",
   "home.hero.option.apk": "Unduhan langsung",
   "home.hero.option.soon": "Segera hadir",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Setiap sesi memakai protokol {noise} untuk handshake terautentikasi. Pesan yang tersimpan memakai algoritme {ratchet}, artinya sekalipun perangkat Anda diretas di kemudian hari, pesan lama Anda tetap tidak terbaca. Hapus darurat memusnahkan semua kunci dan pesan dalam waktu kurang dari satu detik.",
   "home.about.body.internet":
-    "Ketika Anda dan kontak berada di luar jangkauan Bluetooth, relai {nostr} berfungsi sebagai jembatan lewat internet, memakai pesan langsung terbungkus berformat {nip17}, sehingga mesh meluas ke seluruh dunia selama kalian berdua daring. Dukungan {tor} tersedia di iOS dan Android, lewat {arti}.",
+    "Ketika Anda dan kontak berada di luar jangkauan Bluetooth, relai {nostr} berfungsi sebagai jembatan lewat internet, memakai pesan langsung terbungkus berformat {nip17}, sehingga mesh meluas ke seluruh dunia selama kalian berdua daring. Dukungan {tor} tersedia di iOS dan Android, lewat {arti}, dengan bridge {obfs4} dan {snowflake} untuk jaringan yang memblokir Tor.",
   "home.about.optional.title": "Airhop punya fitur opsional yang bisa Anda aktifkan:",
   "home.about.optional.payments.label": "Pembayaran luring:",
   "home.about.optional.payments.body":

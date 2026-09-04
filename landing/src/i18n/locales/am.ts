@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "ሕጋዊ",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "አወቃቀር",
   "footer.link.blogs": "ብሎግ",
   "footer.link.faq": "ተደጋጋሚ ጥያቄዎች",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "የ MIT ፈቃድ · ነጻና ክፍት ምንጭ · ከ bitchat ጋር ይሠራል",
   "home.hero.group.mobile": "ተንቀሳቃሽ",
   "home.hero.group.desktop": "ኮምፒውተር",
-  "home.hero.option.f_droid": "የክፍት ምንጭ ዝርዝር",
+  "home.hero.option.zapstore": "በ Nostr የተፈረመ",
   "home.hero.option.apk": "ቀጥታ ማውረድ",
   "home.hero.option.soon": "በቅርቡ ይመጣል",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "እያንዳንዱ ክፍለ ጊዜ ለተረጋገጠ የመጀመሪያ ልውውጥ የ {noise} ፕሮቶኮልን ይጠቀማል። የተቀመጡ መልእክቶች የ {ratchet} ስልተ ቀመርን ይጠቀማሉ፤ ማለትም መሣሪያዎ ወደፊት ቢጠለፍም እንኳ ያለፉት መልእክቶችዎ ሊነበቡ አይችሉም። የአስቸኳይ ጊዜ ማጥፋት ሁሉንም ቁልፎችና መልእክቶች ከአንድ ሰከንድ ባነሰ ጊዜ ውስጥ ያጠፋል።",
   "home.about.body.internet":
-    "እርስዎና ሰዎችዎ ከ Bluetooth ክልል ውጭ ሲሆኑ የ {nostr} ማስተላለፊያዎች በኢንተርኔት በኩል እንደ ድልድይ ያገለግላሉ፤ በ {nip17} ቅርጽ የተጠቀለሉ ቀጥታ መልእክቶችን ይጠቀማሉ። ስለዚህ ሁለታችሁም በመስመር ላይ ስትሆኑ መረቡ ወደ መላው ዓለም ይዘረጋል። የ {tor} ድጋፍ በ iOS እና በ Android ላይ በ {arti} በኩል ይገኛል።",
+    "እርስዎና ሰዎችዎ ከ Bluetooth ክልል ውጭ ሲሆኑ የ {nostr} ማስተላለፊያዎች በኢንተርኔት በኩል እንደ ድልድይ ያገለግላሉ፤ በ {nip17} ቅርጽ የተጠቀለሉ ቀጥታ መልእክቶችን ይጠቀማሉ። ስለዚህ ሁለታችሁም በመስመር ላይ ስትሆኑ መረቡ ወደ መላው ዓለም ይዘረጋል። የ {tor} ድጋፍ በ iOS እና በ Android ላይ በ {arti} በኩል ይገኛል፤ Tor ለሚያግዱ አውታረ መረቦችም የ {obfs4} እና የ {snowflake} ድልድዮች አሉ።",
   "home.about.optional.title": "Airhop እርስዎ ማብራት የሚችሏቸው አማራጭ ባህሪዎች አሉት:",
   "home.about.optional.payments.label": "ከመስመር ውጭ ክፍያ:",
   "home.about.optional.payments.body":

@@ -7,6 +7,9 @@
 //!
 //! The header is generated from this file by cbindgen (`cbindgen.toml`) rather
 //! than hand-written, so the two cannot drift.
+//!
+//! Every entry point runs inside `crate::catch_panic`: unwinding into a Swift
+//! frame is undefined behaviour.
 
 use std::ffi::{c_char, c_int, CStr};
 
@@ -35,43 +38,45 @@ pub unsafe extern "C" fn airhop_tor_start(
     obfs4_port: u16,
     snowflake_port: u16,
 ) -> c_int {
-    if data_dir.is_null() {
-        return crate::AIRHOP_TOR_ERR_DATA_DIR;
-    }
-    let Ok(dir) = unsafe { CStr::from_ptr(data_dir) }.to_str() else {
-        return crate::AIRHOP_TOR_ERR_DATA_DIR;
-    };
-    let lines = if bridge_lines.is_null() {
-        ""
-    } else {
-        match unsafe { CStr::from_ptr(bridge_lines) }.to_str() {
-            Ok(s) => s,
-            Err(_) => return crate::AIRHOP_TOR_ERR_BRIDGE_LINE,
+    crate::catch_panic(crate::AIRHOP_TOR_ERR_PANIC, || {
+        if data_dir.is_null() {
+            return crate::AIRHOP_TOR_ERR_DATA_DIR;
         }
-    };
-    crate::start(
-        dir,
-        socks_port,
-        lines,
-        crate::TransportPorts {
-            obfs4: obfs4_port,
-            snowflake: snowflake_port,
-        },
-    )
+        let Ok(dir) = (unsafe { CStr::from_ptr(data_dir) }).to_str() else {
+            return crate::AIRHOP_TOR_ERR_DATA_DIR;
+        };
+        let lines = if bridge_lines.is_null() {
+            ""
+        } else {
+            match (unsafe { CStr::from_ptr(bridge_lines) }).to_str() {
+                Ok(s) => s,
+                Err(_) => return crate::AIRHOP_TOR_ERR_BRIDGE_LINE,
+            }
+        };
+        crate::start(
+            dir,
+            socks_port,
+            lines,
+            crate::TransportPorts {
+                obfs4: obfs4_port,
+                snowflake: snowflake_port,
+            },
+        )
+    })
 }
 
 /// Stop Tor, drop its client and release the port. Returns `0`, or
 /// `AIRHOP_TOR_ERR_NOT_RUNNING` when there was nothing to stop.
 #[no_mangle]
 pub extern "C" fn airhop_tor_stop() -> c_int {
-    crate::stop()
+    crate::catch_panic(crate::AIRHOP_TOR_ERR_PANIC, crate::stop)
 }
 
 /// Put Tor to sleep or wake it, for the app leaving and re-entering the
 /// foreground. Returns `0`, or `AIRHOP_TOR_ERR_NOT_RUNNING`.
 #[no_mangle]
 pub extern "C" fn airhop_tor_set_dormant(dormant: bool) -> c_int {
-    crate::set_dormant(dormant)
+    crate::catch_panic(crate::AIRHOP_TOR_ERR_PANIC, || crate::set_dormant(dormant))
 }
 
 /// The current status, packed into one word.
@@ -90,7 +95,10 @@ pub extern "C" fn airhop_tor_set_dormant(dormant: bool) -> c_int {
 /// parameter: there is no failure for a caller to handle.
 #[no_mangle]
 pub extern "C" fn airhop_tor_status() -> c_int {
-    crate::packed_status()
+    // The fallback is a stopped client: a status word has no value a caller
+    // could read as an error, and "not running" is the safe answer as well as
+    // the true one.
+    crate::catch_panic(0, crate::packed_status)
 }
 
 /// Copy Arti's current stage description into `buf` as a NUL-terminated string.
@@ -105,19 +113,21 @@ pub extern "C" fn airhop_tor_status() -> c_int {
 /// `buf` must be non-null and point at `len` writable bytes.
 #[no_mangle]
 pub unsafe extern "C" fn airhop_tor_summary(buf: *mut c_char, len: c_int) -> c_int {
-    if buf.is_null() || len <= 0 {
-        return crate::AIRHOP_TOR_ERR_DATA_DIR;
-    }
-    let summary = crate::status().summary;
-    let capacity = (len - 1) as usize;
-    let mut end = summary.len().min(capacity);
-    while end > 0 && !summary.is_char_boundary(end) {
-        end -= 1;
-    }
-    let bytes = &summary.as_bytes()[..end];
-    unsafe {
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf as *mut u8, end);
-        buf.add(end).write(0);
-    }
-    end as c_int
+    crate::catch_panic(crate::AIRHOP_TOR_ERR_PANIC, || {
+        if buf.is_null() || len <= 0 {
+            return crate::AIRHOP_TOR_ERR_DATA_DIR;
+        }
+        let summary = crate::status().summary;
+        let capacity = (len - 1) as usize;
+        let mut end = summary.len().min(capacity);
+        while end > 0 && !summary.is_char_boundary(end) {
+            end -= 1;
+        }
+        let bytes = &summary.as_bytes()[..end];
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf as *mut u8, end);
+            buf.add(end).write(0);
+        }
+        end as c_int
+    })
 }

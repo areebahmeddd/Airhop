@@ -1777,6 +1777,7 @@ export const strings: Strings = {
     "Tor को जुड़ने में एक मिनट से ज़्यादा लग रहा है। यह चालू रहता है और कोशिश करता रहता है; मेश टैब बताएगा कि यह कब रूट कर रहा है, या यह नेटवर्क इसे रोक रहा है।",
   "settings.conn.tor_failed":
     "Tor शुरू नहीं हो सका। पक्का करें कि ऐप के पास नेटवर्क पहुँच है।",
+  "settings.tor.status": "Tor स्थिति",
   "settings.tor.connection": "कनेक्शन",
   "settings.tor.mode_off": "सीधा",
   "settings.tor.mode_off_desc":
@@ -1784,14 +1785,18 @@ export const strings: Strings = {
   "settings.tor.mode_snowflake": "Snowflake",
   "settings.tor.mode_snowflake_desc":
     "छिपाता है कि आप Tor इस्तेमाल कर रहे हैं, और जहाँ ब्रिज ब्लॉक हैं वहाँ भी चलता है। जुड़ने में सबसे धीमा।",
-  "settings.tor.mode_obfs4": "ब्रिज",
+  "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "छिपाता है कि आप Tor इस्तेमाल कर रहे हैं। Snowflake से तेज़, लेकिन ये ब्रिज सार्वजनिक हैं और कुछ नेटवर्क इन्हें रोकते हैं।",
   "settings.tor.mode_custom": "अपने ब्रिज",
   "settings.tor.mode_custom_desc":
     "bridges.torproject.org से लिए ब्रिज इस्तेमाल करें। बाकी काम न करें तो यह आज़माएँ।",
   "settings.tor.custom_placeholder": "हर पंक्ति में एक ब्रिज लाइन चिपकाएँ",
+  "settings.tor.custom_apply_hint":
+    "कनेक्ट करने के लिए बॉक्स के बाहर टैप करें।",
   "settings.tor.custom_empty": "पहले कम से कम एक ब्रिज लाइन जोड़ें।",
+  "settings.tor.recovered":
+    "Tor बंद कर दिया गया क्योंकि इससे ऐप शुरू नहीं हो पा रहा था। दोबारा कोशिश करने के लिए इसे फिर से चालू करें।",
   "settings.conn.mint_clearnet": "मिंट ट्रैफ़िक को खुले नेट पर जाने दें",
   "settings.conn.mint_clearnet_desc":
     "iOS पर Tor सिर्फ़ Nostr को ढकता है। मिंट अनुरोध रोकने के लिए इसे बंद रहने दें; मेश पर ecash दोनों ही हाल में चलता रहता है।",

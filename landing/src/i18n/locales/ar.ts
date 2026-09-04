@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "قانوني",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "البنية",
   "footer.link.blogs": "المدونة",
   "footer.link.faq": "الأسئلة الشائعة",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "رخصة MIT · مجاني ومفتوح المصدر · متوافق مع bitchat",
   "home.hero.group.mobile": "الهاتف",
   "home.hero.group.desktop": "سطح المكتب",
-  "home.hero.option.f_droid": "متجر مفتوح المصدر",
+  "home.hero.option.zapstore": "موقّع عبر Nostr",
   "home.hero.option.apk": "تنزيل مباشر",
   "home.hero.option.soon": "قريبًا",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "كل جلسة تستخدم بروتوكول {noise} لمصافحة موثّقة. والرسائل المخزّنة تستخدم خوارزمية {ratchet}، أي أنه حتى لو اختُرق جهازك لاحقًا تبقى رسائلك السابقة غير قابلة للقراءة. والمسح الطارئ يتلف كل المفاتيح والرسائل في أقل من ثانية.",
   "home.about.body.internet":
-    "حين تكون أنت وجهة اتصالك خارج نطاق Bluetooth، تعمل مُرحّلات {nostr} كجسر عبر الإنترنت، مستخدمةً رسائل مباشرة مغلّفة بصيغة {nip17}، فتمتد الشبكة المتشابكة عالميًا طالما كنتما متصلين. ودعم {tor} متاح على iOS و Android عبر {arti}.",
+    "حين تكون أنت وجهة اتصالك خارج نطاق Bluetooth، تعمل مُرحّلات {nostr} كجسر عبر الإنترنت، مستخدمةً رسائل مباشرة مغلّفة بصيغة {nip17}، فتمتد الشبكة المتشابكة عالميًا طالما كنتما متصلين. ودعم {tor} متاح على iOS و Android عبر {arti}، مع جسور {obfs4} و {snowflake} للشبكات التي تحجب Tor.",
   "home.about.optional.title": "في Airhop مزايا اختيارية يمكنك تفعيلها:",
   "home.about.optional.payments.label": "مدفوعات دون اتصال:",
   "home.about.optional.payments.body":

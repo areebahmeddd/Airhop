@@ -22,7 +22,7 @@ const strings: Strings = {
   "footer.group.legal": "Perundangan",
   "footer.link.app_store": "App Store",
   "footer.link.play_store": "Google Play",
-  "footer.link.f_droid": "F-Droid",
+  "footer.link.zapstore": "Zapstore",
   "footer.link.architecture": "Seni bina",
   "footer.link.blogs": "Blog",
   "footer.link.faq": "Soalan lazim",
@@ -51,7 +51,7 @@ const strings: Strings = {
   "home.hero.badges": "Berlesen MIT · Percuma dan sumber terbuka · Serasi dengan bitchat",
   "home.hero.group.mobile": "Mudah alih",
   "home.hero.group.desktop": "Desktop",
-  "home.hero.option.f_droid": "Katalog sumber terbuka",
+  "home.hero.option.zapstore": "Ditandatangani di Nostr",
   "home.hero.option.apk": "Muat turun terus",
   "home.hero.option.soon": "Akan datang",
 
@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Setiap sesi menggunakan protokol {noise} untuk jabat tangan yang disahkan. Mesej yang disimpan menggunakan algoritma {ratchet}, iaitu walaupun peranti anda dikompromi kemudian, mesej lama anda kekal tidak boleh dibaca. Pemadaman kecemasan memusnahkan semua kunci dan mesej dalam masa kurang satu saat.",
   "home.about.body.internet":
-    "Apabila anda dan kenalan anda berada di luar jangkauan Bluetooth, geganti {nostr} bertindak sebagai jambatan melalui internet, menggunakan mesej terus yang dibalut mengikut format {nip17}, jadi rangkaian mesh meluas ke seluruh dunia setiap kali anda berdua dalam talian. Sokongan {tor} tersedia pada iOS dan Android, melalui {arti}.",
+    "Apabila anda dan kenalan anda berada di luar jangkauan Bluetooth, geganti {nostr} bertindak sebagai jambatan melalui internet, menggunakan mesej terus yang dibalut mengikut format {nip17}, jadi rangkaian mesh meluas ke seluruh dunia setiap kali anda berdua dalam talian. Sokongan {tor} tersedia pada iOS dan Android, melalui {arti}, dengan jambatan {obfs4} dan {snowflake} untuk rangkaian yang menyekat Tor.",
   "home.about.optional.title": "Airhop mempunyai ciri pilihan yang boleh anda hidupkan:",
   "home.about.optional.payments.label": "Pembayaran luar talian:",
   "home.about.optional.payments.body":
