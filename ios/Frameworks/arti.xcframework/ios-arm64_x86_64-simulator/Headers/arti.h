@@ -60,6 +60,12 @@
 #define AIRHOP_TOR_ERR_BRIDGE_TRANSPORT -8
 
 /**
+ * A panic was caught at the FFI boundary. The call did nothing; the reason is
+ * in the status summary.
+ */
+#define AIRHOP_TOR_ERR_PANIC -9
+
+/**
  * Bit layout of the packed status word both FFI surfaces return.
  *
  * ```text
