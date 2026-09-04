@@ -1528,6 +1528,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "পিয়ার আইডি কপি করুন",
   "settings.peer_id_sheet.note":
     "এটি কেবল তখনই কাজ করে যখন আপনারা দুজনেই ব্লুটুথের নাগালে। কেউ যেকোনো জায়গা থেকে আপনাকে বার্তা পাঠাক চাইলে বরং আপনার QR কোড ভাগ করুন।",
+  "settings.search.placeholder": "সেটিংসে খুঁজুন…",
+  "settings.search.a11y": "সেটিংসে খুঁজুন",
+  "settings.search.close": "খোঁজা বন্ধ করুন",
+  "settings.search.clear": "খোঁজা মুছুন",
+  "settings.search.hint": "নাম দিয়ে যেকোনো সেটিং খুঁজুন, সে যেখানেই থাকুক।",
+  "settings.search.no_results": "“{query}”-এর সঙ্গে মেলে এমন সেটিং নেই",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "সাধারণ",
@@ -1773,7 +1779,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor যুক্ত হতে এক মিনিটের বেশি নিচ্ছে। এটি চালু থেকে চেষ্টা করে যায়; মেশ ট্যাব জানাবে কখন এটি ঘোরাচ্ছে, বা এই নেটওয়ার্ক এটি আটকাচ্ছে কিনা।",
   "settings.conn.tor_failed":
-    "Tor চালু করা গেল না। অ্যাপের নেটওয়ার্কে ঢোকার অনুমতি আছে কিনা দেখুন।",
+    "Tor চালু করা যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
   "settings.tor.status": "Tor স্ট্যাটাস",
   "settings.tor.connection": "সংযোগ",
   "settings.tor.mode_off": "সরাসরি",
@@ -1785,14 +1791,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "আপনি Tor ব্যবহার করছেন তা লুকায়। Snowflake-এর চেয়ে দ্রুত, তবে এই ব্রিজগুলি প্রকাশ্য এবং কিছু নেটওয়ার্ক সেগুলি আটকায়।",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "সাধারণ ওয়েবসাইট ভিজিটের মতো দেখিয়ে আপনি Tor ব্যবহার করছেন তা লুকায়। অন্যগুলোর চেয়ে ব্লক করা কঠিন।",
   "settings.tor.mode_custom": "নিজের ব্রিজ",
   "settings.tor.mode_custom_desc":
-    "bridges.torproject.org থেকে পাওয়া ব্রিজ ব্যবহার করুন। অন্যগুলি কাজ না করলে এটি চেষ্টা করুন।",
+    "bridges.torproject.org থেকে পাওয়া obfs4 ব্রিজ লাইন ব্যবহার করুন। অন্যগুলো ব্যর্থ হলে এটি চেষ্টা করুন।",
   "settings.tor.custom_placeholder": "প্রতি লাইনে একটি ব্রিজ লাইন পেস্ট করুন",
   "settings.tor.custom_apply_hint": "সংযোগ করতে বাক্সের বাইরে ট্যাপ করুন।",
   "settings.tor.custom_empty": "প্রথমে অন্তত একটি ব্রিজ লাইন যোগ করুন।",
   "settings.tor.recovered":
-    "Tor অ্যাপ চালু হতে দেয়নি, তাই এটি বন্ধ করা হয়েছে। আবার চেষ্টা করতে এটি পুনরায় চালু করুন।",
+    "Tor গতবার চালু হওয়া শেষ করতে পারেনি, তাই এটি বন্ধ করা হয়েছে। আবার চেষ্টা করতে এটি পুনরায় চালু করুন।",
   "settings.conn.mint_clearnet": "খোলা নেটে মিন্টের যাতায়াতের অনুমতি দিন",
   "settings.conn.mint_clearnet_desc":
     "iOS-এ Tor কেবল Nostr ঢাকে। মিন্টের অনুরোধ আটকাতে বন্ধ রাখুন; যেভাবেই হোক মেশে ecash চলতেই থাকে।",

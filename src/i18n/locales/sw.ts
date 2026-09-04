@@ -1570,6 +1570,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Nakili kitambulisho cha peer",
   "settings.peer_id_sheet.note":
     "Hii hufanya kazi tu mkiwa nyote ndani ya masafa ya Bluetooth. Ili mtu akutumie ujumbe kutoka popote, shiriki msimbo wako wa QR badala yake.",
+  "settings.search.placeholder": "Tafuta kwenye mipangilio…",
+  "settings.search.a11y": "Tafuta kwenye mipangilio",
+  "settings.search.close": "Funga utafutaji",
+  "settings.search.clear": "Futa utafutaji",
+  "settings.search.hint":
+    "Tafuta mpangilio wowote kwa jina lake, popote ulipo.",
+  "settings.search.no_results": "Hakuna mipangilio inayolingana na “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Jumla",
@@ -1824,7 +1831,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor inachukua zaidi ya dakika moja kuunganisha. Inabaki imewashwa na inaendelea kujaribu; kichupo cha Mesh kitasema itakapokuwa inaelekeza, au kama mtandao huu unaizuia.",
   "settings.conn.tor_failed":
-    "Tor haikuweza kuanza. Hakikisha programu ina ufikiaji wa mtandao.",
+    "Imeshindwa kuanzisha Tor. Jaribu tena baada ya muda mfupi.",
   "settings.tor.status": "Hali ya Tor",
   "settings.tor.connection": "Muunganisho",
   "settings.tor.mode_off": "Moja kwa moja",
@@ -1836,15 +1843,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Huficha kuwa unatumia Tor. Haraka kuliko Snowflake, lakini madaraja haya ni ya umma na baadhi ya mitandao huyazuia.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Huficha kuwa unatumia Tor kwa kuonekana kama kutembelea tovuti ya kawaida. Ngumu kuzuia kuliko nyingine.",
   "settings.tor.mode_custom": "Madaraja yako",
   "settings.tor.mode_custom_desc":
-    "Tumia madaraja uliyopata kutoka bridges.torproject.org. Jaribu hili pale mengine yanaposhindwa.",
+    "Tumia mistari ya daraja ya obfs4 kutoka bridges.torproject.org. Jaribu hii wakati nyingine zinashindwa.",
   "settings.tor.custom_placeholder":
     "Bandika mstari mmoja wa daraja kwa kila mstari",
   "settings.tor.custom_apply_hint": "Gusa nje ya kisanduku ili kuunganisha.",
   "settings.tor.custom_empty": "Ongeza angalau mstari mmoja wa daraja kwanza.",
   "settings.tor.recovered":
-    "Tor imezimwa kwa sababu ilizuia programu isianze. Iwashe tena ili ujaribu upya.",
+    "Tor imezimwa kwa sababu haikukamilisha kuanza mara ya mwisho. Iwashe tena ili ujaribu upya.",
   "settings.conn.mint_clearnet": "Ruhusu trafiki ya mint kupitia mtandao wazi",
   "settings.conn.mint_clearnet_desc":
     "Tor kwenye iOS hufunika Nostr pekee. Iache imezimwa ili kuzuia maombi ya mint; ecash kupitia mesh huendelea kufanya kazi vyovyote vile.",

@@ -1549,6 +1549,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Eş kimliğini kopyala",
   "settings.peer_id_sheet.note":
     "Bu yalnızca ikiniz de Bluetooth menzilindeyken işe yarar. Birinin sana her yerden yazabilmesi için onun yerine QR kodunu paylaş.",
+  "settings.search.placeholder": "Ayarlarda ara…",
+  "settings.search.a11y": "Ayarlarda ara",
+  "settings.search.close": "Aramayı kapat",
+  "settings.search.clear": "Aramayı temizle",
+  "settings.search.hint": "Nerede olursa olsun her ayarı adıyla bul.",
+  "settings.search.no_results": "“{query}” için ayar yok",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Genel",
@@ -1793,8 +1799,7 @@ export const strings: Strings = {
   "settings.conn.tor_unavailable": "Tor yönlendirmesi bu yapıda yok.",
   "settings.conn.tor_timeout":
     "Tor'un bağlanması bir dakikadan uzun sürüyor. Açık kalır ve denemeyi sürdürür; Mesh sekmesi yönlendirmenin başladığını ya da bu ağın engellediğini söyleyecek.",
-  "settings.conn.tor_failed":
-    "Tor başlatılamadı. Uygulamanın ağ erişimi olduğundan emin ol.",
+  "settings.conn.tor_failed": "Tor başlatılamadı. Birazdan yeniden deneyin.",
   "settings.tor.status": "Tor durumu",
   "settings.tor.connection": "Bağlantı",
   "settings.tor.mode_off": "Doğrudan",
@@ -1806,14 +1811,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Tor kullandığınızı gizler. Snowflake'ten hızlıdır, ancak bu köprüler herkese açıktır ve bazı ağlar engeller.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Sıradan bir web sitesi ziyareti gibi görünerek Tor kullandığınızı gizler. Diğerlerinden daha zor engellenir.",
   "settings.tor.mode_custom": "Kendi köprüleriniz",
   "settings.tor.mode_custom_desc":
-    "bridges.torproject.org adresinden aldığınız köprüleri kullanın. Diğerleri işe yaramazsa bunu deneyin.",
+    "bridges.torproject.org adresinden aldığınız obfs4 köprü satırlarını kullanın. Diğerleri başarısız olduğunda bunu deneyin.",
   "settings.tor.custom_placeholder": "Her satıra bir köprü satırı yapıştırın",
   "settings.tor.custom_apply_hint": "Bağlanmak için kutunun dışına dokunun.",
   "settings.tor.custom_empty": "Önce en az bir köprü satırı ekleyin.",
   "settings.tor.recovered":
-    "Tor kapatıldı, çünkü uygulamanın açılmasını engelliyordu. Yeniden denemek için tekrar açın.",
+    "Tor kapatıldı, çünkü geçen sefer başlatma tamamlanmadı. Yeniden denemek için tekrar açın.",
   "settings.conn.mint_clearnet":
     "Darphane trafiğine açık ağ üzerinden izin ver",
   "settings.conn.mint_clearnet_desc":

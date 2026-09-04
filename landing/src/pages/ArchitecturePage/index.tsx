@@ -888,30 +888,19 @@ export default function ArchitecturePage() {
                 ]}
               />
 
+              <h3 className="text-ink pt-2 text-base font-bold">Bitle relay hardware</h3>
               <p>
-                Relays come in two shapes. A bare repeater holds no keys and announces nothing, so
-                it never appears in anyone's list. A peer relay holds a Noise identity and announces
-                like any phone, which is what lets it join gossip sync and carry courier mail rather
-                than only repeating what it hears.{" "}
-                <TextLink href="https://bitle.org">Bitle</TextLink> takes the second shape and adds
-                a 915 MHz LoRa link between nodes, so two clusters of people a kilometer apart can
-                share a room.
+                Flash <TextLink href="https://bitle.org">Bitle</TextLink> firmware onto an ESP32
+                relay and place it where people need a longer reach. It speaks Airhop's mesh
+                protocol, carries gossip and courier mail, and links nodes over 915 MHz LoRa, so
+                Bluetooth clusters can reach one another without a phone standing in the gap.
               </p>
 
               <p>
-                That comes at a cost. A relay that announces arrives in every phone's peer list
-                looking like a person nobody can reach. Bitle answers it with one byte, ANNOUNCE TLV{" "}
-                <C>0xB1</C>, bit 0 meaning dedicated relay. Airhop reads that bit and draws those
-                peers as equipment: an aerial in place of the avatar, and an explanation in place of
-                the message and payment actions.
+                The relay carries the same encrypted packets as a phone and does not need Nostr or
+                an internet connection. Two Bitle nodes can extend a Bluetooth mesh across a gap,
+                keeping messages, sync and courier delivery on the local radio network.
               </p>
-
-              <Note label="The flag decides presentation and nothing else">
-                The byte sits inside the signed payload, but a node signs its own announce, so any
-                device can claim to be infrastructure. All the claim does is take buttons away from
-                its own row, which is nothing worth forging. It never gates a capability, a trust
-                decision or a routing choice. Airhop reads the flag and never sends it.
-              </Note>
 
               <p>
                 One ordering property matters before you deploy any of this: a relay does not make
@@ -1317,7 +1306,7 @@ export default function ArchitecturePage() {
               id="tor"
               eyebrow="Beyond the mesh · 13"
               title="The onion router"
-              lede="Gift wrap hides who is talking to whom. It does not hide your IP address from the relay. Tor closes that gap. Both platforms run the same client; how much of the app it covers is what differs."
+              lede="Gift wrap hides who is talking to whom. It does not hide your IP address from the relay. Tor closes that gap. Both platforms run the same embedded client; what differs is how much of the app it covers and how it reaches the network."
             >
               <p>
                 <TextLink href="https://arti.torproject.org">Arti</TextLink>, the Tor Project's Rust
@@ -1336,12 +1325,81 @@ export default function ArchitecturePage() {
               />
 
               <p>
+                <strong className="text-ink">Failing closed is structural, not timed.</strong> Arti
+                has no clearnet path at all, so a request made before the first circuit exists fails
+                rather than quietly taking the direct route. Protection starts when you turn Tor on,
+                not when the circuit finishes forming. If a network blocks Tor outright, the
+                internet half stops and the app says so instead of falling back.
+              </p>
+
+              <p>
                 Tor hides your address from the relay, but not the fact that you are using it. On a
                 direct connection the first hop goes to a publicly listed relay, so the network you
-                are on can see Tor in use. A bridge is an unlisted entry point, and the transport in
-                front of it makes the connection look like something else. Airhop builds obfs4 and
-                Snowflake in for that, and leaves them off by default: a bridge is slower, and only
-                worth it on a network that blocks or watches for Tor.
+                are on can see Tor traffic for what it is. A bridge is an entry point that appears
+                on no public list, and a pluggable transport in front of it disguises the connection
+                itself. Settings offers four ways to reach the network.
+              </p>
+
+              <Table
+                head={["Connection", "What it hides", "What it costs"]}
+                rows={[
+                  ["Direct", "Your address, from the relay", "Nothing. The default"],
+                  [
+                    "Snowflake",
+                    "That you use Tor, behind a volunteer proxy found through a broker, so there is no address list to enumerate or block",
+                    "Slowest to connect, and needs WebRTC to get through",
+                  ],
+                  [
+                    "obfs4",
+                    "That you use Tor, behind a stream of uniformly random bytes with no protocol structure to recognise",
+                    "Its bridge lines are public, so a determined censor blocks them",
+                  ],
+                  [
+                    "webtunnel",
+                    "That you use Tor, behind traffic shaped like an ordinary visit to a real HTTPS website",
+                    "Fewer bridges to go around, since each one needs a real website standing in front of it",
+                  ],
+                  [
+                    "Custom bridges",
+                    "The same as obfs4 or webtunnel, using lines the built-in list does not carry",
+                    "You fetch them yourself, and they are only as good as their source",
+                  ],
+                ]}
+              />
+
+              <p>
+                The two disguises work in opposite directions. Where{" "}
+                <TextLink href="https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/obfs4">
+                  obfs4
+                </TextLink>{" "}
+                makes the connection look like nothing at all, a stream with no structure to match
+                against,{" "}
+                <TextLink href="https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel">
+                  webtunnel
+                </TextLink>{" "}
+                makes it look like something entirely ordinary. That is the harder one for a censor
+                to act on, because blocking it means blocking real websites.{" "}
+                <TextLink href="https://snowflake.torproject.org">Snowflake</TextLink> sidesteps the
+                question instead: there is no fixed address to block in the first place.
+              </p>
+
+              <p>
+                Snowflake, obfs4 and webtunnel are ordinary programs upstream, and Arti would
+                normally run whichever one you chose as a child process. iOS forbids an app spawning
+                an executable, so Airhop compiles all three in and reaches them over loopback
+                instead: each listens on a port the library picks, and Arti dials it as an unmanaged
+                transport. One design that holds on both platforms, rather than a child process on
+                Android and something else on the phone that cannot have one.
+              </p>
+
+              <p>
+                The built-in obfs4 lines are synced from the Tor Project in CI rather than frozen at
+                release, because a list that goes stale between store updates fails exactly where
+                somebody needed it. Custom bridges take obfs4 and webtunnel lines from{" "}
+                <TextLink href="https://bridges.torproject.org">bridges.torproject.org</TextLink>{" "}
+                for when the built-in ones are blocked too. Bridges stay off by default: one is
+                slower than a direct connection, and only earns that on a network which blocks or
+                watches for Tor.
               </p>
 
               <Note label="Why iOS blocks mint traffic under Tor">

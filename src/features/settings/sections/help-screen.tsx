@@ -1,10 +1,11 @@
 // Help and feedback sub-screen: contact, bug reports, FAQ, and legal links.
 
 import React from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, View } from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -30,13 +31,11 @@ export default function HelpScreen({
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.help")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
+              id="help-contact"
               icon="life-buoy"
               label={T("settings.help.contact")}
               description={CONTACT_EMAIL}
@@ -48,6 +47,7 @@ export default function HelpScreen({
             />
             <GroupDivider />
             <SettingLinkRow
+              id="help-bug"
               icon="alert-circle"
               label={T("settings.help.bug")}
               description={T("settings.help.bug_desc")}
@@ -57,6 +57,7 @@ export default function HelpScreen({
             />
             <GroupDivider />
             <SettingLinkRow
+              id="help-faq"
               icon="help-circle"
               label={T("settings.help.faq")}
               description={T("settings.help.faq_desc")}
@@ -84,7 +85,7 @@ export default function HelpScreen({
             />
           </View>
         </View>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

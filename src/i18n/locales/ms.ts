@@ -1562,6 +1562,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Salin ID rakan",
   "settings.peer_id_sheet.note":
     "Ini hanya berfungsi apabila anda berdua berada dalam jangkauan Bluetooth. Untuk membolehkan seseorang menghantar mesej kepada anda dari mana-mana, kongsikan kod QR anda sebaliknya.",
+  "settings.search.placeholder": "Cari dalam tetapan…",
+  "settings.search.a11y": "Cari dalam tetapan",
+  "settings.search.close": "Tutup carian",
+  "settings.search.clear": "Kosongkan carian",
+  "settings.search.hint":
+    "Cari mana-mana tetapan mengikut namanya, di mana jua ia berada.",
+  "settings.search.no_results": "Tiada tetapan sepadan dengan “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Umum",
@@ -1817,7 +1824,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor mengambil masa lebih daripada seminit untuk menyambung. Ia kekal hidup dan terus mencuba; tab Mesh akan memberitahu bila ia mula menghala, atau kalau rangkaian ini menyekatnya.",
   "settings.conn.tor_failed":
-    "Tor tidak dapat dihidupkan. Pastikan aplikasi mempunyai capaian rangkaian.",
+    "Tor tidak dapat dimulakan. Cuba lagi sebentar lagi.",
   "settings.tor.status": "Status Tor",
   "settings.tor.connection": "Sambungan",
   "settings.tor.mode_off": "Terus",
@@ -1829,15 +1836,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Menyembunyikan penggunaan Tor. Lebih laju daripada Snowflake, tetapi jambatan ini awam dan sesetengah rangkaian menyekatnya.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Menyembunyikan penggunaan Tor dengan kelihatan seperti lawatan laman web biasa. Lebih sukar disekat daripada yang lain.",
   "settings.tor.mode_custom": "Jambatan sendiri",
   "settings.tor.mode_custom_desc":
-    "Gunakan jambatan dari bridges.torproject.org. Cuba ini apabila yang lain gagal.",
+    "Gunakan baris jambatan obfs4 daripada bridges.torproject.org. Cuba ini apabila yang lain gagal.",
   "settings.tor.custom_placeholder": "Tampal satu baris jambatan setiap baris",
   "settings.tor.custom_apply_hint": "Ketik di luar kotak untuk menyambung.",
   "settings.tor.custom_empty":
     "Tambah sekurang-kurangnya satu baris jambatan dahulu.",
   "settings.tor.recovered":
-    "Tor dimatikan kerana ia menghalang apl daripada dibuka. Hidupkannya semula untuk cuba lagi.",
+    "Tor dimatikan kerana ia tidak selesai dimulakan kali terakhir. Hidupkannya semula untuk cuba lagi.",
   "settings.conn.mint_clearnet":
     "Benarkan trafik mint melalui rangkaian terbuka",
   "settings.conn.mint_clearnet_desc":

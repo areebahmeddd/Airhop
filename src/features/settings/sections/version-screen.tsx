@@ -46,12 +46,15 @@ import {
   Linking,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { SubHeader, useSharedStyles } from "../settings-primitives";
+import {
+  SettingsScroll,
+  SubHeader,
+  useSharedStyles,
+} from "../settings-primitives";
 
 interface Props {
   onBack: () => void;
@@ -344,10 +347,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={shared.container}>
       <SubHeader title={T("settings.about.version")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <Pressable
           style={styles.hero}
           onPress={handleHeroTap}
@@ -475,7 +475,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
           </View>
           <Text style={styles.creditText}>{license}</Text>
         </View>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

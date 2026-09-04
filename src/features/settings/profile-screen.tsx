@@ -38,11 +38,10 @@ import {
   FontFamily,
   FontSize,
   FontWeight,
-  HIT_SLOP,
+  hitSlopFor,
   MIN_TOUCH,
   Radius,
   Spacing,
-  TAB_BAR_CLEARANCE,
   useResolvedTheme,
   useThemeColors,
   withAlpha,
@@ -84,11 +83,16 @@ import SupportScreen from "./sections/support-screen";
 import TermsScreen from "./sections/terms-screen";
 import TorScreen from "./sections/tor-screen";
 import VersionScreen from "./sections/version-screen";
+import type { SettingId, SettingsEntry, SettingsView } from "./settings-index";
 import {
   GroupDivider,
   SettingLinkRow,
+  SettingsHighlightProvider,
+  SettingsScroll,
+  useSettingHighlight,
   useSharedStyles,
 } from "./settings-primitives";
+import SettingsSearch from "./settings-search";
 
 // Share sheets are fire-and-forget: a rejection (the OS refusing to present, a
 // provider crash) is not something the user can act on, and leaving it
@@ -152,6 +156,11 @@ const STATUS_ORDER: Status[] = ["online", "away", "invisible"];
 // Diameter of the presence dot overlaid on the profile avatar. Named so its
 // radius follows it rather than being a hand-halved 9.
 const STATUS_DOT_SIZE = 18;
+
+// The round icon buttons in this screen's own header. Same 32pt pill and 18pt
+// glyph the app header wears on the other three tabs.
+const HEADER_BTN_SIZE = 32;
+const HEADER_GLYPH = 18;
 
 // The code and the mark in its middle.
 //
@@ -228,24 +237,6 @@ const TRANSFER_ITEMS: {
   },
 ];
 
-// Which sub-screen is currently pushed. "root" renders the hub itself.
-type SettingsView =
-  | "root"
-  | "general"
-  | "security"
-  | "network"
-  | "tor"
-  | "permissions"
-  | "storage"
-  | "diagnostics"
-  | "help"
-  | "terms"
-  | "privacy"
-  | "support"
-  | "about"
-  | "version"
-  | "licenses";
-
 // Where hardware back should land for a sub-screen nested one level deeper
 // than its section (e.g. Terms/Privacy under Help, Licenses under About).
 // Any view not listed here falls back to "root".
@@ -288,6 +279,15 @@ export default function ProfileScreen({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const STATUS_META = useMemo(() => getStatusMeta(Colors, T), [Colors, T]);
   const [view, setView] = useState<SettingsView>("root");
+  // The row a search result named. The provider clears it on its own timer.
+  const [highlightId, setHighlightId] = useState<SettingId | null>(null);
+  const clearHighlight = useCallback(() => setHighlightId(null), []);
+  // Held here, not in the search screen, so opening a result and coming back
+  // lands on the results again rather than on an empty field.
+  const [searchQuery, setSearchQuery] = useState("");
+  // The screen a search result opened, so back from exactly that screen returns
+  // to the results. Anything deeper follows its own parent chain.
+  const searchOrigin = useRef<SettingsView | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   // Both share actions are sheets rather than the OS share sheet straight from
   // the pill, because the one moment worth explaining what you are handing over
@@ -340,12 +340,45 @@ export default function ProfileScreen({
     setView(next);
   }
 
+  // What a search result does when tapped. See SettingsTarget for the shapes.
+  function handleSelectSearchResult(entry: SettingsEntry): void {
+    const { target } = entry;
+    if (target.kind === "sheet") {
+      setHighlightId(null);
+      setView("root");
+      if (target.sheet === "appearance") setShowThemeModal(true);
+      else setShowStatusModal(true);
+      return;
+    }
+    if (target.kind === "screen") {
+      setHighlightId(null);
+      openSection(target.view);
+      searchOrigin.current = target.view;
+      return;
+    }
+    setHighlightId(target.id);
+    if (target.view === "root") {
+      // The highlight is about to scroll the hub to the row, so the remembered
+      // position must not be restored over it.
+      restoreRootScroll.current = false;
+      setView("root");
+      return;
+    }
+    openSection(target.view);
+    searchOrigin.current = target.view;
+  }
+
   // One way back out of a sub-screen, used by three things: the header chevron,
   // the Android back button, and the shell's back-swipe.
   const goBack = useCallback(() => {
-    setView((current) =>
-      current === "root" ? current : (SETTINGS_PARENT_VIEW[current] ?? "root"),
-    );
+    setView((current) => {
+      if (current === "root") return current;
+      if (searchOrigin.current === current) {
+        searchOrigin.current = null;
+        return "search";
+      }
+      return SETTINGS_PARENT_VIEW[current] ?? "root";
+    });
   }, []);
 
   // Android hardware/gesture back: leave a sub-screen instead of exiting.
@@ -372,6 +405,10 @@ export default function ProfileScreen({
     lastPopSignal.current = popSignal;
     goBack();
   }, [popSignal, goBack]);
+
+  // Its own shape rather than a SettingRow, so it wires up the highlight
+  // by hand.
+  const wipeHighlight = useSettingHighlight("wipe");
 
   // See the guard at the top of handleConfirmWipe.
   const wipeInFlight = useRef(false);
@@ -590,615 +627,683 @@ export default function ProfileScreen({
   }
 
   // ---- Sub-screens ----
+  //
+  // One function rather than bare early returns, so the highlight provider can
+  // wrap whichever is showing. Null on the hub, which falls through below.
+  function renderSubScreen(): React.JSX.Element | null {
+    if (view === "search") {
+      return (
+        <SettingsSearch
+          query={searchQuery}
+          onChangeQuery={setSearchQuery}
+          onClose={goBack}
+          onSelect={handleSelectSearchResult}
+        />
+      );
+    }
+    if (view === "general") {
+      return <GeneralScreen onBack={goBack} />;
+    }
+    if (view === "security") {
+      return <SecurityScreen onBack={goBack} />;
+    }
+    if (view === "network") {
+      return <NetworkScreen onBack={goBack} />;
+    }
+    if (view === "tor") {
+      return <TorScreen onBack={goBack} />;
+    }
+    if (view === "permissions") {
+      return <PermissionsScreen onBack={goBack} />;
+    }
+    if (view === "storage") {
+      return <StorageScreen onBack={goBack} />;
+    }
+    if (view === "diagnostics") {
+      return <DiagnosticsScreen onBack={goBack} />;
+    }
+    if (view === "help") {
+      return (
+        <HelpScreen
+          onBack={goBack}
+          onOpenTerms={() => setView("terms")}
+          onOpenPrivacy={() => setView("privacy")}
+        />
+      );
+    }
+    if (view === "terms") {
+      return <TermsScreen onBack={goBack} />;
+    }
+    if (view === "privacy") {
+      return <PrivacyScreen onBack={goBack} />;
+    }
+    if (view === "support") {
+      return <SupportScreen onBack={goBack} />;
+    }
+    if (view === "about") {
+      return (
+        <AboutScreen
+          onBack={goBack}
+          onOpenVersion={() => setView("version")}
+          onOpenLicenses={() => setView("licenses")}
+        />
+      );
+    }
+    if (view === "version") {
+      return <VersionScreen onBack={goBack} />;
+    }
+    if (view === "licenses") {
+      return <LicensesScreen onBack={goBack} />;
+    }
+    return null;
+  }
 
-  if (view === "general") {
-    return <GeneralScreen onBack={() => setView("root")} />;
-  }
-  if (view === "security") {
-    return <SecurityScreen onBack={() => setView("root")} />;
-  }
-  if (view === "network") {
-    return <NetworkScreen onBack={() => setView("root")} />;
-  }
-  if (view === "tor") {
-    return <TorScreen onBack={() => setView("root")} />;
-  }
-  if (view === "permissions") {
-    return <PermissionsScreen onBack={() => setView("root")} />;
-  }
-  if (view === "storage") {
-    return <StorageScreen onBack={() => setView("root")} />;
-  }
-  if (view === "diagnostics") {
-    return <DiagnosticsScreen onBack={() => setView("root")} />;
-  }
-  if (view === "help") {
+  const subScreen = renderSubScreen();
+  if (subScreen !== null) {
     return (
-      <HelpScreen
-        onBack={() => setView("root")}
-        onOpenTerms={() => setView("terms")}
-        onOpenPrivacy={() => setView("privacy")}
-      />
+      <SettingsHighlightProvider id={highlightId} onExpire={clearHighlight}>
+        {subScreen}
+      </SettingsHighlightProvider>
     );
-  }
-  if (view === "terms") {
-    return <TermsScreen onBack={() => setView("help")} />;
-  }
-  if (view === "privacy") {
-    return <PrivacyScreen onBack={() => setView("help")} />;
-  }
-  if (view === "support") {
-    return <SupportScreen onBack={() => setView("root")} />;
-  }
-  if (view === "about") {
-    return (
-      <AboutScreen
-        onBack={() => setView("root")}
-        onOpenVersion={() => setView("version")}
-        onOpenLicenses={() => setView("licenses")}
-      />
-    );
-  }
-  if (view === "version") {
-    return <VersionScreen onBack={() => setView("about")} />;
-  }
-  if (view === "licenses") {
-    return <LicensesScreen onBack={() => setView("about")} />;
   }
 
   // ---- Root hub ----
 
   return (
-    <ScrollView
-      ref={rootScrollRef}
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      scrollEventThrottle={16}
-      onScroll={(e) => {
-        rootScrollY.current = e.nativeEvent.contentOffset.y;
-      }}
-      onContentSizeChange={() => {
-        if (!restoreRootScroll.current) return;
-        restoreRootScroll.current = false;
-        rootScrollRef.current?.scrollTo({
-          y: rootScrollY.current,
-          animated: false,
-        });
-      }}
-    >
-      {/* Header: pencil edits presence status, top-right */}
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerEditBtn}
-          onPress={() => setShowStatusModal(true)}
-          accessibilityRole="button"
-          accessibilityLabel={T("settings.status.edit")}
-          hitSlop={HIT_SLOP}
-        >
-          <Feather name="edit-2" size={15} color={Colors.textSecondary} />
-        </Pressable>
-      </View>
+    <SettingsHighlightProvider id={highlightId} onExpire={clearHighlight}>
+      <SettingsScroll
+        ref={rootScrollRef}
+        style={styles.container}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          rootScrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        onContentSizeChange={() => {
+          if (!restoreRootScroll.current) return;
+          restoreRootScroll.current = false;
+          rootScrollRef.current?.scrollTo({
+            y: rootScrollY.current,
+            animated: false,
+          });
+        }}
+      >
+        {/* Header: search left, status pencil right. Both wear the app's round
+            icon button, the one the Chats, Mesh and Wallet headers put their
+            actions in; a bare glyph on the background read as decoration.
 
-      {/* Identity block: large centered avatar, name, peer ID, no card background */}
-      <View style={styles.identityBlock}>
-        <View style={styles.avatarWrap}>
-          <Avatar username={username} peerID={peerID} size={96} />
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: STATUS_META[status].color },
+            Search sits on the left, and alone, because it is the one control
+            here about the whole screen below rather than the identity block. */}
+        <View style={styles.header}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.headerBtn,
+              pressed && styles.headerBtnPressed,
             ]}
-          />
+            onPress={() => {
+              // A fresh start; only coming back from a result keeps the query.
+              setSearchQuery("");
+              openSection("search");
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={T("settings.search.a11y")}
+            hitSlop={hitSlopFor(HEADER_BTN_SIZE)}
+          >
+            <Feather
+              name="search"
+              size={HEADER_GLYPH}
+              color={Colors.textSecondary}
+            />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.headerBtn,
+              pressed && styles.headerBtnPressed,
+            ]}
+            onPress={() => setShowStatusModal(true)}
+            accessibilityRole="button"
+            accessibilityLabel={T("settings.status.edit")}
+            hitSlop={hitSlopFor(HEADER_BTN_SIZE)}
+          >
+            <Feather
+              name="edit-2"
+              size={HEADER_GLYPH}
+              color={Colors.textSecondary}
+            />
+          </Pressable>
         </View>
-        <Text style={styles.username}>{username}</Text>
-        <Text style={styles.statusLabel}>{STATUS_META[status].label}</Text>
-        <View style={styles.peerIDGroup}>
-          <Text style={styles.peerIDLabel}>{T("settings.peer_id")}</Text>
-          <Text style={styles.peerID}>{shortPubKey}</Text>
+
+        {/* Identity block: large centered avatar, name, peer ID, no card background */}
+        <View style={styles.identityBlock}>
+          <View style={styles.avatarWrap}>
+            <Avatar username={username} peerID={peerID} size={96} />
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: STATUS_META[status].color },
+              ]}
+            />
+          </View>
+          <Text style={styles.username}>{username}</Text>
+          <Text style={styles.statusLabel}>{STATUS_META[status].label}</Text>
+          <View style={styles.peerIDGroup}>
+            <Text style={styles.peerIDLabel}>{T("settings.peer_id")}</Text>
+            <Text style={styles.peerID}>{shortPubKey}</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Share actions: bordered pill buttons below the identity block */}
-      <View style={styles.sharePills}>
-        <Pressable
-          style={styles.sharePill}
-          onPress={() => setShowPeerIDModal(true)}
-          accessibilityRole="button"
-          accessibilityLabel={T("settings.share_peer_id")}
-        >
-          <View style={styles.sharePillInner}>
-            <Feather name="share" size={13} color={Colors.textSecondary} />
-            <Text style={styles.sharePillText} numberOfLines={1}>
-              {T("settings.share_id_short")}
-            </Text>
-          </View>
-        </Pressable>
-        <Pressable
-          style={styles.sharePill}
-          onPress={() => setShowQRModal(true)}
-          accessibilityRole="button"
-          accessibilityLabel={T("settings.qr.show")}
-        >
-          <View style={styles.sharePillInner}>
-            <Feather name="eye" size={13} color={Colors.textSecondary} />
-            <Text style={styles.sharePillText} numberOfLines={1}>
-              {T("settings.qr.show_short")}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
+        {/* Share actions: bordered pill buttons below the identity block */}
+        <View style={styles.sharePills}>
+          <Pressable
+            style={styles.sharePill}
+            onPress={() => setShowPeerIDModal(true)}
+            accessibilityRole="button"
+            accessibilityLabel={T("settings.share_peer_id")}
+          >
+            <View style={styles.sharePillInner}>
+              <Feather name="share" size={13} color={Colors.textSecondary} />
+              <Text style={styles.sharePillText} numberOfLines={1}>
+                {T("settings.share_id_short")}
+              </Text>
+            </View>
+          </Pressable>
+          <Pressable
+            style={styles.sharePill}
+            onPress={() => setShowQRModal(true)}
+            accessibilityRole="button"
+            accessibilityLabel={T("settings.qr.show")}
+          >
+            <View style={styles.sharePillInner}>
+              <Feather name="eye" size={13} color={Colors.textSecondary} />
+              <Text style={styles.sharePillText} numberOfLines={1}>
+                {T("settings.qr.show_short")}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
 
-      {/* The connectivity toggles, in the box the feature list used to hold.
+        {/* The connectivity toggles, in the box the feature list used to hold.
           Wallet/AI/Feeds were a standing statement about the app rather than
           controls, so they read as chrome on the first screen and have moved
           under General; these four are the switches people open Settings to
           flip, and they belong where the thumb already is. */}
-      <ConnectivityGroup onOpenTor={() => openSection("tor")} />
+        <ConnectivityGroup onOpenTor={() => openSection("tor")} />
 
-      {/* Settings nav: each row drills into its own sub-screen */}
-      <View style={shared.section}>
-        <View style={shared.settingsGroup}>
-          <SettingLinkRow
-            icon="settings"
-            label={T("settings.section.general")}
-            description={T("settings.section.general_desc")}
-            onPress={() => openSection("general")}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="lock"
-            label={T("settings.section.privacy")}
-            description={T("settings.section.privacy_desc")}
-            onPress={() => openSection("security")}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="radio"
-            label={T("settings.section.network")}
-            description={T("settings.section.network_desc")}
-            onPress={() => openSection("network")}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="hard-drive"
-            label={T("settings.section.storage")}
-            description={T("settings.section.storage_desc")}
-            onPress={() => openSection("storage")}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="key"
-            label={T("settings.section.permissions")}
-            description={T("settings.section.permissions_desc")}
-            onPress={() => openSection("permissions")}
-          />
-          <GroupDivider />
-          {/* Left in plain sight rather than behind a tap-count reveal. It
+        {/* Settings nav: each row drills into its own sub-screen */}
+        <View style={shared.section}>
+          <View style={shared.settingsGroup}>
+            <SettingLinkRow
+              icon="settings"
+              label={T("settings.section.general")}
+              description={T("settings.section.general_desc")}
+              onPress={() => openSection("general")}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="lock"
+              label={T("settings.section.privacy")}
+              description={T("settings.section.privacy_desc")}
+              onPress={() => openSection("security")}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="radio"
+              label={T("settings.section.network")}
+              description={T("settings.section.network_desc")}
+              onPress={() => openSection("network")}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="hard-drive"
+              label={T("settings.section.storage")}
+              description={T("settings.section.storage_desc")}
+              onPress={() => openSection("storage")}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="key"
+              label={T("settings.section.permissions")}
+              description={T("settings.section.permissions_desc")}
+              onPress={() => openSection("permissions")}
+            />
+            <GroupDivider />
+            {/* Left in plain sight rather than behind a tap-count reveal. It
               changes nothing, and the whole reason it exists is so a tester can
               read numbers back during a field report - hidden, it would be one
               more thing to explain before the useful part. */}
-          <SettingLinkRow
-            icon="activity"
-            label={T("settings.section.diagnostics")}
-            description={T("settings.section.diagnostics_desc")}
-            onPress={() => openSection("diagnostics")}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="sliders"
-            label={T("settings.section.appearance")}
-            description={T("settings.section.appearance_desc")}
-            onPress={() => setShowThemeModal(true)}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="help-circle"
-            label={T("settings.section.help")}
-            description={T("settings.section.help_desc")}
-            onPress={() => openSection("help")}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="heart"
-            label={T("settings.section.support")}
-            description={T("settings.section.support_desc")}
-            onPress={() => openSection("support")}
-          />
-          <GroupDivider />
-          <SettingLinkRow
-            icon="info"
-            label={T("settings.section.about")}
-            description={T("settings.section.about_desc")}
-            onPress={() => openSection("about")}
-          />
+            <SettingLinkRow
+              icon="activity"
+              label={T("settings.section.diagnostics")}
+              description={T("settings.section.diagnostics_desc")}
+              onPress={() => openSection("diagnostics")}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="sliders"
+              label={T("settings.section.appearance")}
+              description={T("settings.section.appearance_desc")}
+              onPress={() => setShowThemeModal(true)}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="help-circle"
+              label={T("settings.section.help")}
+              description={T("settings.section.help_desc")}
+              onPress={() => openSection("help")}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="heart"
+              label={T("settings.section.support")}
+              description={T("settings.section.support_desc")}
+              onPress={() => openSection("support")}
+            />
+            <GroupDivider />
+            <SettingLinkRow
+              icon="info"
+              label={T("settings.section.about")}
+              description={T("settings.section.about_desc")}
+              onPress={() => openSection("about")}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Moving to a new phone. Not built yet, so the row carries the same
+        {/* Moving to a new phone. Not built yet, so the row carries the same
           "Coming soon" tag as the unshipped feature rows above, and opens a
           sheet describing the move rather than starting one. It sits directly
           above the danger zone because both answer "I am leaving this device",
           and the safe answer should be the one you reach first. */}
-      <View style={shared.section}>
-        <View style={shared.settingsGroup}>
-          <SettingLinkRow
-            icon="smartphone"
-            label={T("settings.transfer.title")}
-            description={T("settings.transfer.desc")}
-            onPress={() => setShowTransferModal(true)}
-            chevron={false}
-            control={
-              <Text style={shared.comingSoon}>{T("settings.coming_soon")}</Text>
-            }
-            accessibilityLabel={T("settings.transfer.coming_soon_a11y")}
-          />
+        <View style={shared.section}>
+          <View style={shared.settingsGroup}>
+            <SettingLinkRow
+              id="transfer"
+              icon="smartphone"
+              label={T("settings.transfer.title")}
+              description={T("settings.transfer.desc")}
+              onPress={() => setShowTransferModal(true)}
+              chevron={false}
+              control={
+                <Text style={shared.comingSoon}>
+                  {T("settings.coming_soon")}
+                </Text>
+              }
+              accessibilityLabel={T("settings.transfer.coming_soon_a11y")}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Danger zone, same settingsGroup box pattern as other sections */}
-      <View style={shared.section}>
-        <View style={[shared.settingsGroup, styles.dangerGroup]}>
-          <Pressable
-            style={styles.dangerRow}
-            onPress={handlePanicPress}
-            accessibilityRole="button"
-            accessibilityLabel={T("settings.wipe.trigger")}
-            accessibilityHint={T("settings.wipe.trigger_desc")}
-          >
-            {/* Inner View owns the row layout. Pressable does not reliably
+        {/* Danger zone, same settingsGroup box pattern as other sections */}
+        <View style={shared.section}>
+          <View style={[shared.settingsGroup, styles.dangerGroup]}>
+            <Pressable
+              ref={wipeHighlight.ref}
+              onLayout={wipeHighlight.onLayout}
+              style={[
+                styles.dangerRow,
+                wipeHighlight.active && shared.rowHighlighted,
+              ]}
+              onPress={handlePanicPress}
+              accessibilityRole="button"
+              accessibilityLabel={T("settings.wipe.trigger")}
+              accessibilityHint={T("settings.wipe.trigger_desc")}
+            >
+              {/* Inner View owns the row layout. Pressable does not reliably
                 propagate flexDirection on all RN versions. */}
-            <View style={styles.dangerRowInner}>
-              <View style={styles.dangerIconWrap}>
-                <Feather
-                  name="alert-triangle"
-                  size={18}
-                  color={Colors.danger}
-                />
+              <View style={styles.dangerRowInner}>
+                <View style={styles.dangerIconWrap}>
+                  <Feather
+                    name="alert-triangle"
+                    size={18}
+                    color={Colors.danger}
+                  />
+                </View>
+                <View style={styles.dangerRowContent}>
+                  <Text style={styles.dangerLabel}>
+                    {T("settings.wipe.title")}
+                  </Text>
+                  <Text style={styles.dangerDescription}>
+                    {T("settings.wipe.desc")}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.dangerRowContent}>
-                <Text style={styles.dangerLabel}>
-                  {T("settings.wipe.title")}
-                </Text>
-                <Text style={styles.dangerDescription}>
-                  {T("settings.wipe.desc")}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
+            </Pressable>
+          </View>
         </View>
-      </View>
 
-      {/* QR code modal: the QR, a Share button, and a Download button */}
-      <BottomSheet
-        visible={showQRModal}
-        onClose={() => setShowQRModal(false)}
-        sheetStyle={shared.sheet}
-      >
-        {/* The one settings sheet with a centered body (QR, peer ID, two
+        {/* QR code modal: the QR, a Share button, and a Download button */}
+        <BottomSheet
+          visible={showQRModal}
+          onClose={() => setShowQRModal(false)}
+          sheetStyle={shared.sheet}
+        >
+          {/* The one settings sheet with a centered body (QR, peer ID, two
             stacked buttons), so its title centers with them instead of sitting
             flush left like the rest. */}
-        <Text style={[shared.sheetTitle, styles.qrSheetTitle]}>
-          {T("settings.qr.title")}
-        </Text>
-        <View style={styles.qrLarge}>
-          {/* The mark sits in the middle, which costs the code the modules it
+          <Text style={[shared.sheetTitle, styles.qrSheetTitle]}>
+            {T("settings.qr.title")}
+          </Text>
+          <View style={styles.qrLarge}>
+            {/* The mark sits in the middle, which costs the code the modules it
               covers - so the error-correction level goes up to H (30%
               recoverable) to pay for it. Without that the logo eats real data
               and a smudged or angled scan starts failing. */}
-          <QRCode
-            value={qrValue}
-            size={QR_SIZE}
-            ecl="H"
-            color={Colors.textPrimary}
-            backgroundColor={Colors.surface}
-            logo={AIRHOP_MARK}
-            logoSize={QR_LOGO_SIZE}
-            logoBackgroundColor={Colors.surface}
-            // Half the logo's own size, which is what makes it a circle rather
-            // than a rounded square. The white ring behind it derives its radius
-            // from this one, so both round together.
-            logoBorderRadius={QR_LOGO_SIZE / 2}
-            logoMargin={4}
-            getRef={(c) => {
-              qrRef.current = c;
-            }}
-          />
-        </View>
-        {/* Above the warning, not below: the same sentence covers the code and
-            the QR, which are the same bytes. */}
-        <Pressable
-          style={styles.codeBox}
-          onPress={handleCopyContactCode}
-          accessibilityRole="button"
-          accessibilityLabel={T("settings.qr.copy_code")}
-        >
-          <View style={styles.codeBoxText}>
-            <Text style={styles.codeBoxLabel}>
-              {T("settings.qr.code_label")}
-            </Text>
-            <Text
-              style={styles.codeBoxValue}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {qrValue}
-            </Text>
+            <QRCode
+              value={qrValue}
+              size={QR_SIZE}
+              ecl="H"
+              color={Colors.textPrimary}
+              backgroundColor={Colors.surface}
+              logo={AIRHOP_MARK}
+              logoSize={QR_LOGO_SIZE}
+              logoBackgroundColor={Colors.surface}
+              // Half the logo's own size, which is what makes it a circle rather
+              // than a rounded square. The white ring behind it derives its radius
+              // from this one, so both round together.
+              logoBorderRadius={QR_LOGO_SIZE / 2}
+              logoMargin={4}
+              getRef={(c) => {
+                qrRef.current = c;
+              }}
+            />
           </View>
-          <CopyGlyph
-            copied={codeCopied}
-            size={COPY_GLYPH}
-            color={Colors.textMuted}
-          />
-        </Pressable>
-        <View style={styles.noteBox}>
-          <Feather name="alert-circle" size={14} color={Colors.textMuted} />
-          <Text style={styles.noteText}>{T("settings.qr.note")}</Text>
-        </View>
-        <View style={styles.qrActions}>
+          {/* Above the warning, not below: the same sentence covers the code and
+            the QR, which are the same bytes. */}
           <Pressable
-            style={styles.qrShareBtn}
-            onPress={() => void handleShareQR()}
+            style={styles.codeBox}
+            onPress={handleCopyContactCode}
             accessibilityRole="button"
-            accessibilityLabel={T("settings.qr.share")}
+            accessibilityLabel={T("settings.qr.copy_code")}
           >
-            <Feather name="share" size={16} color={Colors.textInverse} />
-            <Text style={styles.qrShareText}>
-              {T("settings.qr.share_short")}
-            </Text>
+            <View style={styles.codeBoxText}>
+              <Text style={styles.codeBoxLabel}>
+                {T("settings.qr.code_label")}
+              </Text>
+              <Text
+                style={styles.codeBoxValue}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {qrValue}
+              </Text>
+            </View>
+            <CopyGlyph
+              copied={codeCopied}
+              size={COPY_GLYPH}
+              color={Colors.textMuted}
+            />
           </Pressable>
-          <Pressable
-            style={styles.qrDownloadBtn}
-            onPress={() => void handleDownloadQR()}
-            accessibilityRole="button"
-            accessibilityLabel={T("settings.qr.download")}
-          >
-            <Feather name="download" size={16} color={Colors.textPrimary} />
-            <Text style={styles.qrDownloadText}>
-              {T("settings.qr.download_short")}
-            </Text>
-          </Pressable>
-        </View>
-      </BottomSheet>
+          <View style={styles.noteBox}>
+            <Feather name="alert-circle" size={14} color={Colors.textMuted} />
+            <Text style={styles.noteText}>{T("settings.qr.note")}</Text>
+          </View>
+          <View style={styles.qrActions}>
+            <Pressable
+              style={styles.qrShareBtn}
+              onPress={() => void handleShareQR()}
+              accessibilityRole="button"
+              accessibilityLabel={T("settings.qr.share")}
+            >
+              <Feather name="share" size={16} color={Colors.textInverse} />
+              <Text style={styles.qrShareText}>
+                {T("settings.qr.share_short")}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.qrDownloadBtn}
+              onPress={() => void handleDownloadQR()}
+              accessibilityRole="button"
+              accessibilityLabel={T("settings.qr.download")}
+            >
+              <Feather name="download" size={16} color={Colors.textPrimary} />
+              <Text style={styles.qrDownloadText}>
+                {T("settings.qr.download_short")}
+              </Text>
+            </Pressable>
+          </View>
+        </BottomSheet>
 
-      {/* Peer ID sheet. The pill used to open the OS share sheet directly, which
+        {/* Peer ID sheet. The pill used to open the OS share sheet directly, which
           left no room to say what a bare ID can and cannot do - and it cannot do
           the thing most people reach for it to do. */}
-      <BottomSheet
-        visible={showPeerIDModal}
-        onClose={() => setShowPeerIDModal(false)}
-        sheetStyle={shared.sheet}
-      >
-        <Text style={[shared.sheetTitle, styles.qrSheetTitle]}>
-          {T("settings.peer_id_sheet.title")}
-        </Text>
-        <Pressable
-          style={styles.idBox}
-          onPress={handleCopyPeerID}
-          accessibilityRole="button"
-          accessibilityLabel={T("settings.peer_id_sheet.copy")}
+        <BottomSheet
+          visible={showPeerIDModal}
+          onClose={() => setShowPeerIDModal(false)}
+          sheetStyle={shared.sheet}
         >
-          <Text style={styles.idBoxValue}>{peerID}</Text>
-          <CopyGlyph
-            copied={idCopied}
-            size={COPY_GLYPH}
-            color={Colors.textMuted}
-          />
-        </Pressable>
-        <View style={styles.noteBox}>
-          <Feather name="info" size={14} color={Colors.textMuted} />
-          <Text style={styles.noteText}>
-            {T("settings.peer_id_sheet.note")}
+          <Text style={[shared.sheetTitle, styles.qrSheetTitle]}>
+            {T("settings.peer_id_sheet.title")}
           </Text>
-        </View>
-        <View style={styles.qrActions}>
           <Pressable
-            style={styles.qrShareBtn}
-            onPress={() => void handleSharePeerID()}
+            style={styles.idBox}
+            onPress={handleCopyPeerID}
             accessibilityRole="button"
-            accessibilityLabel={T("settings.share_peer_id")}
+            accessibilityLabel={T("settings.peer_id_sheet.copy")}
           >
-            <Feather name="share" size={16} color={Colors.textInverse} />
-            <Text style={styles.qrShareText}>
-              {T("settings.share_id_short")}
-            </Text>
+            <Text style={styles.idBoxValue}>{peerID}</Text>
+            <CopyGlyph
+              copied={idCopied}
+              size={COPY_GLYPH}
+              color={Colors.textMuted}
+            />
           </Pressable>
-          <Pressable
-            style={styles.qrDownloadBtn}
-            onPress={() => {
-              setShowPeerIDModal(false);
-              setShowQRModal(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={T("settings.qr.show")}
-          >
-            <Feather name="grid" size={16} color={Colors.textPrimary} />
-            <Text style={styles.qrDownloadText}>
-              {T("settings.qr.show_short")}
+          <View style={styles.noteBox}>
+            <Feather name="info" size={14} color={Colors.textMuted} />
+            <Text style={styles.noteText}>
+              {T("settings.peer_id_sheet.note")}
             </Text>
-          </Pressable>
-        </View>
-      </BottomSheet>
+          </View>
+          <View style={styles.qrActions}>
+            <Pressable
+              style={styles.qrShareBtn}
+              onPress={() => void handleSharePeerID()}
+              accessibilityRole="button"
+              accessibilityLabel={T("settings.share_peer_id")}
+            >
+              <Feather name="share" size={16} color={Colors.textInverse} />
+              <Text style={styles.qrShareText}>
+                {T("settings.share_id_short")}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.qrDownloadBtn}
+              onPress={() => {
+                setShowPeerIDModal(false);
+                setShowQRModal(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={T("settings.qr.show")}
+            >
+              <Feather name="grid" size={16} color={Colors.textPrimary} />
+              <Text style={styles.qrDownloadText}>
+                {T("settings.qr.show_short")}
+              </Text>
+            </Pressable>
+          </View>
+        </BottomSheet>
 
-      {/* Status modal: bottom sheet, one selectable row per presence state */}
-      <BottomSheet
-        visible={showStatusModal}
-        onClose={() => setShowStatusModal(false)}
-        sheetStyle={shared.sheet}
-      >
-        <Text style={shared.sheetTitle}>{T("settings.status.title")}</Text>
-        <Text style={shared.sheetSubtitle}>{T("settings.status.desc")}</Text>
-        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-          {STATUS_ORDER.map((key, i) => {
-            const meta = STATUS_META[key];
-            const selected = key === status;
-            return (
-              <React.Fragment key={key}>
-                {i > 0 && <View style={shared.groupDivider} />}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.optionRowGrouped,
-                    selected && styles.optionRowGroupedSelected,
-                    pressed && shared.rowPressed,
-                  ]}
-                  onPress={() => handleSelectStatus(key)}
-                  accessibilityRole="button"
-                  accessibilityLabel={T("settings.status.set_a11y", {
-                    value: meta.label,
-                  })}
-                >
-                  <View
-                    style={[shared.optionDot, { backgroundColor: meta.color }]}
+        {/* Status modal: bottom sheet, one selectable row per presence state */}
+        <BottomSheet
+          visible={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+          sheetStyle={shared.sheet}
+        >
+          <Text style={shared.sheetTitle}>{T("settings.status.title")}</Text>
+          <Text style={shared.sheetSubtitle}>{T("settings.status.desc")}</Text>
+          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+            {STATUS_ORDER.map((key, i) => {
+              const meta = STATUS_META[key];
+              const selected = key === status;
+              return (
+                <React.Fragment key={key}>
+                  {i > 0 && <View style={shared.groupDivider} />}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.optionRowGrouped,
+                      selected && styles.optionRowGroupedSelected,
+                      pressed && shared.rowPressed,
+                    ]}
+                    onPress={() => handleSelectStatus(key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={T("settings.status.set_a11y", {
+                      value: meta.label,
+                    })}
                   >
-                    <Feather name={meta.icon} size={14} color="#FFFFFF" />
-                  </View>
-                  <View style={shared.optionText}>
-                    <Text style={shared.optionLabel}>{meta.label}</Text>
-                    <Text style={shared.optionDescription}>
-                      {meta.description}
-                    </Text>
-                  </View>
-                  {selected && (
-                    <Feather
-                      name="check"
-                      size={18}
-                      color={Colors.textPrimary}
-                    />
-                  )}
-                </Pressable>
-              </React.Fragment>
-            );
-          })}
-        </View>
-      </BottomSheet>
+                    <View
+                      style={[
+                        shared.optionDot,
+                        { backgroundColor: meta.color },
+                      ]}
+                    >
+                      <Feather name={meta.icon} size={14} color="#FFFFFF" />
+                    </View>
+                    <View style={shared.optionText}>
+                      <Text style={shared.optionLabel}>{meta.label}</Text>
+                      <Text style={shared.optionDescription}>
+                        {meta.description}
+                      </Text>
+                    </View>
+                    {selected && (
+                      <Feather
+                        name="check"
+                        size={18}
+                        color={Colors.textPrimary}
+                      />
+                    )}
+                  </Pressable>
+                </React.Fragment>
+              );
+            })}
+          </View>
+        </BottomSheet>
 
-      {/* Appearance modal: theme, mono font, and the language list. Three
+        {/* Appearance modal: theme, mono font, and the language list. Three
           groups outgrow a phone screen, so the body scrolls and the grab
           handle keeps the drag. */}
-      <BottomSheet
-        visible={showThemeModal}
-        onClose={() => setShowThemeModal(false)}
-        sheetStyle={[shared.sheet, styles.appearanceSheet]}
-        scrollable
-      >
-        <Text style={shared.sheetTitle}>
-          {T("settings.section.appearance")}
-        </Text>
-
-        <ScrollView
-          style={styles.appearanceScroll}
-          contentContainerStyle={styles.appearanceScrollContent}
-          showsVerticalScrollIndicator={false}
+        <BottomSheet
+          visible={showThemeModal}
+          onClose={() => setShowThemeModal(false)}
+          sheetStyle={[shared.sheet, styles.appearanceSheet]}
+          scrollable
         >
-          <Text style={styles.appearanceGroupLabel}>
-            {T("settings.group.theme")}
+          <Text style={shared.sheetTitle}>
+            {T("settings.section.appearance")}
           </Text>
-          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-            {THEME_ORDER.map((key, i) => {
-              const meta = THEME_META[key];
-              const selected = key === theme;
-              return (
-                <React.Fragment key={key}>
-                  {i > 0 && <View style={shared.groupDivider} />}
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.optionRowGrouped,
-                      selected && styles.optionRowGroupedSelected,
-                      pressed && shared.rowPressed,
-                    ]}
-                    onPress={() => {
-                      setTheme(key);
-                      setShowThemeModal(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={T("settings.theme.set_a11y", {
-                      value: T(meta.labelKey),
-                    })}
-                  >
-                    <View style={styles.optionIconGrouped}>
-                      <Feather
-                        name={meta.icon}
-                        size={18}
-                        color={Colors.textSecondary}
-                      />
-                    </View>
-                    <View style={shared.optionText}>
-                      <Text style={shared.optionLabel}>{T(meta.labelKey)}</Text>
-                      <Text style={shared.optionDescription}>
-                        {T(meta.descriptionKey)}
-                      </Text>
-                    </View>
-                    {selected && (
-                      <Feather
-                        name="check"
-                        size={18}
-                        color={Colors.textPrimary}
-                      />
-                    )}
-                  </Pressable>
-                </React.Fragment>
-              );
-            })}
-          </View>
 
-          {/* Font: keep the sheet open on select so the change is visible live
+          <ScrollView
+            style={styles.appearanceScroll}
+            contentContainerStyle={styles.appearanceScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.appearanceGroupLabel}>
+              {T("settings.group.theme")}
+            </Text>
+            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+              {THEME_ORDER.map((key, i) => {
+                const meta = THEME_META[key];
+                const selected = key === theme;
+                return (
+                  <React.Fragment key={key}>
+                    {i > 0 && <View style={shared.groupDivider} />}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.optionRowGrouped,
+                        selected && styles.optionRowGroupedSelected,
+                        pressed && shared.rowPressed,
+                      ]}
+                      onPress={() => {
+                        setTheme(key);
+                        setShowThemeModal(false);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={T("settings.theme.set_a11y", {
+                        value: T(meta.labelKey),
+                      })}
+                    >
+                      <View style={styles.optionIconGrouped}>
+                        <Feather
+                          name={meta.icon}
+                          size={18}
+                          color={Colors.textSecondary}
+                        />
+                      </View>
+                      <View style={shared.optionText}>
+                        <Text style={shared.optionLabel}>
+                          {T(meta.labelKey)}
+                        </Text>
+                        <Text style={shared.optionDescription}>
+                          {T(meta.descriptionKey)}
+                        </Text>
+                      </View>
+                      {selected && (
+                        <Feather
+                          name="check"
+                          size={18}
+                          color={Colors.textPrimary}
+                        />
+                      )}
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+
+            {/* Font: keep the sheet open on select so the change is visible live
                 (the mono bits behind it update instantly) and easy to compare. */}
-          <Text style={styles.appearanceGroupLabel}>
-            {T("settings.group.font")}
-          </Text>
-          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-            {MONO_FONT_ORDER.map((key, i) => {
-              const meta = MONO_FONTS[key];
-              const selected = key === monoFont;
-              return (
-                <React.Fragment key={key}>
-                  {i > 0 && <View style={shared.groupDivider} />}
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.optionRowGrouped,
-                      selected && styles.optionRowGroupedSelected,
-                      pressed && shared.rowPressed,
-                    ]}
-                    onPress={() => setMonoFont(key)}
-                    accessibilityRole="button"
-                    accessibilityLabel={T("settings.font.set_a11y", {
-                      value: T(meta.labelKey),
-                    })}
-                  >
-                    <View style={styles.optionIconGrouped}>
-                      <Feather
-                        name={meta.icon}
-                        size={18}
-                        color={Colors.textSecondary}
-                      />
-                    </View>
-                    <View style={shared.optionText}>
-                      <Text
-                        style={[
-                          shared.optionLabel,
-                          { fontFamily: meta.family },
-                        ]}
-                      >
-                        {T(meta.labelKey)}
-                      </Text>
-                      <Text style={shared.optionDescription}>
-                        {T(meta.descriptionKey)}
-                      </Text>
-                    </View>
-                    {selected && (
-                      <Feather
-                        name="check"
-                        size={18}
-                        color={Colors.textPrimary}
-                      />
-                    )}
-                  </Pressable>
-                </React.Fragment>
-              );
-            })}
-          </View>
+            <Text style={styles.appearanceGroupLabel}>
+              {T("settings.group.font")}
+            </Text>
+            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+              {MONO_FONT_ORDER.map((key, i) => {
+                const meta = MONO_FONTS[key];
+                const selected = key === monoFont;
+                return (
+                  <React.Fragment key={key}>
+                    {i > 0 && <View style={shared.groupDivider} />}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.optionRowGrouped,
+                        selected && styles.optionRowGroupedSelected,
+                        pressed && shared.rowPressed,
+                      ]}
+                      onPress={() => setMonoFont(key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={T("settings.font.set_a11y", {
+                        value: T(meta.labelKey),
+                      })}
+                    >
+                      <View style={styles.optionIconGrouped}>
+                        <Feather
+                          name={meta.icon}
+                          size={18}
+                          color={Colors.textSecondary}
+                        />
+                      </View>
+                      <View style={shared.optionText}>
+                        <Text
+                          style={[
+                            shared.optionLabel,
+                            { fontFamily: meta.family },
+                          ]}
+                        >
+                          {T(meta.labelKey)}
+                        </Text>
+                        <Text style={shared.optionDescription}>
+                          {T(meta.descriptionKey)}
+                        </Text>
+                      </View>
+                      {selected && (
+                        <Feather
+                          name="check"
+                          size={18}
+                          color={Colors.textPrimary}
+                        />
+                      )}
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
 
-          {/* Language.
+            {/* Language.
             No "System" row, matching the Appearance picker directly above: the
             resolved language is ticked instead, so there is never a row that
             means "no, really, the other one". First launch follows the phone;
@@ -1209,173 +1314,182 @@ export default function ProfileScreen({
             hidden. Naming it answers "is my language coming" far better than a
             picker that silently omits it, and the row goes live the release its
             catalog lands, with no change here. */}
-          <Text style={styles.appearanceGroupLabel}>
-            {T("settings.group.language")}
-          </Text>
-          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-            {PICKER_LANGUAGES.map((code, i) => {
-              const spec = LANGUAGES[code];
-              const shipped = isShipped(code);
-              // Ticked against what is on screen, not against the preference,
-              // so a right-to-left choice waiting for a relaunch does not claim
-              // to be active while the app is still in the old language.
-              const selected = code === T.language;
-              const pending =
-                languagePreference === code &&
-                needsRelaunch(languagePreference);
-              const name = T(spec.nameKey);
-              return (
-                <React.Fragment key={code}>
-                  {i > 0 && <View style={shared.groupDivider} />}
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.optionRowGrouped,
-                      selected && styles.optionRowGroupedSelected,
-                      !shipped && styles.languageRowSoon,
-                      pressed && shared.rowPressed,
-                    ]}
-                    disabled={!shipped}
-                    onPress={() => {
-                      setLanguage(code);
-                      // Written now rather than at the next `initI18n`: either
-                      // way it lands on the following launch, but setting it
-                      // here is what makes a single restart enough.
-                      //
-                      // App raises the restart notice, not this row: direction
-                      // can change without anyone touching the list. The
-                      // "pending" tag below is the in-place half.
-                      applyLayoutDirection(resolvePreference(code));
-                    }}
-                    accessibilityRole={shipped ? "button" : undefined}
-                    accessibilityState={
-                      shipped
-                        ? { selected, disabled: false }
-                        : { disabled: true }
-                    }
-                    accessibilityLabel={
-                      shipped
-                        ? pending
-                          ? T("settings.language.pending_a11y", { value: name })
-                          : T("settings.language.set_a11y", { value: name })
-                        : T("settings.language.soon_a11y", { value: name })
-                    }
-                  >
-                    <View style={styles.optionIconGrouped}>
-                      <Text style={styles.languageCode}>{spec.shortCode}</Text>
-                    </View>
-                    <View style={shared.optionText}>
-                      <Text style={shared.optionLabel}>{name}</Text>
-                      {/* The endonym stays in its own script and is never
+            <Text style={styles.appearanceGroupLabel}>
+              {T("settings.group.language")}
+            </Text>
+            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+              {PICKER_LANGUAGES.map((code, i) => {
+                const spec = LANGUAGES[code];
+                const shipped = isShipped(code);
+                // Ticked against what is on screen, not against the preference,
+                // so a right-to-left choice waiting for a relaunch does not claim
+                // to be active while the app is still in the old language.
+                const selected = code === T.language;
+                const pending =
+                  languagePreference === code &&
+                  needsRelaunch(languagePreference);
+                const name = T(spec.nameKey);
+                return (
+                  <React.Fragment key={code}>
+                    {i > 0 && <View style={shared.groupDivider} />}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.optionRowGrouped,
+                        selected && styles.optionRowGroupedSelected,
+                        !shipped && styles.languageRowSoon,
+                        pressed && shared.rowPressed,
+                      ]}
+                      disabled={!shipped}
+                      onPress={() => {
+                        setLanguage(code);
+                        // Written now rather than at the next `initI18n`: either
+                        // way it lands on the following launch, but setting it
+                        // here is what makes a single restart enough.
+                        //
+                        // App raises the restart notice, not this row: direction
+                        // can change without anyone touching the list. The
+                        // "pending" tag below is the in-place half.
+                        applyLayoutDirection(resolvePreference(code));
+                      }}
+                      accessibilityRole={shipped ? "button" : undefined}
+                      accessibilityState={
+                        shipped
+                          ? { selected, disabled: false }
+                          : { disabled: true }
+                      }
+                      accessibilityLabel={
+                        shipped
+                          ? pending
+                            ? T("settings.language.pending_a11y", {
+                                value: name,
+                              })
+                            : T("settings.language.set_a11y", { value: name })
+                          : T("settings.language.soon_a11y", { value: name })
+                      }
+                    >
+                      <View style={styles.optionIconGrouped}>
+                        <Text style={styles.languageCode}>
+                          {spec.shortCode}
+                        </Text>
+                      </View>
+                      <View style={shared.optionText}>
+                        <Text style={shared.optionLabel}>{name}</Text>
+                        {/* The endonym stays in its own script and is never
                         translated, so somebody who cannot read the current UI
                         language can still find their own row. */}
-                      <Text style={shared.optionDescription}>
-                        {spec.endonym}
-                      </Text>
-                    </View>
-                    {!shipped && (
-                      <Text style={styles.languageSoon}>
-                        {T("settings.language.soon")}
-                      </Text>
-                    )}
-                    {pending && (
-                      <Text style={styles.languageSoon}>
-                        {T("settings.language.pending")}
-                      </Text>
-                    )}
-                    {selected && !pending && (
-                      <Feather
-                        name="check"
-                        size={18}
-                        color={Colors.textPrimary}
-                      />
-                    )}
-                  </Pressable>
-                </React.Fragment>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </BottomSheet>
+                        <Text style={shared.optionDescription}>
+                          {spec.endonym}
+                        </Text>
+                      </View>
+                      {!shipped && (
+                        <Text style={styles.languageSoon}>
+                          {T("settings.language.soon")}
+                        </Text>
+                      )}
+                      {pending && (
+                        <Text style={styles.languageSoon}>
+                          {T("settings.language.pending")}
+                        </Text>
+                      )}
+                      {selected && !pending && (
+                        <Feather
+                          name="check"
+                          size={18}
+                          color={Colors.textPrimary}
+                        />
+                      )}
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </BottomSheet>
 
-      {/* Transfer sheet: a preview, not a flow. It states what a move will
+        {/* Transfer sheet: a preview, not a flow. It states what a move will
           carry and how it will run, so the shape of the feature is settled
           before anything is behind it. There is nothing to start yet, so the
           only action is dismissing it. */}
-      <BottomSheet
-        visible={showTransferModal}
-        onClose={() => setShowTransferModal(false)}
-        sheetStyle={shared.sheet}
-      >
-        <Text style={shared.sheetTitle}>{T("settings.transfer.title")}</Text>
-        <Text style={shared.sheetSubtitle}>{T("settings.transfer.body")}</Text>
-        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-          {TRANSFER_ITEMS.map((item, i) => (
-            <React.Fragment key={item.labelKey}>
-              {i > 0 && <View style={shared.groupDivider} />}
-              <View style={styles.optionRowGrouped}>
-                <View style={styles.optionIconGrouped}>
-                  <Feather
-                    name={item.icon}
-                    size={18}
-                    color={Colors.textSecondary}
-                  />
+        <BottomSheet
+          visible={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          sheetStyle={shared.sheet}
+        >
+          <Text style={shared.sheetTitle}>{T("settings.transfer.title")}</Text>
+          <Text style={shared.sheetSubtitle}>
+            {T("settings.transfer.body")}
+          </Text>
+          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+            {TRANSFER_ITEMS.map((item, i) => (
+              <React.Fragment key={item.labelKey}>
+                {i > 0 && <View style={shared.groupDivider} />}
+                <View style={styles.optionRowGrouped}>
+                  <View style={styles.optionIconGrouped}>
+                    <Feather
+                      name={item.icon}
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                  <View style={shared.optionText}>
+                    <Text style={shared.optionLabel}>{T(item.labelKey)}</Text>
+                    <Text style={shared.optionDescription}>
+                      {T(item.descriptionKey)}
+                    </Text>
+                  </View>
                 </View>
-                <View style={shared.optionText}>
-                  <Text style={shared.optionLabel}>{T(item.labelKey)}</Text>
-                  <Text style={shared.optionDescription}>
-                    {T(item.descriptionKey)}
-                  </Text>
-                </View>
-              </View>
-            </React.Fragment>
-          ))}
-        </View>
-        <View style={shared.sheetActions}>
-          <Pressable
-            style={({ pressed }) => [
-              shared.sheetBtnPrimary,
-              pressed && shared.sheetBtnPrimaryPressed,
-            ]}
-            onPress={() => setShowTransferModal(false)}
-            accessibilityRole="button"
-            accessibilityLabel={T("settings.wipe.got_it")}
-          >
-            <Text style={shared.sheetBtnTextPrimary}>
-              {T("settings.wipe.got_it")}
-            </Text>
-          </Pressable>
-        </View>
-      </BottomSheet>
+              </React.Fragment>
+            ))}
+          </View>
+          <View style={shared.sheetActions}>
+            <Pressable
+              style={({ pressed }) => [
+                shared.sheetBtnPrimary,
+                pressed && shared.sheetBtnPrimaryPressed,
+              ]}
+              onPress={() => setShowTransferModal(false)}
+              accessibilityRole="button"
+              accessibilityLabel={T("settings.wipe.got_it")}
+            >
+              <Text style={shared.sheetBtnTextPrimary}>
+                {T("settings.wipe.got_it")}
+              </Text>
+            </Pressable>
+          </View>
+        </BottomSheet>
 
-      {/* Panic wipe modal: confirm, then wipe and drop straight to onboarding
+        {/* Panic wipe modal: confirm, then wipe and drop straight to onboarding
           rather than making the user tap through a second "Wiped" screen. */}
-      <BottomSheet
-        visible={showWipeModal}
-        onClose={() => setShowWipeModal(false)}
-        sheetStyle={shared.sheet}
-      >
-        <Text style={shared.sheetTitle}>{T("settings.wipe.title")}</Text>
-        <Text style={shared.sheetSubtitle}>{T("settings.wipe.body")}</Text>
-        <View style={styles.wipeActions}>
-          <Pressable
-            style={styles.wipeConfirmBtn}
-            onPress={() => void handleConfirmWipe()}
-            accessibilityRole="button"
-            accessibilityLabel={T("settings.wipe.now")}
-          >
-            <Text style={styles.wipeConfirmText}>{T("settings.wipe.now")}</Text>
-          </Pressable>
-          <Pressable
-            style={styles.wipeCancelBtn}
-            onPress={() => setShowWipeModal(false)}
-            accessibilityRole="button"
-            accessibilityLabel={T("common.cancel")}
-          >
-            <Text style={styles.wipeCancelText}>{T("common.cancel")}</Text>
-          </Pressable>
-        </View>
-      </BottomSheet>
-    </ScrollView>
+        <BottomSheet
+          visible={showWipeModal}
+          onClose={() => setShowWipeModal(false)}
+          sheetStyle={shared.sheet}
+        >
+          <Text style={shared.sheetTitle}>{T("settings.wipe.title")}</Text>
+          <Text style={shared.sheetSubtitle}>{T("settings.wipe.body")}</Text>
+          <View style={styles.wipeActions}>
+            <Pressable
+              style={styles.wipeConfirmBtn}
+              onPress={() => void handleConfirmWipe()}
+              accessibilityRole="button"
+              accessibilityLabel={T("settings.wipe.now")}
+            >
+              <Text style={styles.wipeConfirmText}>
+                {T("settings.wipe.now")}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.wipeCancelBtn}
+              onPress={() => setShowWipeModal(false)}
+              accessibilityRole="button"
+              accessibilityLabel={T("common.cancel")}
+            >
+              <Text style={styles.wipeCancelText}>{T("common.cancel")}</Text>
+            </Pressable>
+          </View>
+        </BottomSheet>
+      </SettingsScroll>
+    </SettingsHighlightProvider>
   );
 }
 
@@ -1385,21 +1499,21 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flex: 1,
       backgroundColor: Colors.bg,
     },
-    content: {
-      padding: Spacing.base,
-      gap: Spacing.md,
-      paddingBottom: TAB_BAR_CLEARANCE,
-    },
     header: {
       flexDirection: "row",
-      justifyContent: "flex-end",
+      alignItems: "center",
+      justifyContent: "space-between",
     },
-    headerEditBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: Radius.md,
+    headerBtn: {
+      width: HEADER_BTN_SIZE,
+      height: HEADER_BTN_SIZE,
+      borderRadius: Radius.full,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: Colors.surfaceRaised,
+    },
+    headerBtnPressed: {
+      backgroundColor: Colors.surfacePressed,
     },
     identityBlock: {
       alignItems: "center",

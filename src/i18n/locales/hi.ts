@@ -1533,6 +1533,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "पीअर ID कॉपी करें",
   "settings.peer_id_sheet.note":
     "यह तभी काम करता है जब आप दोनों ब्लूटूथ की पहुँच में हों। किसी को कहीं से भी संदेश भेजने देने के लिए अपना QR कोड साझा करें।",
+  "settings.search.placeholder": "सेटिंग्स खोजें…",
+  "settings.search.a11y": "सेटिंग्स खोजें",
+  "settings.search.close": "खोज बंद करें",
+  "settings.search.clear": "खोज साफ़ करें",
+  "settings.search.hint": "कोई भी सेटिंग नाम से खोजें, वह कहीं भी हो।",
+  "settings.search.no_results": "“{query}” से मेल खाती कोई सेटिंग नहीं",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "सामान्य",
@@ -1776,7 +1782,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor को जुड़ने में एक मिनट से ज़्यादा लग रहा है। यह चालू रहता है और कोशिश करता रहता है; मेश टैब बताएगा कि यह कब रूट कर रहा है, या यह नेटवर्क इसे रोक रहा है।",
   "settings.conn.tor_failed":
-    "Tor शुरू नहीं हो सका। पक्का करें कि ऐप के पास नेटवर्क पहुँच है।",
+    "Tor शुरू नहीं हो सका। थोड़ी देर बाद फिर कोशिश करें।",
   "settings.tor.status": "Tor स्थिति",
   "settings.tor.connection": "कनेक्शन",
   "settings.tor.mode_off": "सीधा",
@@ -1788,15 +1794,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "छिपाता है कि आप Tor इस्तेमाल कर रहे हैं। Snowflake से तेज़, लेकिन ये ब्रिज सार्वजनिक हैं और कुछ नेटवर्क इन्हें रोकते हैं।",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "यह सामान्य वेबसाइट विज़िट जैसा दिखकर छिपाता है कि आप Tor इस्तेमाल करते हैं। बाकियों से ब्लॉक करना कठिन।",
   "settings.tor.mode_custom": "अपने ब्रिज",
   "settings.tor.mode_custom_desc":
-    "bridges.torproject.org से लिए ब्रिज इस्तेमाल करें। बाकी काम न करें तो यह आज़माएँ।",
+    "bridges.torproject.org से मिली obfs4 ब्रिज लाइनें इस्तेमाल करें। बाकी विफल होने पर यह आज़माएँ।",
   "settings.tor.custom_placeholder": "हर पंक्ति में एक ब्रिज लाइन चिपकाएँ",
   "settings.tor.custom_apply_hint":
     "कनेक्ट करने के लिए बॉक्स के बाहर टैप करें।",
   "settings.tor.custom_empty": "पहले कम से कम एक ब्रिज लाइन जोड़ें।",
   "settings.tor.recovered":
-    "Tor बंद कर दिया गया क्योंकि इससे ऐप शुरू नहीं हो पा रहा था। दोबारा कोशिश करने के लिए इसे फिर से चालू करें।",
+    "Tor पिछली बार शुरू होना पूरा नहीं कर सका, इसलिए इसे बंद कर दिया गया। दोबारा कोशिश करने के लिए इसे फिर से चालू करें।",
   "settings.conn.mint_clearnet": "मिंट ट्रैफ़िक को खुले नेट पर जाने दें",
   "settings.conn.mint_clearnet_desc":
     "iOS पर Tor सिर्फ़ Nostr को ढकता है। मिंट अनुरोध रोकने के लिए इसे बंद रहने दें; मेश पर ecash दोनों ही हाल में चलता रहता है।",

@@ -1591,6 +1591,14 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Adikao ny ID-n'ny teboka",
   "settings.peer_id_sheet.note":
     "Miasa ihany izy raha samy ao anatin'ny fetran'ny Bluetooth ianareo roa. Mba hahafahan'ny olona manoratra aminao avy any amin'ny toerana rehetra, zarao ny kaody QR-nao.",
+  "settings.search.placeholder": "Karohy ao amin'ny fandrindrana…",
+  "settings.search.a11y": "Karohy ao amin'ny fandrindrana",
+  "settings.search.close": "Akatony ny fikarohana",
+  "settings.search.clear": "Fafao ny fikarohana",
+  "settings.search.hint":
+    "Tadiavo amin'ny anarany ny fandrindrana rehetra, na aiza na aiza misy azy.",
+  "settings.search.no_results":
+    "Tsy misy fandrindrana mifanaraka amin'ny “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Ankapobeny",
@@ -1852,7 +1860,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Mihoatra ny iray minitra i Tor vao mifandray. Mijanona mandeha izy ary manohy manandrana; hilaza ny takelaka Harato rehefa mitondra izy, na raha misakana azy ity tambajotra ity.",
   "settings.conn.tor_failed":
-    "Tsy afaka nandefa ny Tor. Hamarino fa manana fidirana amin'ny tambajotra ny rindranasa.",
+    "Tsy afaka nanomboka ny Tor. Andramo indray afaka kelikely.",
   "settings.tor.status": "Toetran'ny Tor",
   "settings.tor.connection": "Fifandraisana",
   "settings.tor.mode_off": "Mivantana",
@@ -1864,16 +1872,19 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Manafina fa mampiasa Tor ianao. Haingana noho ny Snowflake, saingy ampahibemaso ireo tetezana ireo ka sakanan'ny tambajotra sasany.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Manafina ny fampiasanao Tor amin'ny fanaovana azy ho toy ny fitsidihana tranonkala mahazatra. Sarotra sakanana noho ny hafa.",
   "settings.tor.mode_custom": "Tetezana manokana",
   "settings.tor.mode_custom_desc":
-    "Ampiasao ny tetezana azo avy ao amin'ny bridges.torproject.org. Andramo ity rehefa tsy mandeha ny hafa.",
+    "Ampiasao ny andalana tetezana obfs4 avy amin'ny bridges.torproject.org. Andramo ity rehefa tsy mety ny hafa.",
   "settings.tor.custom_placeholder":
     "Apetaho tsipika tetezana iray isaky ny andalana",
   "settings.tor.custom_apply_hint": "Tsindrio ivelan'ny boaty mba hifandray.",
   "settings.tor.custom_empty":
     "Ampio tsipika tetezana iray farafahakeliny aloha.",
   "settings.tor.recovered":
-    "Nakatona ny Tor satria nanakana ny fandehanan'ny rindranasa. Alefaso indray raha te hanandrana.",
+    "Nakatona ny Tor satria tsy vita ny fanombohana tamin'ny farany. Alefaso indray raha te hanandrana.",
   "settings.conn.mint_clearnet":
     "Avelao ny fifamoivoizan'ny mpamoaka amin'ny tambajotra misokatra",
   "settings.conn.mint_clearnet_desc":

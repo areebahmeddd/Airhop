@@ -1557,6 +1557,14 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Salin ID rekan",
   "settings.peer_id_sheet.note":
     "Ini hanya bekerja saat kalian berdua dalam jangkauan Bluetooth. Agar orang bisa mengirimimu pesan dari mana saja, bagikan kode QR-mu.",
+  "settings.search.placeholder": "Cari di pengaturan…",
+  "settings.search.a11y": "Cari di pengaturan",
+  "settings.search.close": "Tutup pencarian",
+  "settings.search.clear": "Bersihkan pencarian",
+  "settings.search.hint":
+    "Temukan pengaturan mana pun lewat namanya, di mana pun letaknya.",
+  "settings.search.no_results":
+    "Tidak ada pengaturan yang cocok dengan “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Umum",
@@ -1809,7 +1817,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor butuh lebih dari semenit untuk menyambung. Ia tetap menyala dan terus mencoba; tab Mesh akan memberi tahu saat perutean berjalan, atau kalau jaringan ini memblokirnya.",
   "settings.conn.tor_failed":
-    "Tor tidak bisa dinyalakan. Pastikan aplikasi punya akses jaringan.",
+    "Tor tidak dapat dimulai. Coba lagi sebentar lagi.",
   "settings.tor.status": "Status Tor",
   "settings.tor.connection": "Koneksi",
   "settings.tor.mode_off": "Langsung",
@@ -1821,14 +1829,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Menyembunyikan bahwa Anda memakai Tor. Lebih cepat dari Snowflake, tetapi bridge ini publik dan sebagian jaringan memblokirnya.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Menyembunyikan bahwa Anda memakai Tor dengan tampak seperti kunjungan situs web biasa. Lebih sulit diblokir daripada yang lain.",
   "settings.tor.mode_custom": "Bridge sendiri",
   "settings.tor.mode_custom_desc":
-    "Pakai bridge dari bridges.torproject.org. Coba ini bila yang lain gagal.",
+    "Gunakan baris bridge obfs4 dari bridges.torproject.org. Coba ini saat yang lain gagal.",
   "settings.tor.custom_placeholder": "Tempel satu baris bridge per baris",
   "settings.tor.custom_apply_hint": "Ketuk di luar kotak untuk menyambung.",
   "settings.tor.custom_empty": "Tambahkan setidaknya satu baris bridge dahulu.",
   "settings.tor.recovered":
-    "Tor dimatikan karena membuat aplikasi gagal dibuka. Aktifkan lagi untuk mencoba kembali.",
+    "Tor dimatikan karena tidak selesai dimulai terakhir kali. Aktifkan lagi untuk mencoba kembali.",
   "settings.conn.mint_clearnet":
     "Izinkan lalu lintas mint lewat jaringan terbuka",
   "settings.conn.mint_clearnet_desc":

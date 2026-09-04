@@ -1579,6 +1579,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Copier l’identifiant de pair",
   "settings.peer_id_sheet.note":
     "Cela ne fonctionne que si vous êtes tous les deux à portée du Bluetooth. Pour qu’on puisse t’écrire de n’importe où, partage plutôt ton code QR.",
+  "settings.search.placeholder": "Rechercher dans les réglages…",
+  "settings.search.a11y": "Rechercher dans les réglages",
+  "settings.search.close": "Fermer la recherche",
+  "settings.search.clear": "Effacer la recherche",
+  "settings.search.hint":
+    "Trouve n’importe quel réglage par son nom, où qu’il soit.",
+  "settings.search.no_results": "Aucun réglage ne correspond à « {query} »",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Général",
@@ -1833,7 +1840,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor met plus d’une minute à se connecter. Il reste actif et continue d’essayer ; l’onglet Maillage indiquera quand il route, ou si ce réseau le bloque.",
   "settings.conn.tor_failed":
-    "Impossible de démarrer Tor. Vérifie que l’app a accès au réseau.",
+    "Impossible de démarrer Tor. Réessayez dans un instant.",
   "settings.tor.status": "État de Tor",
   "settings.tor.connection": "Connexion",
   "settings.tor.mode_off": "Directe",
@@ -1845,15 +1852,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Masque que vous utilisez Tor. Plus rapide que Snowflake, mais ces ponts sont publics et certains réseaux les bloquent.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Masque l’usage de Tor en ressemblant à une visite ordinaire d’un site web. Plus difficile à bloquer que les autres.",
   "settings.tor.mode_custom": "Ponts personnalisés",
   "settings.tor.mode_custom_desc":
-    "Utilisez des ponts obtenus sur bridges.torproject.org. À essayer quand les autres échouent.",
+    "Utilisez des lignes de pont obfs4 provenant de bridges.torproject.org. Essayez ceci quand les autres échouent.",
   "settings.tor.custom_placeholder": "Collez une ligne de pont par ligne",
   "settings.tor.custom_apply_hint":
     "Touchez en dehors du champ pour vous connecter.",
   "settings.tor.custom_empty": "Ajoutez d’abord au moins une ligne de pont.",
   "settings.tor.recovered":
-    "Tor a été désactivé car il empêchait l’application de démarrer. Réactivez-le pour réessayer.",
+    "Tor a été désactivé car son démarrage ne s’est pas terminé la dernière fois. Réactivez-le pour réessayer.",
   "settings.conn.mint_clearnet":
     "Autoriser le trafic vers le mint sur le réseau en clair",
   "settings.conn.mint_clearnet_desc":

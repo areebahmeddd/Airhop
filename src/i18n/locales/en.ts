@@ -1559,6 +1559,13 @@ export const strings = {
   "settings.peer_id_sheet.copy": "Copy peer ID",
   "settings.peer_id_sheet.note":
     "This only works when you’re both within Bluetooth range. To let someone message you from anywhere, share your QR code instead.",
+  // ---- Settings: search ----
+  "settings.search.placeholder": "Search settings…",
+  "settings.search.a11y": "Search settings",
+  "settings.search.close": "Close search",
+  "settings.search.clear": "Clear search",
+  "settings.search.hint": "Find a setting by name, wherever it lives.",
+  "settings.search.no_results": "No settings match “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "General",
@@ -1797,8 +1804,7 @@ export const strings = {
     "Tor routing is not available in this build.",
   "settings.conn.tor_timeout":
     "Tor is taking longer than a minute to connect. It stays on and keeps trying; the Mesh tab will say when it is routing, or if this network is blocking it.",
-  "settings.conn.tor_failed":
-    "Could not start Tor. Ensure the app has network access.",
+  "settings.conn.tor_failed": "Could not start Tor. Try again in a moment.",
   "settings.tor.status": "Tor status",
   "settings.tor.connection": "Connection",
   "settings.tor.mode_off": "Direct",
@@ -1810,14 +1816,17 @@ export const strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Hides that you use Tor. Faster than Snowflake, but these bridges are public and some networks block them.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Hides that you use Tor by looking like an ordinary website visit. Harder to block than the others.",
   "settings.tor.mode_custom": "Custom bridges",
   "settings.tor.mode_custom_desc":
-    "Use bridges you got from bridges.torproject.org. Try this when the others fail.",
+    "Use obfs4 bridge lines from bridges.torproject.org. Try this when the others fail.",
   "settings.tor.custom_placeholder": "Paste one bridge line per line",
   "settings.tor.custom_apply_hint": "Tap outside the box to connect.",
   "settings.tor.custom_empty": "Add at least one bridge line first.",
   "settings.tor.recovered":
-    "Tor was turned off because it stopped the app from starting. Turn it back on to try again.",
+    "Tor was turned off because it did not finish starting last time. Turn it back on to try again.",
   "settings.conn.mint_clearnet": "Allow mint traffic over clear net",
   "settings.conn.mint_clearnet_desc":
     "Tor on iOS only covers Nostr. Leave off to block mint requests; ecash over the mesh keeps working either way.",

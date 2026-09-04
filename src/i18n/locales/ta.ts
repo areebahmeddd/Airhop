@@ -1592,6 +1592,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "பியர் அடையாளத்தை நகலெடு",
   "settings.peer_id_sheet.note":
     "நீங்கள் இருவரும் புளூடூத் வரம்பில் இருக்கும்போது மட்டுமே இது வேலை செய்யும். எங்கிருந்தும் உங்களுக்குச் செய்தி அனுப்ப ஒருவரால் முடிய வேண்டுமெனில், அதற்குப் பதிலாக உங்கள் QR குறியீட்டைப் பகிருங்கள்.",
+  "settings.search.placeholder": "அமைப்புகளில் தேடு…",
+  "settings.search.a11y": "அமைப்புகளில் தேடு",
+  "settings.search.close": "தேடலை மூடு",
+  "settings.search.clear": "தேடலை அழி",
+  "settings.search.hint":
+    "எந்த அமைப்பையும் அதன் பெயரால் தேடுங்கள், அது எங்கிருந்தாலும்.",
+  "settings.search.no_results": "”{query}“ க்கு பொருந்தும் அமைப்பு இல்லை",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "பொது",
@@ -1850,7 +1857,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor இணைக்க ஒரு நிமிடத்துக்கு மேல் எடுக்கிறது. அது இயக்கத்திலேயே இருந்து முயன்றுகொண்டிருக்கும்; எப்போது திசைவழி தொடங்குகிறது, அல்லது இந்த வலையமைப்பு அதைத் தடுக்கிறதா என்பதை மெஷ் தாவல் சொல்லும்.",
   "settings.conn.tor_failed":
-    "Tor ஐத் தொடங்க முடியவில்லை. செயலிக்கு வலையமைப்பு அணுகல் உள்ளதா என உறுதிசெய்யுங்கள்.",
+    "Tor ஐத் தொடங்க முடியவில்லை. சிறிது நேரத்தில் மீண்டும் முயற்சிக்கவும்.",
   "settings.tor.status": "Tor நிலை",
   "settings.tor.connection": "இணைப்பு",
   "settings.tor.mode_off": "நேரடி",
@@ -1862,15 +1869,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "நீங்கள் Tor பயன்படுத்துவதை மறைக்கிறது. Snowflake ஐ விட வேகமானது, ஆனால் இந்தப் பாலங்கள் பொதுவானவை, சில நெட்வொர்க்குகள் தடுக்கின்றன.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "சாதாரண இணையதள வருகை போலத் தோன்றி நீங்கள் Tor பயன்படுத்துவதை மறைக்கிறது. மற்றவற்றை விட தடுப்பது கடினம்.",
   "settings.tor.mode_custom": "சொந்தப் பாலங்கள்",
   "settings.tor.mode_custom_desc":
-    "bridges.torproject.org இல் பெற்ற பாலங்களைப் பயன்படுத்தவும். மற்றவை வேலை செய்யாதபோது இதை முயற்சிக்கவும்.",
+    "bridges.torproject.org இலிருந்து பெற்ற obfs4 பிரிட்ஜ் வரிகளைப் பயன்படுத்தவும். மற்றவை தோல்வியடையும்போது இதை முயற்சிக்கவும்.",
   "settings.tor.custom_placeholder": "ஒரு வரிக்கு ஒரு பாலம் வரியை ஒட்டவும்",
   "settings.tor.custom_apply_hint": "இணைக்க பெட்டிக்கு வெளியே தட்டவும்.",
   "settings.tor.custom_empty":
     "முதலில் குறைந்தது ஒரு பாலம் வரியைச் சேர்க்கவும்.",
   "settings.tor.recovered":
-    "Tor செயலியைத் தொடங்க விடாததால் அது அணைக்கப்பட்டது. மீண்டும் முயற்சிக்க அதை இயக்கவும்.",
+    "Tor கடந்த முறை தொடங்குவதை முடிக்கவில்லை, எனவே அது அணைக்கப்பட்டது. மீண்டும் முயற்சிக்க அதை இயக்கவும்.",
   "settings.conn.mint_clearnet":
     "நாணயச்சாலைப் போக்குவரத்தைத் திறந்த வலையில் அனுமதி",
   "settings.conn.mint_clearnet_desc":

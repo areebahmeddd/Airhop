@@ -20,11 +20,12 @@ import { showAlert } from "@store/alert-store";
 import { WALLET_STORAGE_ID } from "@store/wallet-store";
 import { formatBytes } from "@utils/format";
 import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,
   SettingRow,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -94,13 +95,11 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.storage")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             <SettingRow
+              id="network-usage"
               icon="activity"
               label={T("settings.storage.network_usage")}
               description={T("settings.storage.session_usage", {
@@ -115,6 +114,7 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
             />
             <GroupDivider />
             <SettingRow
+              id="storage-usage"
               icon="hard-drive"
               label={T("settings.storage.storage_usage")}
               description={T("settings.storage.storage_usage_desc")}
@@ -126,6 +126,7 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
             />
             <GroupDivider />
             <SettingLinkRow
+              id="cache"
               icon="trash-2"
               label={T("settings.storage.cache")}
               description={T("settings.storage.cache_desc", {
@@ -151,7 +152,7 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
             />
           </View>
         </View>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

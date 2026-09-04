@@ -1564,6 +1564,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Peer-ID kopiëren",
   "settings.peer_id_sheet.note":
     "Dit werkt alleen als jullie allebei binnen Bluetooth-bereik zijn. Wil je dat iemand je van overal kan schrijven, deel dan je QR-code.",
+  "settings.search.placeholder": "Instellingen doorzoeken…",
+  "settings.search.a11y": "Instellingen doorzoeken",
+  "settings.search.close": "Zoeken sluiten",
+  "settings.search.clear": "Zoekopdracht wissen",
+  "settings.search.hint": "Vind elke instelling op naam, waar die ook staat.",
+  "settings.search.no_results": "Geen instellingen voor “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Algemeen",
@@ -1813,7 +1819,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor doet er langer dan een minuut over om te verbinden. Het blijft aan en blijft proberen; het Mesh-tabblad laat weten wanneer het routeert, of dat dit netwerk het blokkeert.",
   "settings.conn.tor_failed":
-    "Tor kon niet starten. Controleer of de app netwerktoegang heeft.",
+    "Tor kon niet worden gestart. Probeer het zo opnieuw.",
   "settings.tor.status": "Tor-status",
   "settings.tor.connection": "Verbinding",
   "settings.tor.mode_off": "Direct",
@@ -1825,15 +1831,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Verbergt dat je Tor gebruikt. Sneller dan Snowflake, maar deze bridges zijn openbaar en sommige netwerken blokkeren ze.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Verbergt dat je Tor gebruikt door op een gewoon websitebezoek te lijken. Moeilijker te blokkeren dan de andere.",
   "settings.tor.mode_custom": "Eigen bridges",
   "settings.tor.mode_custom_desc":
-    "Gebruik bridges van bridges.torproject.org. Probeer dit als de rest niet werkt.",
+    "Gebruik obfs4-bridgeregels van bridges.torproject.org. Probeer dit als de andere niet werken.",
   "settings.tor.custom_placeholder": "Plak één bridge-regel per regel",
   "settings.tor.custom_apply_hint":
     "Tik buiten het vak om verbinding te maken.",
   "settings.tor.custom_empty": "Voeg eerst minstens één bridge-regel toe.",
   "settings.tor.recovered":
-    "Tor is uitgeschakeld omdat de app er niet meer mee opstartte. Zet het weer aan om het opnieuw te proberen.",
+    "Tor is uitgeschakeld omdat het de vorige keer niet volledig is opgestart. Zet het weer aan om het opnieuw te proberen.",
   "settings.conn.mint_clearnet": "Mintverkeer over het open net toestaan",
   "settings.conn.mint_clearnet_desc":
     "Tor op iOS dekt alleen Nostr. Laat dit uit om mintverzoeken te blokkeren; ecash over de mesh blijft hoe dan ook werken.",

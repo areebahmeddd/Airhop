@@ -7,16 +7,10 @@ import { THIRD_PARTY_LICENSES } from "@data/licenses";
 import { useT } from "@i18n";
 import { FontSize, Spacing, useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
-import {
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   GroupDivider,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -33,10 +27,7 @@ export default function LicensesScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.about.licenses")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         {THIRD_PARTY_LICENSES.map((group) => (
           <View key={group.category} style={styles.section}>
             <View style={local.header}>
@@ -73,7 +64,7 @@ export default function LicensesScreen({ onBack }: Props): React.JSX.Element {
             </View>
           </View>
         ))}
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

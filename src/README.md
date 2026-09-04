@@ -209,6 +209,3 @@ The following still require testing on real devices before a release:
 - CoreBluetooth behavior on physical hardware
 - OEM battery management
 - Real Tor circuits
-
-On-device UI smoke tests are planned with
-[Maestro](https://maestro.mobile.dev).

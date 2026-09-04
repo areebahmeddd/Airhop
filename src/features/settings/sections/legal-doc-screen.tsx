@@ -21,8 +21,12 @@ import {
   useThemeColors,
 } from "@ui/theme";
 import React, { useMemo } from "react";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SubHeader, useSharedStyles } from "../settings-primitives";
+import { Linking, StyleSheet, Text, View } from "react-native";
+import {
+  SettingsScroll,
+  SubHeader,
+  useSharedStyles,
+} from "../settings-primitives";
 
 // A block is either a paragraph string or a bulleted list of strings.
 // Any string (paragraph or bullet item) may contain **bold** spans and
@@ -53,10 +57,7 @@ export default function LegalDocScreen({
   return (
     <View style={shared.container}>
       <SubHeader title={title} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <Text style={styles.lastUpdated}>
           {t("legal.last_updated", { date: lastUpdated })}
         </Text>
@@ -90,7 +91,7 @@ export default function LegalDocScreen({
             )}
           </View>
         ))}
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

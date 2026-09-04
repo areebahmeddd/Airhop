@@ -528,31 +528,27 @@ pub(crate) fn isolation_for(key: &str) -> IsolationToken {
         .or_insert_with(IsolationToken::new)
 }
 
+/// Serializes the tests that touch the process-global client. A poisoned lock is
+/// recovered, so one failure does not cascade into the tests after it.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
-    /// The client and its status are process global, so these tests cannot run
-    /// beside one another. A poisoned lock is recovered: the test that panicked
-    /// has already failed, and cascading would hide which one.
-    fn exclusive() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: Mutex<()> = Mutex::new(());
-        LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    /// The lifecycle the app drives, on the host.
+    /// The lifecycle the app drives. The build's other gates read the finished
+    /// library; this one calls it, which is where a missing crypto provider or
+    /// an unusable state directory surfaces. No network needed.
     ///
-    /// The build's other gates read the finished library; this one calls it.
-    /// `create_unbootstrapped_async` builds the client and binds the listener,
-    /// which is where a missing crypto provider or an unusable state directory
-    /// surfaces. No network is needed, and the bootstrap that follows is free
-    /// to fail.
-    ///
-    /// Port 0 so the kernel picks a free one, rather than colliding with a
-    /// developer's running Airhop. Only callers above the FFI must name one.
+    /// Port 0 so the kernel picks a free one. Only callers above the FFI must
+    /// name a real port.
     #[test]
     fn the_client_starts_and_stops() {
-        let _serial = exclusive();
+        let _serial = test_lock();
         let dir = std::env::temp_dir().join(format!(
             "airhop-tor-test-{}-{:?}",
             std::process::id(),
@@ -576,7 +572,6 @@ mod test {
         assert!(!running.ready, "ready must not be claimed before a circuit");
         assert!(!running.bridged, "no bridge lines were given");
 
-        // The guard against two clients racing for the same port and state lock.
         assert_eq!(
             start(path, 0, "", TransportPorts::default()),
             AIRHOP_TOR_ERR_ALREADY_RUNNING
@@ -592,11 +587,11 @@ mod test {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Fail-closed end to end, not only at the config builder: a user who asked
-    /// for a bridge must never be given a direct connection instead.
+    /// Fail-closed end to end: a user who asked for a bridge must never be given
+    /// a direct connection instead.
     #[test]
     fn a_bridge_without_its_transport_refuses_to_start() {
-        let _serial = exclusive();
+        let _serial = test_lock();
         let dir = std::env::temp_dir().join(format!(
             "airhop-tor-test-{}-{:?}",
             std::process::id(),
@@ -616,11 +611,58 @@ mod test {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A panic returns the fallback and records why, rather than unwinding into
-    /// the caller's C or JNI frame.
+    /// Both platform decoders read this layout by hand; nothing else pins it.
+    #[test]
+    fn every_status_field_survives_packing() {
+        let _serial = test_lock();
+        update_status(|s| {
+            *s = Status {
+                running: true,
+                ready: true,
+                progress: 100,
+                blocked: true,
+                summary: String::new(),
+                bridged: true,
+            };
+        });
+        let packed = packed_status();
+        assert_eq!(
+            packed & AIRHOP_TOR_STATUS_RUNNING,
+            AIRHOP_TOR_STATUS_RUNNING
+        );
+        assert_eq!(packed & AIRHOP_TOR_STATUS_READY, AIRHOP_TOR_STATUS_READY);
+        assert_eq!(
+            packed & AIRHOP_TOR_STATUS_BLOCKED,
+            AIRHOP_TOR_STATUS_BLOCKED
+        );
+        assert_eq!(
+            packed & AIRHOP_TOR_STATUS_BRIDGED,
+            AIRHOP_TOR_STATUS_BRIDGED
+        );
+        assert_eq!((packed >> AIRHOP_TOR_STATUS_PROGRESS_SHIFT) & 0xFF, 100);
+
+        update_status(|s| *s = Status::default());
+        assert_eq!(
+            packed_status(),
+            0,
+            "a stopped client packs to no bits at all"
+        );
+    }
+
+    /// A privacy property, not bookkeeping: one guard seeing this client talk to
+    /// five named relays is a correlatable shape even with every byte opaque.
+    #[test]
+    fn isolation_is_stable_per_key_and_distinct_between_keys() {
+        let _serial = test_lock();
+        let first = isolation_for("relay.example");
+        assert_eq!(first, isolation_for("relay.example"));
+        assert_ne!(first, isolation_for("other.example"));
+    }
+
+    /// A panic returns the fallback rather than unwinding into a C or JNI frame.
     #[test]
     fn a_panic_becomes_an_error_code() {
-        let _serial = exclusive();
+        let _serial = test_lock();
         let rc = catch_panic(AIRHOP_TOR_ERR_PANIC, || -> i32 {
             panic!("deliberate test panic");
         });

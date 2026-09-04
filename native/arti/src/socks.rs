@@ -269,3 +269,128 @@ fn reply_code_for(kind: ErrorKind) -> u8 {
         _ => REPLY_GENERAL_FAILURE,
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    /// Not 39050, which a developer's running Airhop would hold.
+    const TEST_PORT: u16 = 39150;
+
+    /// Runs even when a test panics, so one failure cannot leave a client
+    /// running for the next.
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            crate::stop();
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Run `f` against a connected SOCKS client. Every case here is refused
+    /// during the handshake, before arti is asked for a stream, so none of them
+    /// needs a circuit.
+    fn with_client(f: impl FnOnce(&mut TcpStream)) {
+        let _serial = crate::test_lock();
+        let dir = std::env::temp_dir().join(format!("airhop-socks-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(
+            crate::start(
+                dir.to_str().expect("temp dir is not UTF-8"),
+                TEST_PORT,
+                "",
+                crate::TransportPorts::default(),
+            ),
+            crate::AIRHOP_TOR_OK,
+            "listener did not come up: {}",
+            crate::status().summary
+        );
+        let _cleanup = Cleanup(dir);
+
+        let mut stream = TcpStream::connect(("127.0.0.1", TEST_PORT)).expect("port is accepting");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("read timeout");
+        f(&mut stream);
+    }
+
+    fn greet_no_auth(stream: &mut TcpStream) {
+        stream.write_all(&[0x05, 0x01, 0x00]).expect("greeting");
+        let mut chosen = [0u8; 2];
+        stream.read_exact(&mut chosen).expect("method reply");
+        assert_eq!(chosen, [0x05, 0x00]);
+    }
+
+    fn read_reply(stream: &mut TcpStream) -> [u8; 10] {
+        let mut reply = [0u8; 10];
+        stream.read_exact(&mut reply).expect("reply");
+        assert_eq!(reply[0], 0x05);
+        reply
+    }
+
+    /// Credentials are the only way a caller can ask for a specific circuit.
+    #[test]
+    fn credentials_are_preferred_over_no_auth() {
+        with_client(|stream| {
+            stream
+                .write_all(&[0x05, 0x02, 0x00, 0x02])
+                .expect("greeting");
+            let mut chosen = [0u8; 2];
+            stream.read_exact(&mut chosen).expect("method reply");
+            assert_eq!(chosen, [0x05, 0x02]);
+        });
+    }
+
+    #[test]
+    fn a_greeting_with_no_usable_method_is_refused() {
+        with_client(|stream| {
+            // GSSAPI alone, which this server does not implement.
+            stream.write_all(&[0x05, 0x01, 0x01]).expect("greeting");
+            let mut chosen = [0u8; 2];
+            stream.read_exact(&mut chosen).expect("method reply");
+            assert_eq!(chosen, [0x05, 0xFF]);
+        });
+    }
+
+    /// BIND and UDP ASSOCIATE have no meaning over Tor.
+    #[test]
+    fn only_connect_is_offered() {
+        with_client(|stream| {
+            greet_no_auth(stream);
+            stream
+                .write_all(&[0x05, 0x02, 0x00, 0x01])
+                .expect("bind request");
+            assert_eq!(read_reply(stream)[1], super::REPLY_CMD_UNSUPPORTED);
+        });
+    }
+
+    #[test]
+    fn an_unknown_address_type_is_refused() {
+        with_client(|stream| {
+            greet_no_auth(stream);
+            stream
+                .write_all(&[0x05, 0x01, 0x00, 0x09])
+                .expect("request");
+            assert_eq!(read_reply(stream)[1], super::REPLY_ATYP_UNSUPPORTED);
+        });
+    }
+
+    /// Answering would tell whatever opened the port what is listening on it.
+    #[test]
+    fn a_greeting_that_is_not_socks5_gets_no_reply() {
+        with_client(|stream| {
+            stream.write_all(&[0x04, 0x01, 0x00]).expect("greeting");
+            let mut any = [0u8; 1];
+            // Closing with the greeting still unread makes the kernel answer RST
+            // rather than a clean end of file. Either way nothing was said back.
+            match stream.read(&mut any) {
+                Ok(0) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
+                other => panic!("expected no reply, got {other:?}"),
+            }
+        });
+    }
+}

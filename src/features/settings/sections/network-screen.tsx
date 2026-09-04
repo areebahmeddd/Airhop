@@ -26,19 +26,13 @@ import { useSettingsStore } from "@store/settings-store";
 import { HIT_SLOP, useThemeColors } from "@ui/theme";
 import { formatNumber } from "@utils/format";
 import React, { useState } from "react";
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,
   SettingRow,
   SettingSwitch,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -212,16 +206,14 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.network")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             {T("settings.group.internet")}
           </Text>
           <View style={styles.settingsGroup}>
             <SettingRow
+              id="internet"
               icon="cloud"
               label={T("settings.network.internet")}
               description={T("settings.network.internet_desc")}
@@ -234,6 +226,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
             />
             <GroupDivider />
             <SettingRow
+              id="relay-discovery"
               icon="map-pin"
               label={T("settings.network.discovery")}
               description={T("settings.network.discovery_desc")}
@@ -433,6 +426,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
             )}
             <GroupDivider />
             <SettingRow
+              id="bitchat"
               icon="bluetooth"
               label={T("settings.network.bitchat")}
               description={T("settings.network.bitchat_desc")}
@@ -449,6 +443,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
           <Text style={styles.sectionTitle}>{T("settings.group.local")}</Text>
           <View style={styles.settingsGroup}>
             <SettingRow
+              id="lan"
               icon="wifi"
               label={T("settings.network.lan")}
               description={T("settings.network.lan_desc")}
@@ -519,7 +514,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
             </View>
           </View>
         )}
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

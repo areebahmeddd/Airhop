@@ -1555,6 +1555,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "კვანძის ID-ის კოპირება",
   "settings.peer_id_sheet.note":
     "ეს მხოლოდ მაშინ მუშაობს, როცა ორივე ბლუთუზის რადიუსში ხართ. იმისთვის, რომ ვინმემ ნებისმიერი ადგილიდან მოგწეროს, სანაცვლოდ შენი QR კოდი გააზიარე.",
+  "settings.search.placeholder": "პარამეტრების ძებნა…",
+  "settings.search.a11y": "პარამეტრების ძებნა",
+  "settings.search.close": "ძებნის დახურვა",
+  "settings.search.clear": "ძებნის გასუფთავება",
+  "settings.search.hint":
+    "იპოვე ნებისმიერი პარამეტრი სახელით, სადაც არ უნდა იყოს.",
+  "settings.search.no_results": "„{query}“-ის შესაბამისი პარამეტრი არ არის",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "ზოგადი",
@@ -1802,8 +1809,7 @@ export const strings: Strings = {
   "settings.conn.tor_unavailable": "ამ ბილდში Tor-ით მიმართვა მიუწვდომელია.",
   "settings.conn.tor_timeout":
     "Tor-ს დაკავშირებას ერთ წუთზე მეტი სჭირდება. ის ჩართული რჩება და ცდას აგრძელებს; მეშის ჩანართი გეტყვის, როდის დაიწყო მიმართვა, ან თუ ეს ქსელი მას ბლოკავს.",
-  "settings.conn.tor_failed":
-    "Tor-ის გაშვება ვერ მოხერხდა. დარწმუნდი, რომ აპლიკაციას ქსელთან წვდომა აქვს.",
+  "settings.conn.tor_failed": "Tor ვერ გაეშვა. სცადეთ ხელახლა ცოტა ხანში.",
   "settings.tor.status": "Tor-ის სტატუსი",
   "settings.tor.connection": "კავშირი",
   "settings.tor.mode_off": "პირდაპირი",
@@ -1815,14 +1821,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "მალავს, რომ Tor-ს იყენებთ. Snowflake-ზე სწრაფია, თუმცა ეს ხიდები საჯაროა და ზოგი ქსელი ბლოკავს.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "მალავს Tor-ის გამოყენებას ჩვეულებრივი ვებგვერდის მონახულების იმიტაციით. სხვებზე რთულად დასაბლოკია.",
   "settings.tor.mode_custom": "საკუთარი ხიდები",
   "settings.tor.mode_custom_desc":
-    "გამოიყენეთ ხიდები bridges.torproject.org-იდან. სცადეთ, როცა დანარჩენი ვერ მუშაობს.",
+    "გამოიყენეთ obfs4 ხიდის ხაზები bridges.torproject.org-იდან. სცადეთ ეს, როცა დანარჩენები ვერ მუშაობს.",
   "settings.tor.custom_placeholder": "ჩასვით თითო ხიდის ხაზი თითო სტრიქონში",
   "settings.tor.custom_apply_hint": "დასაკავშირებლად შეეხეთ ველის გარეთ.",
   "settings.tor.custom_empty": "ჯერ დაამატეთ ერთი ხიდის ხაზი მაინც.",
   "settings.tor.recovered":
-    "Tor გამოირთო, რადგან ხელს უშლიდა აპის გაშვებას. ხელახლა საცდელად თავიდან ჩართეთ.",
+    "Tor გამოირთო, რადგან წინა ჯერზე გაშვება არ დასრულდა. ხელახლა საცდელად თავიდან ჩართეთ.",
   "settings.conn.mint_clearnet": "ზარაფხანის ტრაფიკის დაშვება ღია ქსელით",
   "settings.conn.mint_clearnet_desc":
     "iOS-ზე Tor მხოლოდ Nostr-ს ფარავს. დატოვე გამორთული, რომ ზარაფხანის მოთხოვნები დაიბლოკოს; ორივე შემთხვევაში მეშით ecash მაინც მუშაობს.",

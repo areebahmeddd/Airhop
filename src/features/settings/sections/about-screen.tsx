@@ -13,10 +13,11 @@
 import { APP_VERSION, GITHUB_URL, LATEST_RELEASE_PAGE } from "@data/app-info";
 import { useT } from "@i18n";
 import React from "react";
-import { Linking, ScrollView, Text, View } from "react-native";
+import { Linking, Text, View } from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -37,10 +38,7 @@ export default function AboutScreen({
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.about")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
@@ -57,6 +55,7 @@ export default function AboutScreen({
             />
             <GroupDivider />
             <SettingLinkRow
+              id="release-notes"
               icon="clock"
               label={T("settings.about.release_notes")}
               description={T("settings.about.release_notes_desc")}
@@ -66,6 +65,7 @@ export default function AboutScreen({
             />
             <GroupDivider />
             <SettingLinkRow
+              id="source"
               icon="github"
               label={T("settings.about.source")}
               description="areebahmeddd/airhop"
@@ -83,7 +83,7 @@ export default function AboutScreen({
             />
           </View>
         </View>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

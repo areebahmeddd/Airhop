@@ -1597,6 +1597,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Kopyahin ang peer ID",
   "settings.peer_id_sheet.note":
     "Gumagana lang ito kapag pareho kayong nasa saklaw ng Bluetooth. Para makapag-mensahe sa iyo ang isang tao mula saanman, ibahagi na lang ang QR code mo.",
+  "settings.search.placeholder": "Maghanap sa mga setting…",
+  "settings.search.a11y": "Maghanap sa mga setting",
+  "settings.search.close": "Isara ang paghahanap",
+  "settings.search.clear": "Linisin ang paghahanap",
+  "settings.search.hint":
+    "Hanapin ang alinmang setting sa pangalan nito, nasaan man ito.",
+  "settings.search.no_results": "Walang setting na tumutugma sa “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Pangkalahatan",
@@ -1851,7 +1858,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Mahigit isang minuto nang kumokonekta ang Tor. Mananatili itong naka-on at patuloy na susubok; sasabihin ng tab na Mesh kung kailan ito nagruruta, o kung hinaharangan ito ng network na ito.",
   "settings.conn.tor_failed":
-    "Hindi nasimulan ang Tor. Tiyaking may access sa network ang app.",
+    "Hindi masimulan ang Tor. Subukan ulit maya-maya.",
   "settings.tor.status": "Katayuan ng Tor",
   "settings.tor.connection": "Koneksyon",
   "settings.tor.mode_off": "Direkta",
@@ -1863,14 +1870,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Itinatago na gumagamit ka ng Tor. Mas mabilis kaysa Snowflake, pero pampubliko ang mga bridge na ito at hinaharangan ng ilang network.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Itinatago na gumagamit ka ng Tor sa pamamagitan ng pagmukhang karaniwang pagbisita sa website. Mas mahirap harangan kaysa sa iba.",
   "settings.tor.mode_custom": "Sariling bridge",
   "settings.tor.mode_custom_desc":
-    "Gumamit ng bridge mula sa bridges.torproject.org. Subukan ito kapag hindi gumana ang iba.",
+    "Gumamit ng mga obfs4 bridge line mula sa bridges.torproject.org. Subukan ito kapag nabigo ang iba.",
   "settings.tor.custom_placeholder": "I-paste ang isang bridge line kada linya",
   "settings.tor.custom_apply_hint": "I-tap sa labas ng kahon para kumonekta.",
   "settings.tor.custom_empty": "Magdagdag muna ng kahit isang bridge line.",
   "settings.tor.recovered":
-    "Na-off ang Tor dahil hindi makapagsimula ang app. I-on itong muli para subukan ulit.",
+    "Na-off ang Tor dahil hindi natapos ang pagsisimula nito noong huli. I-on itong muli para subukan ulit.",
   "settings.conn.mint_clearnet": "Payagan ang trapiko ng mint sa bukas na net",
   "settings.conn.mint_clearnet_desc":
     "Nostr lang ang sakop ng Tor sa iOS. Iwang naka-off para harangan ang mga hiling sa mint; gumagana pa rin ang ecash sa mesh.",

@@ -131,3 +131,32 @@ pub unsafe extern "C" fn airhop_tor_summary(buf: *mut c_char, len: c_int) -> c_i
         end as c_int
     })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// Swift reads this with `String(cString:)`, which repairs a broken sequence
+    /// rather than reporting it, so a bad cut only ever surfaces as mojibake.
+    #[test]
+    fn a_summary_is_truncated_on_a_character_boundary() {
+        let _serial = crate::test_lock();
+        // Three bytes per character, so a byte-count cut lands mid-sequence.
+        crate::update_status(|s| s.summary = "\u{9375}\u{9375}\u{9375}".to_owned());
+
+        // c_char, not i8: it is unsigned on ARM Linux.
+        let mut buf = [0 as c_char; 8];
+        let written = unsafe { airhop_tor_summary(buf.as_mut_ptr(), buf.len() as c_int) };
+
+        // Two whole characters fit in seven bytes; the third does not.
+        assert_eq!(written, 6);
+        let bytes: Vec<u8> = buf[..written as usize].iter().map(|b| *b as u8).collect();
+        assert_eq!(
+            String::from_utf8(bytes).expect("valid UTF-8"),
+            "\u{9375}\u{9375}"
+        );
+        assert_eq!(buf[written as usize], 0, "the result is NUL terminated");
+
+        crate::update_status(|s| *s = crate::Status::default());
+    }
+}

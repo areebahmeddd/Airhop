@@ -1564,6 +1564,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Kopiuj identyfikator peera",
   "settings.peer_id_sheet.note":
     "Działa tylko wtedy, gdy oboje jesteście w zasięgu Bluetooth. Żeby ktoś mógł napisać do ciebie skądkolwiek, udostępnij zamiast tego swój kod QR.",
+  "settings.search.placeholder": "Szukaj w ustawieniach…",
+  "settings.search.a11y": "Szukaj w ustawieniach",
+  "settings.search.close": "Zamknij wyszukiwanie",
+  "settings.search.clear": "Wyczyść wyszukiwanie",
+  "settings.search.hint":
+    "Znajdź dowolne ustawienie po nazwie, gdziekolwiek jest.",
+  "settings.search.no_results": "Brak ustawień dla „{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Ogólne",
@@ -1816,7 +1823,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor łączy się dłużej niż minutę. Zostaje włączony i próbuje dalej; zakładka Mesh powie, kiedy trasuje ruch albo czy ta sieć go blokuje.",
   "settings.conn.tor_failed":
-    "Nie udało się uruchomić Tor. Upewnij się, że aplikacja ma dostęp do sieci.",
+    "Nie udało się uruchomić Tor. Spróbuj ponownie za chwilę.",
   "settings.tor.status": "Status Tor",
   "settings.tor.connection": "Połączenie",
   "settings.tor.mode_off": "Bezpośrednie",
@@ -1828,14 +1835,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Ukrywa, że używasz Tor. Szybsze niż Snowflake, ale te mostki są publiczne i część sieci je blokuje.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Ukrywa korzystanie z Tor, wyglądając jak zwykłe odwiedziny strony. Trudniejszy do zablokowania niż pozostałe.",
   "settings.tor.mode_custom": "Własne mostki",
   "settings.tor.mode_custom_desc":
-    "Użyj mostków z bridges.torproject.org. Spróbuj tego, gdy pozostałe zawiodą.",
+    "Użyj linii mostków obfs4 z bridges.torproject.org. Spróbuj tego, gdy inne zawiodą.",
   "settings.tor.custom_placeholder": "Wklej jedną linię mostka w wierszu",
   "settings.tor.custom_apply_hint": "Dotknij poza polem, aby połączyć.",
   "settings.tor.custom_empty": "Najpierw dodaj co najmniej jedną linię mostka.",
   "settings.tor.recovered":
-    "Tor został wyłączony, bo uniemożliwiał uruchomienie aplikacji. Włącz go ponownie, aby spróbować jeszcze raz.",
+    "Tor został wyłączony, bo poprzednim razem nie zakończył uruchamiania. Włącz go ponownie, aby spróbować jeszcze raz.",
   "settings.conn.mint_clearnet": "Zezwól na ruch do mennicy przez otwartą sieć",
   "settings.conn.mint_clearnet_desc":
     "Tor na iOS obejmuje tylko Nostr. Zostaw wyłączone, żeby blokować zapytania do mennicy; ecash przez sieć mesh działa tak czy inaczej.",

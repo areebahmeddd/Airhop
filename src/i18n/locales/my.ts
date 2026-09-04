@@ -1578,6 +1578,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "လုပ်ဖော်ကိုင်ဖက် ID ကူးပါ",
   "settings.peer_id_sheet.note":
     "ဤနည်းသည် နှစ်ဦးစလုံး ဘလူးတုသ်အကွာအဝေးအတွင်း ရှိမှသာ အလုပ်လုပ်သည်။ တစ်စုံတစ်ဦးက မည်သည့်နေရာမှမဆို မက်ဆေ့ဂျ်ပို့နိုင်စေရန် သင့် QR ကုဒ်ကို မျှဝေပါ။",
+  "settings.search.placeholder": "ဆက်တင်များ ရှာပါ…",
+  "settings.search.a11y": "ဆက်တင်များ ရှာပါ",
+  "settings.search.close": "ရှာဖွေမှု ပိတ်ပါ",
+  "settings.search.clear": "ရှာဖွေမှု ရှင်းပါ",
+  "settings.search.hint": "ဆက်တင်တစ်ခုကို ဘယ်နေရာမှာရှိရှိ အမည်ဖြင့် ရှာပါ။",
+  "settings.search.no_results": "“{query}” နှင့် ကိုက်ညီသော ဆက်တင် မရှိပါ",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "အထွေထွေ",
@@ -1836,8 +1842,7 @@ export const strings: Strings = {
     "ဤတည်ဆောက်မှုတွင် Tor လမ်းကြောင်း မရနိုင်ပါ။",
   "settings.conn.tor_timeout":
     "Tor ချိတ်ဆက်ရန် တစ်မိနစ်ကျော် ကြာနေပါသည်။ ၎င်းသည် ဖွင့်ထားဆဲဖြစ်ပြီး ဆက်ကြိုးစားနေပါသည်။ လမ်းကြောင်းရသည့်အခါ သို့မဟုတ် ဤကွန်ရက်က ပိတ်ဆို့နေသည်ဆိုပါက မက်ရှ်တဘ်က အသိပေးပါလိမ့်မည်။",
-  "settings.conn.tor_failed":
-    "Tor ကို မစတင်နိုင်ပါ။ အက်ပ်တွင် ကွန်ရက်အသုံးပြုခွင့် ရှိမရှိ စစ်ဆေးပါ။",
+  "settings.conn.tor_failed": "Tor ကို စတင်၍မရပါ။ ခဏနေ ထပ်စမ်းပါ။",
   "settings.tor.status": "Tor အခြေအနေ",
   "settings.tor.connection": "ချိတ်ဆက်မှု",
   "settings.tor.mode_off": "တိုက်ရိုက်",
@@ -1849,15 +1854,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Tor သုံးနေကြောင်း ဖုံးကွယ်ပေးသည်။ Snowflake ထက် မြန်သော်လည်း ဤတံတားများမှာ အများသိဖြစ်ပြီး အချို့ကွန်ရက်များက ပိတ်ဆို့သည်။",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "သာမန်ဝဘ်ဆိုက်လည်ပတ်မှုပုံစံဖြင့် Tor သုံးနေကြောင်း ဖုံးကွယ်ပေးသည်။ အခြားနည်းများထက် ပိတ်ဆို့ရန် ခက်သည်။",
   "settings.tor.mode_custom": "ကိုယ်ပိုင်တံတားများ",
   "settings.tor.mode_custom_desc":
-    "bridges.torproject.org မှ ရယူထားသော တံတားများကို သုံးပါ။ အခြားနည်းများ မအောင်မြင်လျှင် စမ်းကြည့်ပါ။",
+    "bridges.torproject.org မှ obfs4 တံတားလိုင်းများကို သုံးပါ။ အခြားနည်းများ မအောင်မြင်လျှင် ဤနည်းကို စမ်းပါ။",
   "settings.tor.custom_placeholder":
     "တစ်ကြောင်းလျှင် တံတားတစ်ကြောင်း ကူးထည့်ပါ",
   "settings.tor.custom_apply_hint": "ချိတ်ဆက်ရန် အကွက်ပြင်ပကို တို့ပါ။",
   "settings.tor.custom_empty": "ဦးစွာ တံတားလိုင်း အနည်းဆုံးတစ်ခု ထည့်ပါ။",
   "settings.tor.recovered":
-    "အက်ပ်ကို စတင်ခြင်းမှ တားဆီးနေသဖြင့် Tor ကို ပိတ်လိုက်ပါပြီ။ ထပ်စမ်းရန် ပြန်ဖွင့်ပါ။",
+    "Tor သည် ယခင်တစ်ကြိမ်က စတင်ခြင်း မပြီးဆုံးခဲ့သဖြင့် ပိတ်လိုက်ပါပြီ။ ထပ်စမ်းရန် ပြန်ဖွင့်ပါ။",
   "settings.conn.mint_clearnet":
     "မင့်အသွားအလာကို ပွင့်လင်းကွန်ရက်ပေါ်တွင် ခွင့်ပြုပါ",
   "settings.conn.mint_clearnet_desc":

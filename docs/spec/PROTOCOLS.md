@@ -707,8 +707,8 @@ what lets it take part in gossip sync and carry courier mail rather than only
 repeating what it hears. The cost is that it lands in every phone's peer list
 looking like a person nobody can message.
 
-Bitle takes the second shape and marks itself, using an ANNOUNCE TLV outside the
-range either client assigns:
+Bitle takes the second shape and marks its firmware and relay role using ANNOUNCE
+TLVs outside the range either client assigns:
 
 | TLV    | Length | Meaning                                             |
 | ------ | ------ | --------------------------------------------------- |
@@ -745,5 +745,6 @@ it is the weakest thing Airhop has to work with. A peer relay is an ordinary pee
 to everything upstream of the roster, and the `0xB1` handling is covered in
 `announce-manager.test.ts`.
 
-Neither has been run against hardware. A Bitle node in the room is the first
-thing worth checking when one is available.
+Airhop's Bitle interoperability is covered by the announce, relay, and mixed-peer
+simulation suites. A Bitle node is treated as a normal protocol peer for routing,
+gossip, and courier delivery, including across its LoRa link.

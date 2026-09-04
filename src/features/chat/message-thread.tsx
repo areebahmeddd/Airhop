@@ -3321,6 +3321,9 @@ export default function MessageThread({
       liveHoldRef.current = false;
       setIsTalkingLive(false);
       setIsPTTActive(false);
+      // Not awaited, unlike every other path that closes the microphone: this
+      // arrives on a native event listener and returns void. A press landing
+      // inside the round trip fails the same way, with the same toast.
       void releaseAudioSession();
       setToast({ message: t("chat.perm.recording_stopped"), icon: "mic-off" });
     });

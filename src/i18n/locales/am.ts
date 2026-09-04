@@ -1444,6 +1444,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "የአቻ መለያን ቅዳ",
   "settings.peer_id_sheet.note":
     "ይህ የሚሠራው ሁለታችሁም በብሉቱዝ ክልል ውስጥ ስትሆኑ ብቻ ነው። አንድ ሰው ከየትም ሆኖ መልእክት እንዲልክልህ ከፈለግህ በምትኩ QR ኮድህን አጋራ።",
+  "settings.search.placeholder": "ቅንብሮችን ፈልግ…",
+  "settings.search.a11y": "ቅንብሮችን ፈልግ",
+  "settings.search.close": "ፍለጋን ዝጋ",
+  "settings.search.clear": "ፍለጋን አጽዳ",
+  "settings.search.hint": "ማንኛውንም ቅንብር በስሙ ፈልግ።",
+  "settings.search.no_results": "ለ«{query}» ምንም ቅንብር የለም",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "አጠቃላይ",
@@ -1674,8 +1680,7 @@ export const strings: Strings = {
   "settings.conn.tor_unavailable": "በዚህ ስሪት ውስጥ የTor አቅጣጫ አይገኝም።",
   "settings.conn.tor_timeout":
     "Tor ለመገናኘት ከአንድ ደቂቃ በላይ እየወሰደ ነው። በርቶ ይቀጥላል፤ መሞከሩንም ይቀጥላል፤ የሜሽ ትሩ መቼ እያመራ እንደሆነ ወይም ይህ አውታረ መረብ እያገደው እንደሆነ ይነግርሃል።",
-  "settings.conn.tor_failed":
-    "Tor ሊጀመር አልቻለም። መተግበሪያው የአውታረ መረብ መዳረሻ እንዳለው አረጋግጥ።",
+  "settings.conn.tor_failed": "Tor ማስጀመር አልተቻለም። ከጥቂት ጊዜ በኋላ እንደገና ይሞክሩ።",
   "settings.tor.status": "የTor ሁኔታ",
   "settings.tor.connection": "ግንኙነት",
   "settings.tor.mode_off": "ቀጥታ",
@@ -1687,14 +1692,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Tor እንደሚጠቀሙ ይደብቃል። ከ Snowflake ይፈጥናል፣ ግን እነዚህ ድልድዮች ይፋዊ ናቸው እና አንዳንድ አውታረ መረቦች ያግዷቸዋል።",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "ተራ የድር ጣቢያ ጉብኝት በመምሰል Tor መጠቀምዎን ይደብቃል። ከሌሎቹ ለማገድ ይከብዳል።",
   "settings.tor.mode_custom": "ብጁ ድልድዮች",
   "settings.tor.mode_custom_desc":
-    "ከ bridges.torproject.org ያገኟቸውን ድልድዮች ይጠቀሙ። ሌሎቹ ሲወድቁ ይህን ይሞክሩ።",
+    "ከ bridges.torproject.org የተገኙ የ obfs4 ድልድይ መስመሮችን ይጠቀሙ። ሌሎቹ ሲወድቁ ይህን ይሞክሩ።",
   "settings.tor.custom_placeholder": "በአንድ መስመር አንድ የድልድይ መስመር ይለጥፉ",
   "settings.tor.custom_apply_hint": "ለመገናኘት ከሳጥኑ ውጭ ይንኩ።",
   "settings.tor.custom_empty": "መጀመሪያ ቢያንስ አንድ የድልድይ መስመር ያክሉ።",
   "settings.tor.recovered":
-    "መተግበሪያው እንዳይጀምር ስላደረገ Tor ጠፍቷል። እንደገና ለመሞከር መልሰው ያብሩት።",
+    "Tor ባለፈው ጊዜ ማስጀመሩን ስላላጠናቀቀ ጠፍቷል። እንደገና ለመሞከር መልሰው ያብሩት።",
   "settings.conn.mint_clearnet": "የሚንት ትራፊክ በክፍት አውታረ መረብ ላይ ይፈቀድ",
   "settings.conn.mint_clearnet_desc":
     "በiOS ላይ Tor የሚሸፍነው Nostr ን ብቻ ነው። የሚንት ጥያቄዎችን ለማገድ አጥፍተህ ተወው፤ በሁለቱም መንገድ በሜሽ ላይ ecash መሥራቱን ይቀጥላል።",

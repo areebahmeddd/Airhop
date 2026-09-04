@@ -1494,6 +1494,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "نسخ معرّف النظير",
   "settings.peer_id_sheet.note":
     "لا يعمل هذا إلا وأنتما ضمن نطاق البلوتوث. ولتمكين أحدهم من مراسلتك من أي مكان، شارك رمز الاستجابة السريعة الخاص بك بدلًا من ذلك.",
+  "settings.search.placeholder": "ابحث في الإعدادات…",
+  "settings.search.a11y": "ابحث في الإعدادات",
+  "settings.search.close": "إغلاق البحث",
+  "settings.search.clear": "مسح البحث",
+  "settings.search.hint": "ابحث عن أي إعداد بالاسم، أينما كان.",
+  "settings.search.no_results": "لا إعدادات تطابق «{query}»",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "عام",
@@ -1733,8 +1739,7 @@ export const strings: Strings = {
   "settings.conn.tor_unavailable": "توجيه Tor غير متاح في هذه النسخة.",
   "settings.conn.tor_timeout":
     "يستغرق Tor أكثر من دقيقة للاتصال. يبقى مفعّلًا ويواصل المحاولة؛ وسيخبرك تبويب الشبكة متى بدأ التوجيه، أو إن كانت هذه الشبكة تحجبه.",
-  "settings.conn.tor_failed":
-    "تعذّر تشغيل Tor. تأكد من أن التطبيق يملك وصولًا إلى الشبكة.",
+  "settings.conn.tor_failed": "تعذّر بدء Tor. أعد المحاولة بعد قليل.",
   "settings.tor.status": "حالة Tor",
   "settings.tor.connection": "الاتصال",
   "settings.tor.mode_off": "مباشر",
@@ -1746,14 +1751,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "يخفي استخدامك لـ Tor. أسرع من Snowflake، لكن هذه الجسور علنية وبعض الشبكات تحجبها.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "يخفي استخدامك لـ Tor بجعله يبدو كزيارة عادية لموقع ويب. حظره أصعب من غيره.",
   "settings.tor.mode_custom": "جسور مخصصة",
   "settings.tor.mode_custom_desc":
-    "استخدم جسورًا حصلت عليها من bridges.torproject.org. جرّب هذا عند فشل الخيارات الأخرى.",
+    "استخدم أسطر جسور obfs4 من bridges.torproject.org. جرّب هذا عندما تفشل الخيارات الأخرى.",
   "settings.tor.custom_placeholder": "الصق سطر جسر واحد في كل سطر",
   "settings.tor.custom_apply_hint": "انقر خارج المربع للاتصال.",
   "settings.tor.custom_empty": "أضف سطر جسر واحدًا على الأقل أولًا.",
   "settings.tor.recovered":
-    "تم إيقاف Tor لأنّه منع التطبيق من البدء. أعد تشغيله للمحاولة مرة أخرى.",
+    "تم إيقاف Tor لأنّه لم يُكمل التشغيل في المرة السابقة. أعد تشغيله للمحاولة مرة أخرى.",
   "settings.conn.mint_clearnet": "السماح بحركة دار السك عبر الشبكة المكشوفة",
   "settings.conn.mint_clearnet_desc":
     "لا يغطي Tor على iOS سوى Nostr. اتركه معطّلًا لحجب طلبات دار السك؛ والنقد الإلكتروني عبر الشبكة يعمل في الحالتين.",

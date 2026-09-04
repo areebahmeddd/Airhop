@@ -24,6 +24,7 @@
 // requirement. Teleported channels (geohash:<gh>) carry a fixed geohash, so
 // they stay live over the internet even with no location fix.
 
+import { BoardWireConstants } from "@core/mesh/wire/board-packet";
 import { NoisePayloadType } from "@core/mesh/wire/noise-payload";
 import {
   decodeBitchatEnvelope,
@@ -63,6 +64,7 @@ import { useLocationNotesStore } from "@store/location-notes-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import { systemPreview } from "@utils/message-text";
+import { truncateToUtf8Bytes } from "@utils/utf8-budget";
 import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
 import { getCoarseLocation, type Coords } from "./location-service";
 
@@ -172,6 +174,15 @@ const GEO_DM_LOOKBACK_SECONDS = 24 * 60 * 60;
 // core/nostr/geohash-presence.ts), so five minutes is about four missed rounds
 // of slack. Shortening one without the other makes the list flicker.
 const PARTICIPANT_TTL_MS = 5 * 60 * 1000;
+
+// Largest inbound channel message that is kept.
+//
+// A Nostr event arrives behind nothing but the relay's own size limit, and
+// addMessage persists, so an oversized one sits on every device in the cell
+// across restarts. Three bytes per UTF-16 unit is the composer's own 2000 at its
+// widest, so no compliant client is cut, and cutting beats dropping: one over
+// the limit is likelier buggy than hostile.
+const MAX_INBOUND_MESSAGE_BYTES = 2000 * 3;
 
 // A bridged note only counts as "new" for the notification bell if it arrived
 // within this window, so a subscription's history replay does not flood it.
@@ -762,7 +773,7 @@ export class GeohashChannelService {
       channel,
       senderID: `nostr_${event.pubkey}`,
       senderNickname: nickname,
-      text: event.content,
+      text: truncateToUtf8Bytes(event.content, MAX_INBOUND_MESSAGE_BYTES),
       timestampMs:
         Math.min(event.created_at, Math.floor(Date.now() / 1000)) * 1000,
       isMine: false,
@@ -1034,7 +1045,7 @@ export class GeohashChannelService {
           channel,
           senderID: `nostr_${event.pubkey}`,
           senderNickname: nickname,
-          text: event.content,
+          text: truncateToUtf8Bytes(event.content, MAX_INBOUND_MESSAGE_BYTES),
           // Clamp to now, matching bitchat: a relay event may carry a
           // future-dated created_at, and without this it would sort ahead of
           // real messages and stick to the bottom of the thread.
@@ -1211,6 +1222,12 @@ export class GeohashChannelService {
     const isUrgent = event.tags.some(
       ([t, v]) => t === TAG_TOPIC && v === "urgent",
     );
+    // The board wire limit, which is also the composer's, so one note is one
+    // size whichever way it arrived.
+    const content = truncateToUtf8Bytes(
+      event.content,
+      BoardWireConstants.CONTENT_MAX_BYTES,
+    );
     // Clamp to now: a relay event may carry a future-dated created_at.
     const createdAtMs =
       Math.min(event.created_at, Math.floor(Date.now() / 1000)) * 1000;
@@ -1218,7 +1235,7 @@ export class GeohashChannelService {
       id: event.id,
       pubkey: event.pubkey,
       nickname,
-      content: event.content,
+      content,
       isUrgent,
       geohash,
       createdAtMs,
@@ -1243,7 +1260,7 @@ export class GeohashChannelService {
         // The note is the author's own words and is stored as written. Only the
         // sentence around it belongs to Airhop.
         ...systemPreview(isUrgent ? "notif.notice_urgent" : "notif.notice", {
-          content: event.content,
+          content,
         }),
         timestampMs: createdAtMs,
         kind: "notice",

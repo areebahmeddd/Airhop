@@ -21,10 +21,11 @@
 import { useT } from "@i18n";
 import { FontSize, Radius, Spacing, useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, StyleSheet, Text, View } from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -49,13 +50,11 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.support")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
+              id="support-card"
               icon="credit-card"
               label={T("settings.support.card")}
               description={T("settings.support.card_desc")}
@@ -65,6 +64,7 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
             />
             <GroupDivider />
             <SettingLinkRow
+              id="support-sponsors"
               icon="github"
               label={T("settings.support.sponsors")}
               description={T("settings.support.sponsors_desc")}
@@ -77,7 +77,7 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
         <View style={localStyles.note}>
           <Text style={localStyles.noteText}>{T("settings.support.note")}</Text>
         </View>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

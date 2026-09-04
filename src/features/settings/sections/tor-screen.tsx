@@ -23,11 +23,12 @@ import { useSettingsStore, type TorBridgeMode } from "@store/settings-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import { FontFamily, HIT_SLOP, MIN_TOUCH, useThemeColors } from "@ui/theme";
 import React, { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import {
   GroupDivider,
   SettingRow,
   SettingSwitch,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -43,7 +44,8 @@ interface Props {
 // enumerated and cannot go stale; obfs4 is faster but its lines are public.
 // Custom last: the answer when the built-in ones have been blocked.
 const MODES: {
-  value: TorBridgeMode;
+  // Null is a transport the app carries but does not offer yet.
+  value: TorBridgeMode | null;
   labelKey: Parameters<ReturnType<typeof useT>>[0];
   descriptionKey: Parameters<ReturnType<typeof useT>>[0];
 }[] = [
@@ -61,6 +63,11 @@ const MODES: {
     value: "obfs4",
     labelKey: "settings.tor.mode_obfs4",
     descriptionKey: "settings.tor.mode_obfs4_desc",
+  },
+  {
+    value: null,
+    labelKey: "settings.tor.mode_webtunnel",
+    descriptionKey: "settings.tor.mode_webtunnel_desc",
   },
   {
     value: "custom",
@@ -185,10 +192,7 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.conn.tor")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             {T("settings.conn.tor_short")}
@@ -224,9 +228,11 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
             </Text>
             <View style={styles.optionGroup}>
               {MODES.map((mode, i) => {
-                const selected = mode.value === bridgeMode;
+                const value = mode.value;
+                const selected = value !== null && value === bridgeMode;
+                const disabled = busy || value === null;
                 return (
-                  <React.Fragment key={mode.value}>
+                  <React.Fragment key={mode.labelKey}>
                     {i > 0 && <GroupDivider />}
                     <Pressable
                       style={({ pressed }) => [
@@ -234,11 +240,11 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
                         selected && styles.optionRowGroupedSelected,
                         pressed && styles.rowPressed,
                       ]}
-                      onPress={() => chooseMode(mode.value)}
-                      disabled={busy}
+                      onPress={() => value !== null && chooseMode(value)}
+                      disabled={disabled}
                       hitSlop={HIT_SLOP}
                       accessibilityRole="button"
-                      accessibilityState={{ selected, disabled: busy }}
+                      accessibilityState={{ selected, disabled }}
                       accessibilityLabel={T(mode.labelKey)}
                     >
                       <View style={styles.optionText}>
@@ -256,6 +262,11 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
                           color={Colors.textPrimary}
                         />
                       )}
+                      {value === null && (
+                        <Text style={styles.comingSoon}>
+                          {T("settings.coming_soon")}
+                        </Text>
+                      )}
                     </Pressable>
                   </React.Fragment>
                 );
@@ -271,13 +282,6 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
             </Text>
             <View style={styles.settingsGroup}>
               <View style={styles.settingRow}>
-                {/* Monospace, like every other opaque identifier in the app: a
-                    bridge line is a fingerprint and a base64 certificate, and
-                    proportional text makes a mistyped one unfindable.
-
-                    One row tall until there is something in it. A multiline
-                    input grows with its content, so a taller floor only buys an
-                    empty box the size of the bridges it is waiting for. */}
                 <TextInput
                   style={[
                     styles.settingLabel,
@@ -300,17 +304,14 @@ export default function TorScreen({ onBack }: Props): React.JSX.Element {
                 />
               </View>
             </View>
-            {/* Blur is what applies the lines, and nothing about a text box
-                says so. Shown only once there is an edit to apply, so it reads
-                as the next step rather than as standing advice. */}
-            <Text style={styles.settingDescription}>
-              {hasUnappliedLines
-                ? T("settings.tor.custom_apply_hint")
-                : T("settings.tor.mode_custom_desc")}
-            </Text>
+            {hasUnappliedLines && (
+              <Text style={styles.settingDescription}>
+                {T("settings.tor.custom_apply_hint")}
+              </Text>
+            )}
           </View>
         )}
-      </ScrollView>
+      </SettingsScroll>
 
       <BottomSheet
         visible={confirmVisible}

@@ -1572,6 +1572,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Copiar o ID de par",
   "settings.peer_id_sheet.note":
     "Isto só resulta quando ambos estão dentro do alcance do Bluetooth. Para deixares que te escrevam de qualquer lugar, partilha antes o teu código QR.",
+  "settings.search.placeholder": "Procurar nas definições…",
+  "settings.search.a11y": "Procurar nas definições",
+  "settings.search.close": "Fechar a procura",
+  "settings.search.clear": "Limpar a procura",
+  "settings.search.hint":
+    "Encontra qualquer definição pelo nome, onde quer que esteja.",
+  "settings.search.no_results": "Nenhuma definição para “{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Geral",
@@ -1827,7 +1834,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "O Tor está a demorar mais de um minuto a ligar-se. Fica ligado e continua a tentar; o separador Malha diz quando estiver a encaminhar, ou se esta rede o estiver a bloquear.",
   "settings.conn.tor_failed":
-    "Não foi possível iniciar o Tor. Confirma que a aplicação tem acesso à rede.",
+    "Não foi possível iniciar o Tor. Tente novamente dentro de momentos.",
   "settings.tor.status": "Estado do Tor",
   "settings.tor.connection": "Ligação",
   "settings.tor.mode_off": "Direta",
@@ -1839,15 +1846,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Esconde que usa Tor. Mais rápido do que o Snowflake, mas estas pontes são públicas e algumas redes bloqueiam-nas.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Esconde que usa o Tor parecendo uma visita comum a um site. Mais difícil de bloquear do que os outros.",
   "settings.tor.mode_custom": "Pontes próprias",
   "settings.tor.mode_custom_desc":
-    "Use pontes obtidas em bridges.torproject.org. Tente isto quando as outras falharem.",
+    "Use linhas de ponte obfs4 de bridges.torproject.org. Tente isto quando as outras falharem.",
   "settings.tor.custom_placeholder": "Cole uma linha de ponte por linha",
   "settings.tor.custom_apply_hint": "Toque fora da caixa para ligar.",
   "settings.tor.custom_empty":
     "Adicione pelo menos uma linha de ponte primeiro.",
   "settings.tor.recovered":
-    "O Tor foi desligado porque impedia a aplicação de abrir. Volte a ligá-lo para tentar de novo.",
+    "O Tor foi desligado porque não terminou de iniciar da última vez. Volte a ligá-lo para tentar de novo.",
   "settings.conn.mint_clearnet":
     "Permitir o tráfego da casa de emissão pela rede aberta",
   "settings.conn.mint_clearnet_desc":

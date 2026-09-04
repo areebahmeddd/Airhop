@@ -1449,6 +1449,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "复制节点 ID",
   "settings.peer_id_sheet.note":
     "只有你们双方都在蓝牙范围内时才管用。想让别人从任何地方给你发消息，请改为分享你的二维码。",
+  "settings.search.placeholder": "搜索设置…",
+  "settings.search.a11y": "搜索设置",
+  "settings.search.close": "关闭搜索",
+  "settings.search.clear": "清除搜索",
+  "settings.search.hint": "按名称查找任意设置，无论它在哪一屏。",
+  "settings.search.no_results": "没有匹配“{query}”的设置",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "通用",
@@ -1676,7 +1682,7 @@ export const strings: Strings = {
   "settings.conn.tor_unavailable": "这个版本不支持 Tor 路由。",
   "settings.conn.tor_timeout":
     "Tor 连接已经花了一分多钟。它会保持开启并继续尝试；网状网络标签页会告诉你它何时开始转发，或者这个网络是否在拦截它。",
-  "settings.conn.tor_failed": "无法启动 Tor。请确认应用有网络访问权限。",
+  "settings.conn.tor_failed": "无法启动 Tor。请稍后重试。",
   "settings.tor.status": "Tor 状态",
   "settings.tor.connection": "连接方式",
   "settings.tor.mode_off": "直连",
@@ -1688,14 +1694,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "隐藏你在使用 Tor。比 Snowflake 快，但这些网桥是公开的，有些网络会封锁。",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "让流量看起来像普通的网站访问，从而隐藏你在使用 Tor。比其他方式更难封锁。",
   "settings.tor.mode_custom": "自定义网桥",
   "settings.tor.mode_custom_desc":
-    "使用你从 bridges.torproject.org 获取的网桥。其他方式都不行时试试这个。",
+    "使用来自 bridges.torproject.org 的 obfs4 网桥行。其他方式失败时可尝试此项。",
   "settings.tor.custom_placeholder": "每行粘贴一条网桥",
   "settings.tor.custom_apply_hint": "点按框外即可连接。",
   "settings.tor.custom_empty": "请先添加至少一条网桥。",
   "settings.tor.recovered":
-    "Tor 已关闭，因为它导致应用无法启动。重新打开可再试一次。",
+    "Tor 已关闭，因为上次未能完成启动。重新打开可再试一次。",
   "settings.conn.mint_clearnet": "允许铸币厂流量走明网",
   "settings.conn.mint_clearnet_desc":
     "iOS 上的 Tor 只覆盖 Nostr。保持关闭即可拦截铸币厂请求；无论如何，通过网状网络收发 ecash 都照常可用。",

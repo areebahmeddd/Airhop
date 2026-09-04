@@ -26,12 +26,13 @@ import {
 import BottomSheet from "@ui/components/bottom-sheet";
 import { useThemeColors } from "@ui/theme";
 import React, { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,
   SettingRow,
   SettingSwitch,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -187,10 +188,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.general")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         {/* Features. Wallet has shipped, so it leads the group with a switch
             locked on: the Wallet tab is part of what Airhop is, not something
             to switch off. The rest aren't built yet and carry a "Coming soon"
@@ -251,6 +249,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
           </Text>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
+              id="undo"
               icon="rotate-ccw"
               label={T("settings.general.undo")}
               description={T("settings.general.undo_desc")}
@@ -270,6 +269,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
           <Text style={styles.sectionTitle}>{T("settings.group.media")}</Text>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
+              id="media-quality"
               icon="image"
               label={T("settings.general.quality")}
               description={T(QUALITY_META[uploadQuality].descriptionKey)}
@@ -287,6 +287,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                 stays on it. Beside quality and show-media it completes one
                 subject: how media behaves, sending through keeping. */}
             <SettingLinkRow
+              id="media-retention"
               icon="clock"
               label={T("settings.general.media_retention")}
               description={T("settings.general.media_retention_desc")}
@@ -304,6 +305,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                 whether it appears by itself or waits behind a tap. Worth having
                 for the shoulder-surfing case, worth naming honestly. */}
             <SettingRow
+              id="show-media"
               icon="eye"
               label={T("settings.general.show_media")}
               description={T("settings.general.show_media_desc")}
@@ -324,6 +326,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
           <Text style={styles.sectionTitle}>{T("settings.group.reset")}</Text>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
+              id="reset"
               icon="refresh-ccw"
               label={T("settings.general.reset")}
               description={T("settings.general.reset_desc")}
@@ -332,7 +335,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
             />
           </View>
         </View>
-      </ScrollView>
+      </SettingsScroll>
 
       <BottomSheet
         visible={showUndoSheet}

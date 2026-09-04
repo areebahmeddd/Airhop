@@ -253,6 +253,7 @@ export default function ConnectivityGroup({
         {Platform.OS === "android" && (
           <>
             <SettingRow
+              id="background"
               icon="power"
               label={T("settings.conn.background")}
               description={T("settings.conn.background_desc")}
@@ -270,6 +271,7 @@ export default function ConnectivityGroup({
             voice never leaves Bluetooth, so it stays available when
             everything below is greyed out. */}
         <SettingRow
+          id="live-voice"
           icon="mic"
           label={T("settings.conn.live_voice")}
           description={T("settings.conn.live_voice_desc")}
@@ -282,6 +284,7 @@ export default function ConnectivityGroup({
         />
         <GroupDivider />
         <SettingRow
+          id="mesh-bridge"
           icon="git-merge"
           label={T("settings.conn.bridge")}
           description={T("settings.conn.bridge_desc")}
@@ -325,6 +328,7 @@ export default function ConnectivityGroup({
             reach the channels. "cast" rather than "radio", which the hub's own
             Network & Relays row already wears. */}
         <SettingRow
+          id="gateway"
           icon="cast"
           label={T("settings.conn.gateway")}
           description={T("settings.conn.gateway_desc")}

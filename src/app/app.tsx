@@ -123,6 +123,7 @@ import {
   installGlobalErrorHandler,
 } from "@ui/components/error-boundary";
 import MeshStatusBar from "@ui/components/mesh-status-bar";
+import SearchField from "@ui/components/search-field";
 import TransferBadge from "@ui/components/transfer-badge";
 import {
   DISABLED_OPACITY,
@@ -1981,49 +1982,15 @@ function AppContent(): React.JSX.Element {
                       />
                     </Pressable>
                   )}
-                  <View style={styles.searchBar}>
-                    <Feather name="search" size={16} color={Colors.textMuted} />
-                    <TextInput
-                      ref={searchInputRef}
-                      style={styles.searchInput}
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      onFocus={() => setChatView({ kind: "search" })}
-                      placeholder={T("chat.search.placeholder")}
-                      placeholderTextColor={Colors.textMuted}
-                      returnKeyType="search"
-                      selectionColor={Colors.selection}
-                      // A placeholder is not a label: it disappears the moment
-                      // there is a query, so a screen reader landing on a
-                      // half-typed field would otherwise announce nothing but
-                      // the text itself.
-                      accessibilityLabel={T("chat.search.a11y")}
-                      // Search is a name/content scan, never an address or a
-                      // sentence, so the OS should not try to help.
-                      autoCorrect={false}
-                      autoCapitalize="none"
-                      // iOS gets the native clear affordance for free; the
-                      // explicit button below covers Android, so only one of
-                      // the two ever renders.
-                      clearButtonMode={
-                        Platform.OS === "ios" ? "while-editing" : "never"
-                      }
-                    />
-                    {Platform.OS !== "ios" && searchQuery.length > 0 && (
-                      <Pressable
-                        onPress={() => setSearchQuery("")}
-                        hitSlop={hitSlopFor(16)}
-                        accessibilityRole="button"
-                        accessibilityLabel={T("chat.search.clear")}
-                      >
-                        <Feather
-                          name="x-circle"
-                          size={16}
-                          color={Colors.textMuted}
-                        />
-                      </Pressable>
-                    )}
-                  </View>
+                  <SearchField
+                    inputRef={searchInputRef}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    onFocus={() => setChatView({ kind: "search" })}
+                    placeholder={T("chat.search.placeholder")}
+                    accessibilityLabel={T("chat.search.a11y")}
+                    clearAccessibilityLabel={T("chat.search.clear")}
+                  />
                 </View>
               )}
 
@@ -2384,24 +2351,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.base,
       paddingTop: Spacing.sm,
       paddingBottom: Spacing.xs,
-    },
-    searchBar: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-      paddingHorizontal: Spacing.base,
-      paddingVertical: Spacing.sm + 2,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
-      borderWidth: 1,
-      borderColor: Colors.border,
-    },
-    searchInput: {
-      flex: 1,
-      fontSize: FontSize.base,
-      color: Colors.textPrimary,
-      padding: 0,
     },
     headerControls: {
       flexDirection: "row",

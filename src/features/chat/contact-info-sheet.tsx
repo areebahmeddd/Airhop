@@ -46,6 +46,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import VerifyContactScreen from "../contacts/verify-contact-screen";
 import SendEcashSheet from "../wallet/send-ecash-sheet";
 
+const CORNER_BTN_SIZE = 32;
+
 interface Props {
   // "dm:<peerID>" of the conversation, or null when closed.
   channel: string | null;
@@ -289,7 +291,7 @@ export default function ContactInfoSheet({
                   setDraftName(contact?.localNickname ?? "");
                   setEditingFor(peerID);
                 }}
-                hitSlop={hitSlopFor(28)}
+                hitSlop={hitSlopFor(CORNER_BTN_SIZE)}
                 accessibilityRole="button"
                 accessibilityLabel={T("chat.contact.rename")}
               >
@@ -538,12 +540,19 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.xs,
     },
+    // The rename pencil, top-right. On a round ground like every other icon
+    // action in the app; bare, it read as decoration rather than a control.
     cornerBtn: {
       position: "absolute",
       top: Spacing.base,
       end: Spacing.base,
       zIndex: 1,
-      padding: Spacing.xs,
+      width: CORNER_BTN_SIZE,
+      height: CORNER_BTN_SIZE,
+      borderRadius: Radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: Colors.surfaceRaised,
     },
     renameRow: {
       flexDirection: "row",

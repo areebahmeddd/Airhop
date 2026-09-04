@@ -1541,6 +1541,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Kopiera peer-ID",
   "settings.peer_id_sheet.note":
     "Det här fungerar bara när ni båda är inom Bluetooth-räckhåll. Dela din QR-kod i stället om du vill kunna nås var som helst ifrån.",
+  "settings.search.placeholder": "Sök i inställningar…",
+  "settings.search.a11y": "Sök i inställningar",
+  "settings.search.close": "Stäng sökningen",
+  "settings.search.clear": "Rensa sökningen",
+  "settings.search.hint":
+    "Hitta vilken inställning som helst på namn, var den än finns.",
+  "settings.search.no_results": "Inga inställningar för ”{query}”",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Allmänt",
@@ -1789,7 +1796,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor tar mer än en minut på sig att ansluta. Det förblir påslaget och fortsätter försöka; Mesh-fliken säger till när trafiken dirigeras om, eller om nätverket blockerar det.",
   "settings.conn.tor_failed":
-    "Tor kunde inte startas. Kontrollera att appen har nätverksåtkomst.",
+    "Det gick inte att starta Tor. Försök igen om en stund.",
   "settings.tor.status": "Tor-status",
   "settings.tor.connection": "Anslutning",
   "settings.tor.mode_off": "Direkt",
@@ -1801,14 +1808,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Döljer att du använder Tor. Snabbare än Snowflake, men dessa bryggor är offentliga och vissa nätverk blockerar dem.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Döljer att du använder Tor genom att likna ett vanligt webbplatsbesök. Svårare att blockera än de andra.",
   "settings.tor.mode_custom": "Egna bryggor",
   "settings.tor.mode_custom_desc":
-    "Använd bryggor från bridges.torproject.org. Prova detta när de andra inte fungerar.",
+    "Använd obfs4-bryggrader från bridges.torproject.org. Prova detta när de andra inte fungerar.",
   "settings.tor.custom_placeholder": "Klistra in en bryggrad per rad",
   "settings.tor.custom_apply_hint": "Tryck utanför rutan för att ansluta.",
   "settings.tor.custom_empty": "Lägg först till minst en bryggrad.",
   "settings.tor.recovered":
-    "Tor stängdes av eftersom appen inte startade med det på. Slå på det igen för att försöka på nytt.",
+    "Tor stängdes av eftersom starten inte slutfördes förra gången. Slå på det igen för att försöka på nytt.",
   "settings.conn.mint_clearnet": "Tillåt mint-trafik över öppna nätet",
   "settings.conn.mint_clearnet_desc":
     "Tor på iOS täcker bara Nostr. Lämna av för att blockera mint-förfrågningar; ecash över meshen fungerar oavsett.",

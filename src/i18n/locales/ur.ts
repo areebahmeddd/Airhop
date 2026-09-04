@@ -1533,6 +1533,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "پیئر شناخت کاپی کریں",
   "settings.peer_id_sheet.note":
     "یہ صرف تب کام کرتا ہے جب آپ دونوں بلوٹوتھ کی حدود میں ہوں۔ کسی کو کہیں سے بھی پیغام بھیجنے کے قابل بنانے کے لیے اس کے بجائے اپنا QR کوڈ شیئر کریں۔",
+  "settings.search.placeholder": "ترتیبات میں تلاش کریں…",
+  "settings.search.a11y": "ترتیبات میں تلاش کریں",
+  "settings.search.close": "تلاش بند کریں",
+  "settings.search.clear": "تلاش صاف کریں",
+  "settings.search.hint": "کوئی بھی ترتیب نام سے ڈھونڈیں، وہ جہاں بھی ہو۔",
+  "settings.search.no_results": "”{query}“ سے مماثل کوئی ترتیب نہیں",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "عمومی",
@@ -1776,7 +1782,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor کو جڑنے میں ایک منٹ سے زیادہ لگ رہا ہے۔ وہ چالو رہتا ہے اور کوشش جاری رکھتا ہے؛ میش ٹیب بتا دے گا کہ وہ کب رخ بندی کر رہا ہے، یا اگر یہ نیٹ ورک اسے روک رہا ہو۔",
   "settings.conn.tor_failed":
-    "Tor شروع نہیں ہو سکا۔ یقینی بنائیں کہ ایپ کو نیٹ ورک تک رسائی حاصل ہے۔",
+    "Tor شروع نہیں ہو سکا۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔",
   "settings.tor.status": "Tor کی صورتحال",
   "settings.tor.connection": "کنکشن",
   "settings.tor.mode_off": "براہِ راست",
@@ -1788,14 +1794,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "چھپاتا ہے کہ آپ Tor استعمال کر رہے ہیں۔ Snowflake سے تیز، مگر یہ پل عوامی ہیں اور کچھ نیٹ ورک انہیں بلاک کرتے ہیں۔",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "عام ویب سائٹ وزٹ جیسا دکھ کر چھپاتا ہے کہ آپ Tor استعمال کرتے ہیں۔ باقیوں سے بلاک کرنا مشکل۔",
   "settings.tor.mode_custom": "اپنے پل",
   "settings.tor.mode_custom_desc":
-    "bridges.torproject.org سے حاصل کیے گئے پل استعمال کریں۔ باقی ناکام ہوں تو یہ آزمائیں۔",
+    "bridges.torproject.org سے حاصل کردہ obfs4 برج لائنیں استعمال کریں۔ باقی ناکام ہونے پر یہ آزمائیں۔",
   "settings.tor.custom_placeholder": "ہر سطر میں ایک پل کی سطر چسپاں کریں",
   "settings.tor.custom_apply_hint": "جڑنے کے لیے باکس سے باہر ٹیپ کریں۔",
   "settings.tor.custom_empty": "پہلے کم از کم ایک پل کی سطر شامل کریں۔",
   "settings.tor.recovered":
-    "Tor بند کر دیا گیا کیونکہ اس سے ایپ شروع نہیں ہو رہی تھی۔ دوبارہ کوشش کے لیے اسے پھر آن کریں۔",
+    "Tor پچھلی بار شروع ہونا مکمل نہیں کر سکا، اس لیے اسے بند کر دیا گیا۔ دوبارہ کوشش کے لیے اسے پھر آن کریں۔",
   "settings.conn.mint_clearnet": "ٹکسال کی ٹریفک کھلے نیٹ پر جانے دیں",
   "settings.conn.mint_clearnet_desc":
     "iOS پر Tor صرف Nostr کو ڈھانپتا ہے۔ ٹکسال کی درخواستیں روکنے کے لیے بند رہنے دیں؛ میش پر ecash بہرحال کام کرتا ہے۔",

@@ -37,14 +37,15 @@ import {
   Linking,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   View,
 } from "react-native";
+import type { SettingId } from "../settings-index";
 import {
   GroupDivider,
   SettingRow,
   SettingSwitch,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -73,6 +74,10 @@ type PermState = "granted" | "askable" | "blocked" | "unmanaged";
 
 interface PermMeta {
   key: PermKey;
+  // What settings search calls this row. Separate from `key`, which is the
+  // permission's own name in the platform layer: one is ours to rename, the
+  // other is not.
+  searchId: SettingId;
   icon: keyof typeof Feather.glyphMap;
   labelKey: TranslationKey;
   // Two halves, in the same order on every row: what Airhop uses it for, then
@@ -85,36 +90,42 @@ interface PermMeta {
 const PERMISSIONS: PermMeta[] = [
   {
     key: "bluetooth",
+    searchId: "perm-bluetooth",
     icon: "bluetooth",
     labelKey: "settings.permissions.bluetooth",
     needKey: "settings.permissions.bluetooth_desc",
   },
   {
     key: "location",
+    searchId: "perm-location",
     icon: "map-pin",
     labelKey: "settings.permissions.location",
     needKey: "settings.permissions.location_desc",
   },
   {
     key: "notifications",
+    searchId: "perm-notifications",
     icon: "bell",
     labelKey: "settings.permissions.notifications",
     needKey: "settings.permissions.notifications_desc",
   },
   {
     key: "camera",
+    searchId: "perm-camera",
     icon: "camera",
     labelKey: "settings.permissions.camera",
     needKey: "settings.permissions.camera_desc",
   },
   {
     key: "photos",
+    searchId: "perm-photos",
     icon: "image",
     labelKey: "settings.permissions.photos",
     needKey: "settings.permissions.photos_desc",
   },
   {
     key: "microphone",
+    searchId: "perm-microphone",
     icon: "mic",
     labelKey: "settings.permissions.microphone",
     needKey: "settings.permissions.microphone_desc",
@@ -313,16 +324,14 @@ export default function PermissionsScreen({
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.permissions")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             {PERMISSIONS.map((perm, index) => (
               <React.Fragment key={perm.key}>
                 {index > 0 && <GroupDivider />}
                 <SettingRow
+                  id={perm.searchId}
                   icon={perm.icon}
                   label={T(perm.labelKey)}
                   description={T(perm.needKey)}
@@ -332,7 +341,7 @@ export default function PermissionsScreen({
             ))}
           </View>
         </View>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

@@ -1,7 +1,9 @@
 // Shared building blocks for the settings hub and its sub-screens: the
-// bordered-group row list pattern, the back-header used by every drill-in
-// screen, and the bottom-sheet modal pattern (handle bar, title, actions).
-// One shared StyleSheet so every sub-screen matches pixel-for-pixel.
+// bordered-group row list, the back-header and scroll body, and the bottom-sheet
+// pattern. One shared StyleSheet so every sub-screen matches pixel-for-pixel.
+//
+// It also owns the search-highlight plumbing, for the same reason it owns the
+// row: search names a row on a screen it does not render.
 
 import Feather from "@expo/vector-icons/Feather";
 import { useT } from "@i18n";
@@ -20,9 +22,25 @@ import {
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "@ui/theme";
-import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+  type ScrollViewProps,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { SettingId } from "./settings-index";
 
 // Circle diameters for the two round shapes in the shared sheet vocabulary: the
 // icon medallion at the top of a confirm sheet, and an option row's leading dot.
@@ -63,9 +81,135 @@ export function useSharedStyles() {
   }, [Colors, insets.bottom]);
 }
 
+// ---- Search highlight ----
+//
+// Two contexts, because the halves have different owners: the hub knows which
+// row is wanted and holds it across the screen change, while the scroll view
+// that has to move belongs to the screen the result lands on.
+const HighlightContext = createContext<SettingId | null>(null);
+const RevealContext = createContext<((node: View) => void) | null>(null);
+
+// Long enough to find after the scroll settles, short enough not to read as a
+// selection.
+const HIGHLIGHT_MS = 2400;
+
+// Space left above a revealed row, so it lands inside the list.
+const REVEAL_INSET = Spacing.xl;
+
+// Names the row every screen below points at. `onExpire` must be stable, or the
+// timer restarts each render and the highlight never clears.
+export function SettingsHighlightProvider({
+  id,
+  onExpire,
+  children,
+}: {
+  id: SettingId | null;
+  onExpire: () => void;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  useEffect(() => {
+    if (id === null) return;
+    const timer = setTimeout(onExpire, HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [id, onExpire]);
+  return (
+    <HighlightContext.Provider value={id}>{children}</HighlightContext.Provider>
+  );
+}
+
+// The scroll body every settings screen puts under its header, and the only
+// thing that can scroll a highlighted row into view.
+//
+// `contentContainerStyle` is excluded: the content box moved onto a real View
+// inside, so passing one would be silently ignored. Every other ScrollView prop
+// passes through, which is how the hub keeps its scroll-position bookkeeping.
+export const SettingsScroll = React.forwardRef<
+  ScrollView,
+  Omit<ScrollViewProps, "contentContainerStyle"> & {
+    children: React.ReactNode;
+  }
+>(function SettingsScroll({ children, ...scrollProps }, forwardedRef) {
+  const styles = useSharedStyles();
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+
+  const reveal = useCallback((node: View) => {
+    const content = contentRef.current;
+    if (content === null) return;
+    // Against the content view, not the window: scrollTo wants an offset into
+    // the content, which is exactly what this returns.
+    node.measureLayout(
+      content,
+      (_x, y) => {
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, y - REVEAL_INSET),
+          animated: true,
+        });
+      },
+      () => {
+        // The row went away between layout and measure. Nothing to scroll to.
+      },
+    );
+  }, []);
+
+  return (
+    <RevealContext.Provider value={reveal}>
+      <ScrollView
+        ref={(node) => {
+          scrollRef.current = node;
+          if (typeof forwardedRef === "function") forwardedRef(node);
+          else if (forwardedRef !== null) forwardedRef.current = node;
+        }}
+        showsVerticalScrollIndicator={false}
+        {...scrollProps}
+      >
+        {/* The content padding rides on a real View rather than
+            contentContainerStyle, so rows have an ancestor to measure against.
+            Identical box either way. */}
+        <View ref={contentRef} style={styles.content} collapsable={false}>
+          {children}
+        </View>
+      </ScrollView>
+    </RevealContext.Provider>
+  );
+});
+
+// Wire one row up to the highlight. Exported as the escape hatch for rows built
+// by hand rather than from SettingRow (the panic-wipe row).
+export function useSettingHighlight(id: SettingId | undefined): {
+  ref: React.RefObject<View | null>;
+  active: boolean;
+  onLayout: () => void;
+} {
+  const highlighted = useContext(HighlightContext);
+  const reveal = useContext(RevealContext);
+  const ref = useRef<View>(null);
+  const active = id !== undefined && id === highlighted;
+
+  // From onLayout, not an effect: a measure taken before native layout comes
+  // back as zeroes. Once per activation, or a later relayout (a switch flips, a
+  // byte count arrives) would yank an already-scrolled list back.
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (!active) revealed.current = false;
+  }, [active]);
+
+  const onLayout = useCallback(() => {
+    if (!active || revealed.current || reveal === null) return;
+    const node = ref.current;
+    if (node === null) return;
+    revealed.current = true;
+    reveal(node);
+  }, [active, reveal]);
+
+  return { ref, active, onLayout };
+}
+
 // ---- SettingRow: leading icon, label/description, trailing control ----
 
 export interface SettingRowProps {
+  // Set on a row settings search can name; also its highlight target.
+  id?: SettingId;
   icon?: keyof typeof Feather.glyphMap;
   // Escape hatch for the rare row whose icon isn't in Feather's set (e.g. a
   // currency glyph from another icon family). Takes precedence over `icon`.
@@ -76,6 +220,7 @@ export interface SettingRowProps {
 }
 
 export function SettingRow({
+  id,
   icon,
   iconOverride,
   label,
@@ -84,8 +229,14 @@ export function SettingRow({
 }: SettingRowProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
+  const { ref, active, onLayout } = useSettingHighlight(id);
   return (
-    <View style={styles.settingRow}>
+    <View
+      ref={ref}
+      // Only a row search can name pays for a layout callback.
+      onLayout={id === undefined ? undefined : onLayout}
+      style={[styles.settingRow, active && styles.rowHighlighted]}
+    >
       <View style={styles.settingIcon}>
         {iconOverride ??
           (icon && (
@@ -110,6 +261,7 @@ export function SettingRow({
 // that leave the app (browser, mail client, GitHub) rather than navigate
 // to another in-app screen.
 export function SettingLinkRow({
+  id,
   icon,
   iconOverride,
   label,
@@ -128,9 +280,16 @@ export function SettingLinkRow({
   const Colors = useThemeColors();
   const T = useT();
   const styles = useSharedStyles();
+  const { ref, active, onLayout } = useSettingHighlight(id);
   return (
     <Pressable
-      style={({ pressed }) => [styles.settingRow, pressed && styles.rowPressed]}
+      ref={ref}
+      onLayout={id === undefined ? undefined : onLayout}
+      style={({ pressed }) => [
+        styles.settingRow,
+        active && styles.rowHighlighted,
+        pressed && styles.rowPressed,
+      ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={
@@ -314,6 +473,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Shared by the settings rows and the grouped option lists.
     rowPressed: {
       backgroundColor: Colors.surfacePressed,
+    },
+    // The row a search result pointed at, lit for a beat once scrolled into
+    // view. Same raised fill a selected option row wears.
+    rowHighlighted: {
+      backgroundColor: Colors.surfaceRaised,
     },
     settingIcon: {
       width: SETTING_ICON_WIDTH,

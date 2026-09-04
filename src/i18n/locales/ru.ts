@@ -1559,6 +1559,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Копировать идентификатор узла",
   "settings.peer_id_sheet.note":
     "Это работает, только когда вы оба в зоне действия Bluetooth. Чтобы вам могли писать откуда угодно, поделитесь своим QR-кодом.",
+  "settings.search.placeholder": "Поиск по настройкам…",
+  "settings.search.a11y": "Поиск по настройкам",
+  "settings.search.close": "Закрыть поиск",
+  "settings.search.clear": "Очистить поиск",
+  "settings.search.hint":
+    "Находите любую настройку по названию, где бы она ни была.",
+  "settings.search.no_results": "Нет настроек по запросу «{query}»",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Основные",
@@ -1812,7 +1819,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor подключается дольше минуты. Он остаётся включённым и продолжает попытки; вкладка «Сеть» сообщит, когда маршрутизация заработает или если эта сеть её блокирует.",
   "settings.conn.tor_failed":
-    "Не удалось запустить Tor. Убедитесь, что у приложения есть доступ к сети.",
+    "Не удалось запустить Tor. Повторите попытку через мгновение.",
   "settings.tor.status": "Состояние Tor",
   "settings.tor.connection": "Подключение",
   "settings.tor.mode_off": "Напрямую",
@@ -1824,14 +1831,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Скрывает использование Tor. Быстрее Snowflake, но эти мосты общедоступны и часть сетей их блокирует.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Скрывает использование Tor, выглядя как обычный визит на сайт. Заблокировать сложнее, чем остальные.",
   "settings.tor.mode_custom": "Свои мосты",
   "settings.tor.mode_custom_desc":
-    "Используйте мосты с bridges.torproject.org. Попробуйте, когда остальное не работает.",
+    "Используйте строки мостов obfs4 с bridges.torproject.org. Попробуйте это, когда остальные не работают.",
   "settings.tor.custom_placeholder": "Вставьте по одной строке моста в строке",
   "settings.tor.custom_apply_hint": "Нажмите вне поля, чтобы подключиться.",
   "settings.tor.custom_empty": "Сначала добавьте хотя бы одну строку моста.",
   "settings.tor.recovered":
-    "Tor отключён: из-за него приложение не запускалось. Включите снова, чтобы повторить попытку.",
+    "Tor отключён: в прошлый раз запуск не завершился. Включите снова, чтобы повторить попытку.",
   "settings.conn.mint_clearnet":
     "Разрешить трафик к монетному двору по открытой сети",
   "settings.conn.mint_clearnet_desc":

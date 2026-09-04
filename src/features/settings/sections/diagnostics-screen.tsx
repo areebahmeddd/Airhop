@@ -29,10 +29,11 @@ import { FontFamily, FontSize, Spacing, useThemeColors } from "@ui/theme";
 import { formatNumber } from "@utils/format";
 import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import {
   GroupDivider,
   SettingRow,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -109,10 +110,7 @@ export default function DiagnosticsScreen({
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.diagnostics")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         {/* Transports. Links and peers are separate rows because they answer
             different questions: a link is a socket we hold, a peer may be
             several hops away with no link of ours near it. */}
@@ -282,7 +280,7 @@ export default function DiagnosticsScreen({
         </View>
 
         <Text style={local.footnote}>{T("settings.diag.footnote")}</Text>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

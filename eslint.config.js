@@ -137,6 +137,7 @@ module.exports = defineConfig([
       "ios/",
       "landing/",
       ".expo/",
+      ".native-build/",
       "dist/",
       "build/",
       "coverage/",

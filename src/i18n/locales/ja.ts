@@ -1544,6 +1544,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "ピアIDをコピー",
   "settings.peer_id_sheet.note":
     "これはお互いがBluetooth圏内にいるときだけ使えます。どこからでもメッセージを受け取れるようにするには、QRコードを共有してください。",
+  "settings.search.placeholder": "設定を検索…",
+  "settings.search.a11y": "設定を検索",
+  "settings.search.close": "検索を閉じる",
+  "settings.search.clear": "検索をクリア",
+  "settings.search.hint": "どこにある設定でも名前で見つけられます。",
+  "settings.search.no_results": "「{query}」に一致する設定はありません",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "一般",
@@ -1787,7 +1793,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Torの接続に1分以上かかっています。オンのまま試み続けます。中継が始まったか、このネットワークが遮断しているかは、メッシュタブでお知らせします。",
   "settings.conn.tor_failed":
-    "Torを起動できませんでした。アプリにネットワークへのアクセスがあるか確認してください。",
+    "Tor を開始できませんでした。しばらくしてからもう一度お試しください。",
   "settings.tor.status": "Tor の状態",
   "settings.tor.connection": "接続方法",
   "settings.tor.mode_off": "直接",
@@ -1799,14 +1805,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Tor の利用を隠します。Snowflake より速いものの、これらのブリッジは公開されており遮断する回線もあります。",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "通常のウェブサイト閲覧のように見せて、Tor の利用を隠します。他より遮断されにくい方法です。",
   "settings.tor.mode_custom": "カスタムブリッジ",
   "settings.tor.mode_custom_desc":
-    "bridges.torproject.org で取得したブリッジを使います。他が使えないときに試してください。",
+    "bridges.torproject.org で入手した obfs4 のブリッジ行を使います。他が失敗したときに試してください。",
   "settings.tor.custom_placeholder": "1 行につき 1 つのブリッジ行を貼り付け",
   "settings.tor.custom_apply_hint": "接続するにはボックスの外をタップします。",
   "settings.tor.custom_empty": "まず 1 つ以上のブリッジ行を追加してください。",
   "settings.tor.recovered":
-    "Tor はアプリの起動を妨げていたため、オフにしました。もう一度試すにはオンに戻してください。",
+    "Tor は前回の起動が完了しなかったため、オフにしました。もう一度試すにはオンに戻してください。",
   "settings.conn.mint_clearnet": "素のネットワークでのミント通信を許可",
   "settings.conn.mint_clearnet_desc":
     "iOSではTorはNostrしか覆いません。オフのままにするとミントへのリクエストを遮断します。メッシュ経由のecashはどちらでも使えます。",

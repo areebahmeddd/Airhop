@@ -14,6 +14,7 @@ import { conversationDisplayName } from "./conversation-display-name";
 import { formatTokenSummary } from "./format";
 import { messagePreviewText } from "./message-preview";
 import { messageText } from "./message-text";
+import { scoreMatch, searchKey } from "./search-text";
 
 // Message results are capped so the results view never renders an unbounded
 // list. The underlying scan is cheap (messages are capped per-channel at
@@ -223,20 +224,6 @@ function searchable(text: string): Searchable {
   const display = stripIsolates(text.normalize("NFC"));
   const hay = display.toLowerCase();
   return { hay, display: hay.length === display.length ? display : hay };
-}
-
-// The needle. Only ever compared, so it needs no display form.
-function searchKey(text: string): string {
-  return stripIsolates(text.normalize("NFC")).toLowerCase();
-}
-
-// matchIndex === 0: prefix match. Match starts right after whitespace: word
-// boundary. Anything else: mid-word substring match.
-function scoreMatch(text: string, matchIndex: number): number {
-  if (matchIndex === 0) return 3;
-  const precedingChar = text[matchIndex - 1];
-  if (precedingChar !== undefined && /\s/.test(precedingChar)) return 2;
-  return 1;
 }
 
 function buildSnippet(

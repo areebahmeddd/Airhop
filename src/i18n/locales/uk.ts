@@ -1554,6 +1554,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Копіювати ідентифікатор піра",
   "settings.peer_id_sheet.note":
     "Це працює, лише коли ви обоє в радіусі Bluetooth. Щоб вам могли написати звідусіль, поділіться натомість своїм QR-кодом.",
+  "settings.search.placeholder": "Пошук у налаштуваннях…",
+  "settings.search.a11y": "Пошук у налаштуваннях",
+  "settings.search.close": "Закрити пошук",
+  "settings.search.clear": "Очистити пошук",
+  "settings.search.hint":
+    "Знаходьте будь-яке налаштування за назвою, хоч би де воно було.",
+  "settings.search.no_results": "Немає налаштувань для «{query}»",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Загальні",
@@ -1802,7 +1809,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor з’єднується довше за хвилину. Він лишається увімкненим і продовжує спроби; вкладка Mesh скаже, коли маршрутизація запрацює або якщо ця мережа її блокує.",
   "settings.conn.tor_failed":
-    "Не вдалося запустити Tor. Переконайтеся, що застосунок має доступ до мережі.",
+    "Не вдалося запустити Tor. Спробуйте ще раз за мить.",
   "settings.tor.status": "Стан Tor",
   "settings.tor.connection": "Підключення",
   "settings.tor.mode_off": "Напряму",
@@ -1814,14 +1821,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Приховує, що ви користуєтесь Tor. Швидше за Snowflake, але ці мости загальнодоступні й частина мереж їх блокує.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Приховує використання Tor, виглядаючи як звичайний візит на сайт. Заблокувати складніше, ніж інші.",
   "settings.tor.mode_custom": "Власні мости",
   "settings.tor.mode_custom_desc":
-    "Використайте мости з bridges.torproject.org. Спробуйте, коли інше не працює.",
+    "Використовуйте рядки мостів obfs4 з bridges.torproject.org. Спробуйте це, коли інші не працюють.",
   "settings.tor.custom_placeholder": "Вставте по одному рядку моста в рядок",
   "settings.tor.custom_apply_hint": "Торкніться поза полем, щоб підключитися.",
   "settings.tor.custom_empty": "Спершу додайте хоча б один рядок моста.",
   "settings.tor.recovered":
-    "Tor вимкнено: через нього застосунок не запускався. Увімкніть знову, щоб спробувати ще раз.",
+    "Tor вимкнено: минулого разу запуск не завершився. Увімкніть знову, щоб спробувати ще раз.",
   "settings.conn.mint_clearnet": "Дозволити трафік мінта через відкриту мережу",
   "settings.conn.mint_clearnet_desc":
     "Tor на iOS охоплює лише Nostr. Лишіть вимкненим, щоб блокувати запити до мінта; ecash через mesh працює в будь-якому разі.",

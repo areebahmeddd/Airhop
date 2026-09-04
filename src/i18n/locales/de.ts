@@ -1580,6 +1580,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Peer-ID kopieren",
   "settings.peer_id_sheet.note":
     "Das funktioniert nur, wenn ihr beide in Bluetooth-Reichweite seid. Damit dir jemand von überall schreiben kann, teile stattdessen deinen QR-Code.",
+  "settings.search.placeholder": "Einstellungen durchsuchen…",
+  "settings.search.a11y": "Einstellungen durchsuchen",
+  "settings.search.close": "Suche schließen",
+  "settings.search.clear": "Suche leeren",
+  "settings.search.hint":
+    "Finde jede Einstellung über ihren Namen, egal wo sie steht.",
+  "settings.search.no_results": "Keine Einstellungen für „{query}“",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Allgemein",
@@ -1832,7 +1839,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor braucht länger als eine Minute zum Verbinden. Es bleibt an und versucht es weiter; der Mesh-Tab meldet, wenn es leitet, oder wenn dieses Netzwerk es blockiert.",
   "settings.conn.tor_failed":
-    "Tor konnte nicht gestartet werden. Stelle sicher, dass die App Netzwerkzugriff hat.",
+    "Tor konnte nicht gestartet werden. Versuche es gleich noch einmal.",
   "settings.tor.status": "Tor-Status",
   "settings.tor.connection": "Verbindung",
   "settings.tor.mode_off": "Direkt",
@@ -1844,15 +1851,18 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Verbirgt, dass du Tor nutzt. Schneller als Snowflake, aber diese Bridges sind öffentlich und manche Netzwerke blockieren sie.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Verbirgt die Tor-Nutzung, indem es wie ein gewöhnlicher Website-Besuch aussieht. Schwerer zu blockieren als die anderen.",
   "settings.tor.mode_custom": "Eigene Bridges",
   "settings.tor.mode_custom_desc":
-    "Bridges von bridges.torproject.org verwenden. Nimm das, wenn die anderen nicht funktionieren.",
+    "Verwende obfs4-Bridge-Zeilen von bridges.torproject.org. Versuche das, wenn die anderen fehlschlagen.",
   "settings.tor.custom_placeholder": "Eine Bridge-Zeile pro Zeile einfügen",
   "settings.tor.custom_apply_hint": "Zum Verbinden außerhalb des Felds tippen.",
   "settings.tor.custom_empty":
     "Füge zuerst mindestens eine Bridge-Zeile hinzu.",
   "settings.tor.recovered":
-    "Tor wurde deaktiviert, weil die App damit nicht mehr startete. Schalte es wieder ein, um es erneut zu versuchen.",
+    "Tor wurde deaktiviert, weil der Start beim letzten Mal nicht abgeschlossen wurde. Schalte es wieder ein, um es erneut zu versuchen.",
   "settings.conn.mint_clearnet": "Mint-Verkehr über das offene Netz erlauben",
   "settings.conn.mint_clearnet_desc":
     "Tor deckt unter iOS nur Nostr ab. Lass es aus, um Mint-Anfragen zu blockieren; Ecash über das Mesh funktioniert so oder so weiter.",

@@ -1540,6 +1540,12 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "کپی شناسهٔ همتا",
   "settings.peer_id_sheet.note":
     "این تنها زمانی کار می‌کند که هر دوی شما در محدودهٔ بلوتوث باشید. برای اینکه کسی از هر جایی به شما پیام بدهد، به جایش کد QR خود را هم‌رسانی کنید.",
+  "settings.search.placeholder": "جستجوی تنظیمات…",
+  "settings.search.a11y": "جستجوی تنظیمات",
+  "settings.search.close": "بستن جستجو",
+  "settings.search.clear": "پاک کردن جستجو",
+  "settings.search.hint": "هر تنظیمی را با نامش بیابید، هر جا که باشد.",
+  "settings.search.no_results": "تنظیمی همخوان با «{query}» نیست",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "عمومی",
@@ -1785,8 +1791,7 @@ export const strings: Strings = {
   "settings.conn.tor_unavailable": "مسیردهی Tor در این نسخه در دسترس نیست.",
   "settings.conn.tor_timeout":
     "اتصال Tor بیش از یک دقیقه طول کشیده است. روشن می‌ماند و تلاش را ادامه می‌دهد؛ زبانهٔ مش خواهد گفت کِی مسیردهی برقرار شده، یا اینکه این شبکه جلویش را گرفته است.",
-  "settings.conn.tor_failed":
-    "Tor راه نیفتاد. مطمئن شوید برنامه به شبکه دسترسی دارد.",
+  "settings.conn.tor_failed": "Tor شروع نشد. کمی بعد دوباره تلاش کنید.",
   "settings.tor.status": "وضعیت Tor",
   "settings.tor.connection": "اتصال",
   "settings.tor.mode_off": "مستقیم",
@@ -1798,14 +1803,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "پنهان می‌کند که از Tor استفاده می‌کنید. سریع‌تر از Snowflake، اما این پل‌ها عمومی‌اند و برخی شبکه‌ها آنها را مسدود می‌کنند.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "با شبیه‌سازی بازدید معمولی از یک وب‌سایت، استفاده از Tor را پنهان می‌کند. مسدود کردنش از بقیه سخت‌تر است.",
   "settings.tor.mode_custom": "پل‌های دلخواه",
   "settings.tor.mode_custom_desc":
-    "از پل‌هایی که از bridges.torproject.org گرفته‌اید استفاده کنید. وقتی بقیه کار نکردند این را امتحان کنید.",
+    "از خطوط پل obfs4 از bridges.torproject.org استفاده کنید. وقتی بقیه کار نکردند این را امتحان کنید.",
   "settings.tor.custom_placeholder": "در هر خط یک خط پل را بچسبانید",
   "settings.tor.custom_apply_hint": "برای اتصال، بیرون کادر را لمس کنید.",
   "settings.tor.custom_empty": "ابتدا دست‌کم یک خط پل اضافه کنید.",
   "settings.tor.recovered":
-    "Tor خاموش شد، چون مانع اجرای برنامه می‌شد. برای تلاش دوباره آن را روشن کنید.",
+    "Tor خاموش شد، چون بار قبل راه‌اندازی آن کامل نشد. برای تلاش دوباره آن را روشن کنید.",
   "settings.conn.mint_clearnet": "اجازه به ترافیک ضراب‌خانه روی شبکهٔ باز",
   "settings.conn.mint_clearnet_desc":
     "Tor روی iOS تنها Nostr را پوشش می‌دهد. برای مسدود کردن درخواست‌های ضراب‌خانه خاموش بگذارید؛ در هر حال ecash روی مش کار می‌کند.",

@@ -11,11 +11,12 @@ import { useSettingsStore } from "@store/settings-store";
 import { HIT_SLOP, useThemeColors } from "@ui/theme";
 import { resolveDisplayName } from "@utils/peer-display-name";
 import React from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import {
   GroupDivider,
   SettingRow,
   SettingSwitch,
+  SettingsScroll,
   SubHeader,
   useSharedStyles,
 } from "../settings-primitives";
@@ -55,10 +56,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <SubHeader title={T("settings.section.privacy")} onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <SettingsScroll>
         {/* Always-on guarantees: not choices, just what is true of every
             message. Shown as a locked-on switch so it reads as "on and not
             changeable" rather than plain text. */}
@@ -68,6 +66,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
           </Text>
           <View style={styles.settingsGroup}>
             <SettingRow
+              id="forward-secrecy"
               icon="repeat"
               label={T("settings.security.forward_secrecy")}
               description={T("settings.security.forward_secrecy_desc")}
@@ -75,6 +74,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
             />
             <GroupDivider />
             <SettingRow
+              id="signed-packets"
               icon="check-circle"
               label={T("settings.security.signed_packets")}
               description={T("settings.security.signed_packets_desc")}
@@ -93,6 +93,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
           </Text>
           <View style={styles.settingsGroup}>
             <SettingRow
+              id="hide-previews"
               icon="eye-off"
               label={T("settings.security.hide_previews")}
               description={T("settings.security.hide_previews_desc")}
@@ -157,7 +158,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
             )}
           </View>
         </View>
-      </ScrollView>
+      </SettingsScroll>
     </View>
   );
 }

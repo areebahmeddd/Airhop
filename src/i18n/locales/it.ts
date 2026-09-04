@@ -1572,6 +1572,13 @@ export const strings: Strings = {
   "settings.peer_id_sheet.copy": "Copia l’ID peer",
   "settings.peer_id_sheet.note":
     "Funziona solo quando siete entrambi nel raggio del Bluetooth. Per farti scrivere da ovunque, condividi invece il tuo codice QR.",
+  "settings.search.placeholder": "Cerca nelle impostazioni…",
+  "settings.search.a11y": "Cerca nelle impostazioni",
+  "settings.search.close": "Chiudi la ricerca",
+  "settings.search.clear": "Cancella la ricerca",
+  "settings.search.hint":
+    "Trova qualsiasi impostazione dal nome, ovunque si trovi.",
+  "settings.search.no_results": "Nessuna impostazione per «{query}»",
 
   // ---- Settings: hub rows ----
   "settings.section.general": "Generali",
@@ -1829,7 +1836,7 @@ export const strings: Strings = {
   "settings.conn.tor_timeout":
     "Tor sta impiegando più di un minuto a connettersi. Resta attivo e continua a provare; la scheda Mesh dirà quando sta instradando, o se questa rete lo sta bloccando.",
   "settings.conn.tor_failed":
-    "Non è stato possibile avviare Tor. Verifica che l’app abbia accesso alla rete.",
+    "Impossibile avviare Tor. Riprova tra un momento.",
   "settings.tor.status": "Stato di Tor",
   "settings.tor.connection": "Connessione",
   "settings.tor.mode_off": "Diretta",
@@ -1841,14 +1848,17 @@ export const strings: Strings = {
   "settings.tor.mode_obfs4": "obfs4",
   "settings.tor.mode_obfs4_desc":
     "Nasconde che usi Tor. Più veloce di Snowflake, ma questi bridge sono pubblici e alcune reti li bloccano.",
+  "settings.tor.mode_webtunnel": "webtunnel",
+  "settings.tor.mode_webtunnel_desc":
+    "Nasconde l’uso di Tor facendolo sembrare una normale visita a un sito web. Più difficile da bloccare delle altre.",
   "settings.tor.mode_custom": "Bridge personali",
   "settings.tor.mode_custom_desc":
-    "Usa bridge presi da bridges.torproject.org. Prova questo quando gli altri non funzionano.",
+    "Usa righe bridge obfs4 da bridges.torproject.org. Prova questo quando le altre non funzionano.",
   "settings.tor.custom_placeholder": "Incolla una riga bridge per riga",
   "settings.tor.custom_apply_hint": "Tocca fuori dal riquadro per connetterti.",
   "settings.tor.custom_empty": "Aggiungi prima almeno una riga bridge.",
   "settings.tor.recovered":
-    "Tor è stato disattivato perché impediva l’avvio dell’app. Riattivalo per riprovare.",
+    "Tor è stato disattivato perché l’ultima volta non ha completato l’avvio. Riattivalo per riprovare.",
   "settings.conn.mint_clearnet":
     "Consenti il traffico verso il mint sulla rete in chiaro",
   "settings.conn.mint_clearnet_desc":
