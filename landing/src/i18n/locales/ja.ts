@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "最新リリース",
   "home.hero.title": "インターネットなしで使えるメッセージング。",
   "home.hero.body":
-    "近くのスマートフォンが Bluetooth メッシュを形成し、エンドツーエンドで暗号化したまま最大 7 ホップまでメッセージを中継します。{no_servers}、{no_accounts}、{no_tracking}。",
+    "近くのスマートフォンが Bluetooth メッシュを形成し、エンドツーエンドで暗号化したままメッセージを中継します。{no_servers}、{no_accounts}、{no_tracking}。",
   "home.hero.body.no_servers": "サーバーなし",
   "home.hero.body.no_accounts": "アカウントなし",
   "home.hero.body.no_tracking": "追跡なし",

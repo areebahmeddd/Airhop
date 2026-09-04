@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Senaste versionen",
   "home.hero.title": "Meddelanden som fungerar utan internet.",
   "home.hero.body":
-    "Telefoner i närheten bildar ett Bluetooth-mesh och skickar dina meddelanden vidare i upp till sju hopp, krypterade hela vägen. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Telefoner i närheten bildar ett Bluetooth-mesh och skickar dina meddelanden vidare, krypterade hela vägen. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Inga servrar",
   "home.hero.body.no_accounts": "inga konton",
   "home.hero.body.no_tracking": "ingen spårning",

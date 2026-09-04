@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Последний релиз",
   "home.hero.title": "Сообщения, которые работают без интернета.",
   "home.hero.body":
-    "Телефоны поблизости образуют Bluetooth-mesh и передают ваши сообщения до семи переходов, со сквозным шифрованием. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Телефоны поблизости образуют Bluetooth-mesh и передают ваши сообщения со сквозным шифрованием. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Без серверов",
   "home.hero.body.no_accounts": "без аккаунтов",
   "home.hero.body.no_tracking": "без слежки",

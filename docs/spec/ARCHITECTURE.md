@@ -19,7 +19,6 @@ Every layer and the reasoning behind it. For what is being built and when, see
 11. [Codebase Layout](#11-codebase-layout)
 12. [Native Modules](#12-native-modules)
 13. [Decision Log](#13-decision-log)
-14. [Dependencies](#14-dependencies)
 
 ## 1. Feature Matrix
 
@@ -1129,67 +1128,3 @@ not go through the HTTP stack at all.
 - It does not give per-message forward secrecy within a session
 - Double Ratchet rotates keys per message, so one message's key does not expose its neighbours
 - It also covers offline mail: a ratcheted message sent by courier keeps forward secrecy while the recipient is away
-
-## 14. Dependencies
-
-### Core
-
-| Package                          | Version | Purpose                                                          | License |
-| -------------------------------- | ------- | ---------------------------------------------------------------- | ------- |
-| `@noble/curves`                  | `^2.2`  | X25519, Ed25519 (Noise XX, signing)                              | MIT     |
-| `@noble/ciphers`                 | `^2.2`  | ChaCha20-Poly1305 (Noise, Nostr NIP-44)                          | MIT     |
-| `@noble/hashes`                  | `^2.2`  | SHA-256, HKDF, HMAC                                              | MIT     |
-| `react-native-get-random-values` | `~1.11` | Polyfill `crypto.getRandomValues` for @noble (Expo SDK 57 pin)   | MIT     |
-| `nostr-tools`                    | `^2.24` | Nostr client, NIP-17/59 gift-wrap                                | MIT     |
-| `expo-secure-store`              | `~57.0` | Private key storage (Keychain/Keystore)                          | MIT     |
-| `react-native-mmkv`              | `^4.3`  | Fast JSI key-value store (requires `react-native-nitro-modules`) | MIT     |
-| `react-native-nitro-modules`     | `^0.36` | Peer dependency for react-native-mmkv v4                         | MIT     |
-| `zustand`                        | `^5.x`  | State management                                                 | MIT     |
-
-### Transport
-
-| Package                  | Version  | Purpose                   | License |
-| ------------------------ | -------- | ------------------------- | ------- |
-| Custom `AirhopBLEModule` | internal | BLE GATT Server + Central | N/A     |
-
-### Media and voice
-
-| Package              | Version | Purpose                                     | License |
-| -------------------- | ------- | ------------------------------------------- | ------- |
-| `expo-audio`         | `~57.0` | Voice note and PTT capture and playback     | MIT     |
-| `expo-video`         | `~57.0` | Inline video playback                       | MIT     |
-| `expo-camera`        | `~57.0` | Photo capture and QR scanning               | MIT     |
-| `expo-file-system`   | `~57.0` | Attachment cache on disk                    | MIT     |
-| `expo-image-picker`  | `~57.0` | Picking photos and videos to send           | MIT     |
-| `expo-media-library` | `^57.0` | Saving received media to the device gallery | MIT     |
-
-### Payments
-
-| Package           | Version | Purpose                              | License |
-| ----------------- | ------- | ------------------------------------ | ------- |
-| `@cashu/cashu-ts` | `^4.7`  | Cashu ecash wallet operations        | MIT     |
-| `@scure/bip39`    | `^2.0`  | BIP-39 recovery phrase (NUT-13 seed) | MIT     |
-
-### UI
-
-| Package                        | Version | Purpose                         | License |
-| ------------------------------ | ------- | ------------------------------- | ------- |
-| `react-native-reanimated`      | `^4.x`  | Hardware-accelerated animations | MIT     |
-| `react-native-gesture-handler` | `^2.32` | Gestures, sheets, swipe actions | MIT     |
-| `react-native-qrcode-svg`      | `^6.3`  | Rendering the contact card QR   | MIT     |
-
-There is no navigation library. `src/app/app.tsx` holds a hand-rolled four-tab state
-machine and screens are plain components. Styling is StyleSheet plus the theme
-tokens in `src/ui/`, with no Tailwind or NativeWind.
-
-### Build toolchain
-
-| Tool                               | Version  | Purpose                                         |
-| ---------------------------------- | -------- | ----------------------------------------------- |
-| `expo`                             | `SDK 57` | Bare workflow and config plugins. Not EAS Build |
-| `react`                            | `^19.2`  | Required by React Native 0.86 (peer dep)        |
-| `react-native`                     | `^0.86`  | New Architecture (default since 0.76)           |
-| `typescript`                       | `~6.0.3` | Strict mode, no `baseUrl`, `./`-prefixed paths  |
-| `jest`                             | `^29`    | Unit tests for all of `src/core/`               |
-| `prettier`                         | `^3.9`   | Formatting                                      |
-| `prettier-plugin-organize-imports` | `^4.3`   | Auto-sort import blocks                         |

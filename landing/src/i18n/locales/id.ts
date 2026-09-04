@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Rilis terbaru",
   "home.hero.title": "Pesan yang tetap jalan tanpa internet.",
   "home.hero.body":
-    "Ponsel di sekitar membentuk mesh Bluetooth dan meneruskan pesan Anda hingga tujuh lompatan, terenkripsi ujung ke ujung. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Ponsel di sekitar membentuk mesh Bluetooth dan meneruskan pesan Anda, terenkripsi ujung ke ujung. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Tanpa server",
   "home.hero.body.no_accounts": "tanpa akun",
   "home.hero.body.no_tracking": "tanpa pelacakan",

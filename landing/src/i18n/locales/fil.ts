@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Pinakabagong bersyon",
   "home.hero.title": "Pagmemensahe na gumagana kahit walang internet.",
   "home.hero.body":
-    "Ang mga teleponong malapit ay bumubuo ng Bluetooth mesh at ipinapasa ang iyong mensahe hanggang pitong hakbang, naka-encrypt mula dulo hanggang dulo. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Ang mga teleponong malapit ay bumubuo ng Bluetooth mesh at ipinapasa ang iyong mensahe, naka-encrypt mula dulo hanggang dulo. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Walang server",
   "home.hero.body.no_accounts": "walang account",
   "home.hero.body.no_tracking": "walang pagsubaybay",

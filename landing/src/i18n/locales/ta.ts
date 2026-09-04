@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "சமீபத்திய வெளியீடு",
   "home.hero.title": "இணையம் இல்லாமலும் இயங்கும் செய்தி பரிமாற்றம்.",
   "home.hero.body":
-    "அருகிலுள்ள தொலைபேசிகள் ஒரு Bluetooth மெஷ் அமைத்து, உங்கள் செய்திகளை ஏழு தாவல்கள் வரை முனை முதல் முனை வரை மறையாக்கத்துடன் கடத்துகின்றன. {no_servers}, {no_accounts}, {no_tracking}.",
+    "அருகிலுள்ள தொலைபேசிகள் ஒரு Bluetooth மெஷ் அமைத்து, உங்கள் செய்திகளை முனை முதல் முனை வரை மறையாக்கத்துடன் கடத்துகின்றன. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "சேவையகங்கள் இல்லை",
   "home.hero.body.no_accounts": "கணக்குகள் இல்லை",
   "home.hero.body.no_tracking": "கண்காணிப்பு இல்லை",

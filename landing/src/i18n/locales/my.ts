@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "နောက်ဆုံးထွက်ဗားရှင်း",
   "home.hero.title": "အင်တာနက်မလိုဘဲ အလုပ်လုပ်သော စာပို့စနစ်။",
   "home.hero.body":
-    "အနီးအနားရှိ ဖုန်းများသည် Bluetooth mesh ကို ဖွဲ့စည်းပြီး သင့်စာများကို အဆုံးမှအဆုံး စာဝှက်ထားလျက် ခုနစ်ဆင့်အထိ ဆက်လက်ပို့ဆောင်ပေးသည်။ {no_servers}၊ {no_accounts}၊ {no_tracking}။",
+    "အနီးအနားရှိ ဖုန်းများသည် Bluetooth mesh ကို ဖွဲ့စည်းပြီး သင့်စာများကို အဆုံးမှအဆုံး စာဝှက်ထားလျက် ဆက်လက်ပို့ဆောင်ပေးသည်။ {no_servers}၊ {no_accounts}၊ {no_tracking}။",
   "home.hero.body.no_servers": "ဆာဗာမရှိ",
   "home.hero.body.no_accounts": "အကောင့်မရှိ",
   "home.hero.body.no_tracking": "ခြေရာခံမှုမရှိ",

@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Bản phát hành mới nhất",
   "home.hero.title": "Nhắn tin hoạt động không cần internet.",
   "home.hero.body":
-    "Các điện thoại ở gần tạo thành một mạng mesh Bluetooth và chuyển tiếp tin nhắn của bạn qua tối đa bảy chặng, mã hóa đầu cuối. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Các điện thoại ở gần tạo thành một mạng mesh Bluetooth và chuyển tiếp tin nhắn của bạn, mã hóa đầu cuối. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Không máy chủ",
   "home.hero.body.no_accounts": "không tài khoản",
   "home.hero.body.no_tracking": "không theo dõi",

@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "ਸਭ ਤੋਂ ਨਵੀਂ ਰਿਲੀਜ਼",
   "home.hero.title": "ਸੁਨੇਹੇ ਜੋ ਇੰਟਰਨੈੱਟ ਤੋਂ ਬਿਨਾਂ ਚੱਲਦੇ ਹਨ।",
   "home.hero.body":
-    "ਨੇੜਲੇ ਫ਼ੋਨ ਬਲੂਟੁੱਥ ਮੈਸ਼ ਬਣਾਉਂਦੇ ਹਨ ਅਤੇ ਤੁਹਾਡੇ ਸੁਨੇਹੇ ਸੱਤ ਹੌਪ ਤੱਕ ਅੱਗੇ ਪਹੁੰਚਾਉਂਦੇ ਹਨ, ਸਿਰੇ ਤੋਂ ਸਿਰੇ ਤੱਕ ਇਨਕ੍ਰਿਪਟਡ। {no_servers}, {no_accounts}, {no_tracking}।",
+    "ਨੇੜਲੇ ਫ਼ੋਨ ਬਲੂਟੁੱਥ ਮੈਸ਼ ਬਣਾਉਂਦੇ ਹਨ ਅਤੇ ਤੁਹਾਡੇ ਸੁਨੇਹੇ ਅੱਗੇ ਪਹੁੰਚਾਉਂਦੇ ਹਨ, ਸਿਰੇ ਤੋਂ ਸਿਰੇ ਤੱਕ ਇਨਕ੍ਰਿਪਟਡ। {no_servers}, {no_accounts}, {no_tracking}।",
   "home.hero.body.no_servers": "ਕੋਈ ਸਰਵਰ ਨਹੀਂ",
   "home.hero.body.no_accounts": "ਕੋਈ ਖਾਤਾ ਨਹੀਂ",
   "home.hero.body.no_tracking": "ਕੋਈ ਪਿੱਛਾ ਨਹੀਂ",

@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "Última versión",
   "home.hero.title": "Mensajería que funciona sin internet.",
   "home.hero.body":
-    "Los teléfonos cercanos forman una red mesh por Bluetooth y retransmiten tus mensajes hasta siete saltos, cifrados de extremo a extremo. {no_servers}, {no_accounts}, {no_tracking}.",
+    "Los teléfonos cercanos forman una red mesh por Bluetooth y retransmiten tus mensajes, cifrados de extremo a extremo. {no_servers}, {no_accounts}, {no_tracking}.",
   "home.hero.body.no_servers": "Sin servidores",
   "home.hero.body.no_accounts": "sin cuentas",
   "home.hero.body.no_tracking": "sin rastreo",

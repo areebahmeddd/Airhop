@@ -131,23 +131,6 @@ export default function DiagnosticsScreen({
             />
             <GroupDivider />
             <SettingRow
-              icon="wifi"
-              label={T("settings.diag.wifi")}
-              description={`${t("settings.diag.wifi_about")} · ${wifiLabel(
-                wifiFastPath,
-              )}`}
-              control={
-                <Text style={[styles.settingValue, styles.settingValueMono]}>
-                  {formatNumber(counters.links.wifi)}
-                </Text>
-              }
-            />
-            <GroupDivider />
-            {/* Below Wi-Fi Aware, since that is the faster of the two local
-                paths and the one a reader checks first. "Off" is appended the
-                way the Wi-Fi row appends its state, so a count of zero is not
-                read as "nobody here" on a transport nobody switched on. */}
-            <SettingRow
               icon="share-2"
               label={T("settings.diag.lan")}
               description={
@@ -158,6 +141,19 @@ export default function DiagnosticsScreen({
               control={
                 <Text style={[styles.settingValue, styles.settingValueMono]}>
                   {formatNumber(counters.links.lan)}
+                </Text>
+              }
+            />
+            <GroupDivider />
+            <SettingRow
+              icon="wifi"
+              label={T("settings.diag.wifi")}
+              description={`${t("settings.diag.wifi_about")} · ${wifiLabel(
+                wifiFastPath,
+              )}`}
+              control={
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
+                  {formatNumber(counters.links.wifi)}
                 </Text>
               }
             />

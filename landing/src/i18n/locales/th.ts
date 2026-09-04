@@ -43,7 +43,7 @@ const strings: Strings = {
   "home.hero.release": "รุ่นล่าสุด",
   "home.hero.title": "การส่งข้อความที่ใช้ได้โดยไม่ต้องมีอินเทอร์เน็ต",
   "home.hero.body":
-    "โทรศัพท์ที่อยู่ใกล้กันรวมตัวเป็นเครือข่ายเมชผ่าน Bluetooth และส่งต่อข้อความของคุณได้สูงสุดเจ็ดทอด โดยเข้ารหัสตลอดเส้นทาง {no_servers} {no_accounts} {no_tracking}",
+    "โทรศัพท์ที่อยู่ใกล้กันรวมตัวเป็นเครือข่ายเมชผ่าน Bluetooth และส่งต่อข้อความของคุณ โดยเข้ารหัสตลอดเส้นทาง {no_servers} {no_accounts} {no_tracking}",
   "home.hero.body.no_servers": "ไม่มีเซิร์ฟเวอร์",
   "home.hero.body.no_accounts": "ไม่มีบัญชี",
   "home.hero.body.no_tracking": "ไม่มีการติดตาม",
