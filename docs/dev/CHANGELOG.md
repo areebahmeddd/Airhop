@@ -5,6 +5,28 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- feat: add search functionality in settings + fix minor bugs + add tests for rust code (by @areebahmeddd) [7123cb6]
+- fix: some minor bugs reported from field testing (by @areebahmeddd) [b234a5d]
+- feat: add bridges and pluggable transports for censored networks (by @areebahmeddd) [7477564]
+- feat: integrate pluggable transports for Tor (by @areebahmeddd) [3a2a75a]
+- feat(iptproxy): refactor build scripts to use a consistent source directory structure (by @areebahmeddd) [db9908a]
+- fix(iptproxy): adjust dnstt placement in fetch-sources.sh (by @areebahmeddd) [dbf0191]
+- feat(arti): configure bridges and pluggable transports (by @areebahmeddd) [fd8bf28]
+- feat(iptproxy): add Go setup for Android and Apple builds (by @areebahmeddd) [96f4cf3]
+- feat(iptproxy): build the pluggable transports in our own pipeline (by @areebahmeddd) [6d1dbea]
+- chore: update deps (by @areebahmeddd) [28f6d89]
+- chore(arti): update to arti-client 0.46 and pin the transport toolchain (by @areebahmeddd) [d3114a5]
+- fix: mesh communication for mDNS transport (by @areebahmeddd) [692acdb]
+- feat: embedded Tor via Arti on iOS and Android (#54) (by @Areeb Ahmed) [3790036]
+- ci: add the Arti build workflow (by @areebahmeddd) [12ceb0a]
+- refactor: documentation and code structure for clarity and consistency (by @areebahmeddd) [8961ccf]
+- feat: LAN transport over mDNS and TCP (#53) (by @Areeb Ahmed) [6a9f1b2]
+- refactor: update progress docs and versioning (by @areebahmeddd) [87c97c8]
+
+**Full changelog:** [v1.0.3..v1.0.4](https://github.com/areebahmeddd/airhop/compare/v1.0.3..v1.0.4)
+
+## What's New
+
 - chore: minor fixes (by @areebahmeddd) [3936db6]
 - chore: update docs (by @areebahmeddd) [22f254a]
 - feat: add AirhopAppModule for process-level operations and RTL support (by @areebahmeddd) [27f9fc0]
