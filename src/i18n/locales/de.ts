@@ -362,7 +362,7 @@ export const strings: Strings = {
   "chat.thread.notices": "Aushänge für diesen Kanal",
   "chat.thread.invite": "Jemanden in diesen Kanal einladen",
   "chat.thread.not_in_range":
-    "Nicht in Bluetooth-Reichweite. Zustellung über das Internet.",
+    "Nicht in der Nähe. Zustellung über das Internet.",
   "chat.thread.not_nearby":
     "Nicht in der Nähe. Wir stellen zu, sobald die Person wieder in Reichweite oder online ist.",
   "chat.thread.no_keys":
@@ -789,6 +789,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "Mesh wird gestartet…",
   "mesh.banner.no_bluetooth": "Kein Bluetooth auf diesem Gerät · nur Internet",
   "mesh.banner.bluetooth_off": "Bluetooth aus · Mesh nicht verfügbar",
+  "mesh.banner.bluetooth_off_wifi": "Bluetooth aus · Mesh läuft über WLAN",
   "mesh.banner.permission_needed": "Bluetooth-Berechtigung nötig",
   "mesh.banner.blocked": "Bluetooth blockiert · in den Einstellungen erlauben",
   "mesh.banner.location_permission": "Standort nötig, um Peers zu finden",

@@ -360,7 +360,7 @@ export const strings: Strings = {
   "chat.thread.notices": "இந்தச் சேனலின் அறிவிப்புகள்",
   "chat.thread.invite": "இந்தச் சேனலுக்கு ஒருவரை அழை",
   "chat.thread.not_in_range":
-    "புளூடூத் வரம்பில் இல்லை. இணையம் வழியாகச் சேர்ப்பிக்கப்படுகிறது.",
+    "அருகில் இல்லை. இணையம் வழியாகச் சேர்ப்பிக்கப்படுகிறது.",
   "chat.thread.not_nearby":
     "அருகில் இல்லை. அவர்கள் வரம்புக்குத் திரும்பியதும் அல்லது ஆன்லைனுக்கு வந்ததும் சேர்ப்பிப்போம்.",
   "chat.thread.no_keys":
@@ -793,6 +793,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "இந்தச் சாதனத்தில் புளூடூத் இல்லை · இணையம் மட்டும்",
   "mesh.banner.bluetooth_off": "புளூடூத் முடக்கம் · மெஷ் கிடைக்கவில்லை",
+  "mesh.banner.bluetooth_off_wifi":
+    "புளூடூத் முடக்கம் · மெஷ் WiFi வழியாக இயங்குகிறது",
   "mesh.banner.permission_needed": "புளூடூத் அனுமதி தேவை",
   "mesh.banner.blocked":
     "புளூடூத் தடுக்கப்பட்டுள்ளது · அமைப்புகளில் அனுமதியுங்கள்",

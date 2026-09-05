@@ -361,8 +361,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Fantsona ho an'ny daholobe",
   "chat.thread.notices": "Filazana amin'ity fantsona ity",
   "chat.thread.invite": "Manasa olona amin'ity fantsona ity",
-  "chat.thread.not_in_range":
-    "Tsy ao anatin'ny fetran'ny Bluetooth. Ampitaina amin'ny Internet.",
+  "chat.thread.not_in_range": "Tsy akaiky. Ampitaina amin'ny Internet.",
   "chat.thread.not_nearby":
     "Tsy akaiky. Hampitainay rehefa tafaverina ao anatin'ny fetra na tafiditra an-tserasera izy.",
   "chat.thread.no_keys":
@@ -793,6 +792,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "Tsy misy Bluetooth eto amin'ity fitaovana ity · Internet ihany",
   "mesh.banner.bluetooth_off": "Vonoina ny Bluetooth · tsy misy ny harato",
+  "mesh.banner.bluetooth_off_wifi":
+    "Vonoina ny Bluetooth · mandeha amin'ny WiFi ny harato",
   "mesh.banner.permission_needed": "Mila alalana Bluetooth",
   "mesh.banner.blocked":
     "Voasakana ny Bluetooth · avelao ao amin'ny Fandrindrana",

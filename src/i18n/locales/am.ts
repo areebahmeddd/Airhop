@@ -331,7 +331,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "ይፋዊ ሰርጥ",
   "chat.thread.notices": "የዚህ ሰርጥ ማስታወቂያዎች",
   "chat.thread.invite": "አንድ ሰው ወደዚህ ሰርጥ ጋብዝ",
-  "chat.thread.not_in_range": "በብሉቱዝ ክልል ውስጥ አይደለም። በኢንተርኔት እየተላከ ነው።",
+  "chat.thread.not_in_range": "በአቅራቢያ የለም። በኢንተርኔት እየተላከ ነው።",
   "chat.thread.not_nearby":
     "በአቅራቢያ የለም። ወደ ክልል ሲመለሱ ወይም በመስመር ላይ ሲሆኑ እናደርሰዋለን።",
   "chat.thread.no_keys": "መልእክት ለመላክ በብሉቱዝ ክልል ውስጥ መሆን ወይም ኮዳቸውን መቃኘት አለብህ።",
@@ -728,6 +728,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "ሜሹ እየተጀመረ ነው…",
   "mesh.banner.no_bluetooth": "በዚህ መሣሪያ ላይ ብሉቱዝ የለም · ኢንተርኔት ብቻ",
   "mesh.banner.bluetooth_off": "ብሉቱዝ ጠፍቷል · ሜሽ አይገኝም",
+  "mesh.banner.bluetooth_off_wifi": "ብሉቱዝ ጠፍቷል · ሜሽ በWiFi ላይ ይሠራል",
   "mesh.banner.permission_needed": "የብሉቱዝ ፈቃድ ያስፈልጋል",
   "mesh.banner.blocked": "ብሉቱዝ ታግዷል · በቅንብሮች ውስጥ ፍቀድለት",
   "mesh.banner.location_permission": "አቻዎችን ለማግኘት አካባቢ ያስፈልጋል",

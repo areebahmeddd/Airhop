@@ -335,7 +335,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "公开频道",
   "chat.thread.notices": "本频道的公告",
   "chat.thread.invite": "邀请他人加入本频道",
-  "chat.thread.not_in_range": "不在蓝牙范围内。正通过互联网送达。",
+  "chat.thread.not_in_range": "不在附近。正通过互联网送达。",
   "chat.thread.not_nearby": "不在附近。等对方回到范围内或上线后，我们会送达。",
   "chat.thread.no_keys":
     "你需要在蓝牙范围内，或者扫描对方的二维码，才能给对方发消息。",
@@ -731,6 +731,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "正在启动网状网络…",
   "mesh.banner.no_bluetooth": "这台设备没有蓝牙 · 仅互联网",
   "mesh.banner.bluetooth_off": "蓝牙已关 · 网状网络不可用",
+  "mesh.banner.bluetooth_off_wifi": "蓝牙已关 · 网状网络通过 WiFi 运行",
   "mesh.banner.permission_needed": "需要蓝牙权限",
   "mesh.banner.blocked": "蓝牙被拦截 · 请在设置中允许",
   "mesh.banner.location_permission": "需要定位才能找到节点",

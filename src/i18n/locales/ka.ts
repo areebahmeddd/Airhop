@@ -356,7 +356,7 @@ export const strings: Strings = {
   "chat.thread.notices": "ამ არხის განცხადებები",
   "chat.thread.invite": "მოიწვიე ვინმე ამ არხში",
   "chat.thread.not_in_range":
-    "ბლუთუზის რადიუსში არ არის. მიწოდება ინტერნეტით მიმდინარეობს.",
+    "ახლოს არ არის. მიწოდება ინტერნეტით მიმდინარეობს.",
   "chat.thread.not_nearby":
     "ახლოს არ არის. მივიტანთ, როცა რადიუსში დაბრუნდება ან ონლაინ გამოჩნდება.",
   "chat.thread.no_keys":
@@ -776,6 +776,7 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "ამ მოწყობილობაზე ბლუთუზი არ არის · მხოლოდ ინტერნეტი",
   "mesh.banner.bluetooth_off": "ბლუთუზი გამორთულია · მეში მიუწვდომელია",
+  "mesh.banner.bluetooth_off_wifi": "ბლუთუზი გამორთულია · მეში მუშაობს WiFi-ით",
   "mesh.banner.permission_needed": "საჭიროა ბლუთუზის ნებართვა",
   "mesh.banner.blocked": "ბლუთუზი დაბლოკილია · დაუშვი პარამეტრებში",
   "mesh.banner.location_permission": "კვანძების საპოვნელად საჭიროა მდებარეობა",

@@ -356,8 +356,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Openbaar kanaal",
   "chat.thread.notices": "Meldingen van dit kanaal",
   "chat.thread.invite": "Iemand uitnodigen voor dit kanaal",
-  "chat.thread.not_in_range":
-    "Buiten Bluetooth-bereik. Wordt via internet bezorgd.",
+  "chat.thread.not_in_range": "Niet in de buurt. Wordt via internet bezorgd.",
   "chat.thread.not_nearby":
     "Niet in de buurt. We bezorgen het zodra diegene terug binnen bereik of online is.",
   "chat.thread.no_keys":
@@ -782,6 +781,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "Mesh wordt gestart…",
   "mesh.banner.no_bluetooth": "Geen Bluetooth op dit toestel · alleen internet",
   "mesh.banner.bluetooth_off": "Bluetooth uit · mesh niet beschikbaar",
+  "mesh.banner.bluetooth_off_wifi": "Bluetooth uit · mesh draait via wifi",
   "mesh.banner.permission_needed": "Bluetooth-toestemming nodig",
   "mesh.banner.blocked":
     "Bluetooth geblokkeerd · sta het toe in de instellingen",

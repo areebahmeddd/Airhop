@@ -359,8 +359,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Canal public",
   "chat.thread.notices": "Avis de ce canal",
   "chat.thread.invite": "Inviter quelqu’un dans ce canal",
-  "chat.thread.not_in_range":
-    "Hors de portée du Bluetooth. Remise par internet.",
+  "chat.thread.not_in_range": "Pas à proximité. Remise par internet.",
   "chat.thread.not_nearby":
     "Pas à proximité. Nous remettrons le message dès son retour à portée ou en ligne.",
   "chat.thread.no_keys":
@@ -788,6 +787,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "Pas de Bluetooth sur cet appareil · internet seulement",
   "mesh.banner.bluetooth_off": "Bluetooth désactivé · maillage indisponible",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth désactivé · maillage via le WiFi",
   "mesh.banner.permission_needed": "L’autorisation Bluetooth est nécessaire",
   "mesh.banner.blocked": "Bluetooth bloqué · autorise-le dans les réglages",
   "mesh.banner.location_permission":

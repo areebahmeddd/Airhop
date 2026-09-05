@@ -351,8 +351,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "عوامی چینل",
   "chat.thread.notices": "اس چینل کے اعلانات",
   "chat.thread.invite": "اس چینل میں کسی کو مدعو کریں",
-  "chat.thread.not_in_range":
-    "بلوٹوتھ کی حدود میں نہیں۔ انٹرنیٹ سے پہنچایا جا رہا ہے۔",
+  "chat.thread.not_in_range": "قریب نہیں۔ انٹرنیٹ سے پہنچایا جا رہا ہے۔",
   "chat.thread.not_nearby":
     "قریب نہیں۔ جب وہ حدود میں لوٹیں گے یا آن لائن ہوں گے تو ہم پہنچا دیں گے۔",
   "chat.thread.no_keys":
@@ -770,6 +769,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "میش شروع ہو رہی ہے…",
   "mesh.banner.no_bluetooth": "اس آلے پر بلوٹوتھ نہیں · صرف انٹرنیٹ",
   "mesh.banner.bluetooth_off": "بلوٹوتھ بند · میش دستیاب نہیں",
+  "mesh.banner.bluetooth_off_wifi": "بلوٹوتھ بند · میش WiFi پر چل رہا ہے",
   "mesh.banner.permission_needed": "بلوٹوتھ کی اجازت درکار ہے",
   "mesh.banner.blocked": "بلوٹوتھ مسدود · ترتیبات میں اس کی اجازت دیں",
   "mesh.banner.location_permission": "پیئرز ڈھونڈنے کے لیے مقام درکار ہے",

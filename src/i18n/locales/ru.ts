@@ -354,8 +354,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Открытый канал",
   "chat.thread.notices": "Объявления этого канала",
   "chat.thread.invite": "Пригласить кого-нибудь в этот канал",
-  "chat.thread.not_in_range":
-    "Вне зоны действия Bluetooth. Доставляем через интернет.",
+  "chat.thread.not_in_range": "Нет рядом. Доставляем через интернет.",
   "chat.thread.not_nearby":
     "Нет рядом. Доставим, когда человек вернётся в зону действия или выйдет в сеть.",
   "chat.thread.no_keys":
@@ -781,6 +780,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "На этом устройстве нет Bluetooth · только интернет",
   "mesh.banner.bluetooth_off": "Bluetooth выключен · сеть недоступна",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth выключен · сеть работает через WiFi",
   "mesh.banner.permission_needed": "Нужно разрешение на Bluetooth",
   "mesh.banner.blocked": "Bluetooth заблокирован · разрешите его в настройках",
   "mesh.banner.location_permission": "Для поиска узлов нужна геопозиция",

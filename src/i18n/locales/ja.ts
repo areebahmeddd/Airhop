@@ -353,8 +353,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "公開チャンネル",
   "chat.thread.notices": "このチャンネルのお知らせ",
   "chat.thread.invite": "このチャンネルに誰かを招待",
-  "chat.thread.not_in_range":
-    "Bluetooth圏外です。インターネット経由で届けます。",
+  "chat.thread.not_in_range": "近くにいません。インターネット経由で届けます。",
   "chat.thread.not_nearby":
     "近くにいません。圏内に戻るかオンラインになったときに届けます。",
   "chat.thread.no_keys":
@@ -773,6 +772,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "この端末にBluetoothがありません · インターネットのみ",
   "mesh.banner.bluetooth_off": "Bluetoothがオフです · メッシュを使えません",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetoothがオフです · メッシュはWiFiで動作中",
   "mesh.banner.permission_needed": "Bluetoothの権限が必要です",
   "mesh.banner.blocked":
     "Bluetoothがブロックされています · 設定で許可してください",

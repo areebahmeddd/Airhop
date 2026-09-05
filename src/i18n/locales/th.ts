@@ -346,7 +346,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "ช่องสาธารณะ",
   "chat.thread.notices": "ประกาศสำหรับช่องนี้",
   "chat.thread.invite": "เชิญใครสักคนเข้าช่องนี้",
-  "chat.thread.not_in_range": "ไม่อยู่ในระยะบลูทูธ กำลังส่งผ่านอินเทอร์เน็ต",
+  "chat.thread.not_in_range": "ไม่ได้อยู่ใกล้ กำลังส่งผ่านอินเทอร์เน็ต",
   "chat.thread.not_nearby":
     "ไม่ได้อยู่ใกล้ เราจะส่งให้เมื่อพวกเขากลับเข้าระยะหรือออนไลน์",
   "chat.thread.no_keys":
@@ -756,6 +756,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "กำลังเริ่มเมช…",
   "mesh.banner.no_bluetooth": "เครื่องนี้ไม่มีบลูทูธ · อินเทอร์เน็ตเท่านั้น",
   "mesh.banner.bluetooth_off": "บลูทูธปิดอยู่ · ใช้เมชไม่ได้",
+  "mesh.banner.bluetooth_off_wifi": "บลูทูธปิดอยู่ · เมชทำงานผ่าน WiFi",
   "mesh.banner.permission_needed": "ต้องได้รับอนุญาตให้ใช้บลูทูธ",
   "mesh.banner.blocked": "บลูทูธถูกบล็อก · อนุญาตในการตั้งค่า",
   "mesh.banner.location_permission": "ต้องใช้ตำแหน่งเพื่อค้นหาเพียร์",

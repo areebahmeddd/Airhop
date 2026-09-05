@@ -350,8 +350,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "کانال عمومی",
   "chat.thread.notices": "اعلان‌های این کانال",
   "chat.thread.invite": "دعوت کسی به این کانال",
-  "chat.thread.not_in_range":
-    "در محدودهٔ بلوتوث نیست. از راه اینترنت تحویل می‌شود.",
+  "chat.thread.not_in_range": "نزدیک نیست. از راه اینترنت تحویل می‌شود.",
   "chat.thread.not_nearby":
     "نزدیک نیست. هر وقت به محدوده بازگردند یا برخط شوند تحویل می‌دهیم.",
   "chat.thread.no_keys":
@@ -767,6 +766,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "در حال راه‌اندازی مش…",
   "mesh.banner.no_bluetooth": "این دستگاه بلوتوث ندارد · فقط اینترنت",
   "mesh.banner.bluetooth_off": "بلوتوث خاموش · مش در دسترس نیست",
+  "mesh.banner.bluetooth_off_wifi": "بلوتوث خاموش · مش روی WiFi کار می‌کند",
   "mesh.banner.permission_needed": "به اجازهٔ بلوتوث نیاز است",
   "mesh.banner.blocked": "بلوتوث مسدود است · در تنظیمات اجازه دهید",
   "mesh.banner.location_permission":

@@ -335,7 +335,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "公開頻道",
   "chat.thread.notices": "本頻道的公告",
   "chat.thread.invite": "邀請別人加入本頻道",
-  "chat.thread.not_in_range": "不在藍牙範圍內。正透過網路遞送。",
+  "chat.thread.not_in_range": "不在附近。正透過網路遞送。",
   "chat.thread.not_nearby": "不在附近。等對方回到範圍內或上線後，我們會遞送。",
   "chat.thread.no_keys":
     "你得在藍牙範圍內，或者掃描對方的 QR 碼，才能傳訊息給對方。",
@@ -731,6 +731,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "正在啟動網狀網路…",
   "mesh.banner.no_bluetooth": "這台裝置沒有藍牙 · 僅網路",
   "mesh.banner.bluetooth_off": "藍牙已關 · 網狀網路無法使用",
+  "mesh.banner.bluetooth_off_wifi": "藍牙已關 · 網狀網路透過 WiFi 運作",
   "mesh.banner.permission_needed": "需要藍牙權限",
   "mesh.banner.blocked": "藍牙被擋下 · 請在設定中允許",
   "mesh.banner.location_permission": "需要定位才找得到節點",

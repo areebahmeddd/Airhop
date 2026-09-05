@@ -1514,8 +1514,8 @@ export default function MessageThread({
   const dmPeerID = channel.startsWith("dm:") ? channel.slice(3) : null;
   const isDMPeerOnline =
     dmPeerID !== null && onlinePeers.some((p) => p.peerID === dmPeerID);
-  // Whether this DM can still be delivered when the peer is out of Bluetooth
-  // range: either they are a Nostr-only correspondent, or we hold their durable
+  // Whether this DM can still be delivered when the peer is not nearby: either
+  // they are a Nostr-only correspondent, or we hold their durable
   // Nostr pubkey (from a v2 QR card or a past ANNOUNCE). Drives honest banner
   // copy: an offline peer we can still reach over the internet must not be shown
   // the same "we'll deliver when they're nearby" line as an unreachable one.

@@ -49,6 +49,62 @@ describe("computeMeshBanners", () => {
     expect(banners).toEqual([]);
   });
 
+  // Bluetooth off is only a blocker when it leaves nothing. Said over a working
+  // LAN or WiFi Aware link it is false, and a red banner over a working mesh is
+  // how people learn to ignore the colour.
+  it("softens Bluetooth-off while another local transport carries the mesh", () => {
+    for (const inputs of [
+      { lanState: "active" as const },
+      { lanState: "searching" as const },
+      { wifiFastPath: "active" as const },
+    ]) {
+      const [banner] = computeMeshBanners({
+        ...HEALTHY,
+        bleBlocker: "adapter-off",
+        peerCount: 0,
+        ...inputs,
+      });
+      expect(banner.key).toBe("ble-adapter-off");
+      expect(banner.tone).toBe("caution");
+      expect(banner.label).toBe("Bluetooth off · mesh running over WiFi");
+      // Still worth turning back on: range, the screen being off, and the
+      // other platform all need it.
+      expect(banner.action).toEqual({
+        label: "Turn on",
+        kind: "enable-bluetooth",
+      });
+    }
+  });
+
+  it("keeps Bluetooth-off red when nothing else is carrying", () => {
+    for (const inputs of [
+      { lanState: "off" as const },
+      { lanState: "unavailable" as const },
+      { wifiFastPath: "unpaired" as const },
+    ]) {
+      const [banner] = computeMeshBanners({
+        ...HEALTHY,
+        bleBlocker: "adapter-off",
+        peerCount: 0,
+        ...inputs,
+      });
+      expect(banner.tone).toBe("danger");
+      expect(banner.label).toBe("Bluetooth off · mesh unavailable");
+    }
+  });
+
+  // A permission the user has to go and grant is red however the mesh is
+  // reaching people: nothing else on the phone will fix it for them.
+  it("leaves a denied Bluetooth permission red over a working LAN", () => {
+    const [banner] = computeMeshBanners({
+      ...HEALTHY,
+      bleBlocker: "permission-denied",
+      lanState: "active",
+      peerCount: 0,
+    });
+    expect(banner.tone).toBe("danger");
+  });
+
   it("stacks Bluetooth-off and location-off, severity first", () => {
     const banners = computeMeshBanners({
       ...HEALTHY,

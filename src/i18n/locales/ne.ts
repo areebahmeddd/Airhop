@@ -351,7 +351,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "सार्वजनिक च्यानल",
   "chat.thread.notices": "यो च्यानलका सूचना",
   "chat.thread.invite": "यो च्यानलमा कसैलाई निम्त्याउनुहोस्",
-  "chat.thread.not_in_range": "ब्लुटुथ दायरामा छैन। इन्टरनेटबाट पुर्‍याउँदै।",
+  "chat.thread.not_in_range": "नजिकै छैनन्। इन्टरनेटबाट पुर्‍याउँदै।",
   "chat.thread.not_nearby":
     "नजिकै छैनन्। उनीहरू दायरामा फर्केपछि वा अनलाइन भएपछि हामी पुर्‍याउनेछौँ।",
   "chat.thread.no_keys":
@@ -767,6 +767,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "मेश सुरु हुँदै…",
   "mesh.banner.no_bluetooth": "यो यन्त्रमा ब्लुटुथ छैन · इन्टरनेट मात्र",
   "mesh.banner.bluetooth_off": "ब्लुटुथ बन्द · मेश उपलब्ध छैन",
+  "mesh.banner.bluetooth_off_wifi": "ब्लुटुथ बन्द · मेश WiFi मा चलिरहेको",
   "mesh.banner.permission_needed": "ब्लुटुथ अनुमति चाहिन्छ",
   "mesh.banner.blocked": "ब्लुटुथ रोकिएको · सेटिङमा अनुमति दिनुहोस्",
   "mesh.banner.location_permission": "पियर भेट्न स्थान चाहिन्छ",

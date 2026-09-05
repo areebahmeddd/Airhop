@@ -344,7 +344,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "قناة عامة",
   "chat.thread.notices": "إعلانات هذه القناة",
   "chat.thread.invite": "دعوة شخص إلى هذه القناة",
-  "chat.thread.not_in_range": "خارج نطاق البلوتوث. جارٍ التسليم عبر الإنترنت.",
+  "chat.thread.not_in_range": "ليس بالجوار. جارٍ التسليم عبر الإنترنت.",
   "chat.thread.not_nearby":
     "ليس بالجوار. سنسلّم الرسالة عند عودته إلى النطاق أو اتصاله بالإنترنت.",
   "chat.thread.no_keys":
@@ -753,6 +753,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "جارٍ تشغيل الشبكة…",
   "mesh.banner.no_bluetooth": "لا بلوتوث على هذا الجهاز · الإنترنت فقط",
   "mesh.banner.bluetooth_off": "البلوتوث معطّل · الشبكة غير متاحة",
+  "mesh.banner.bluetooth_off_wifi": "البلوتوث معطّل · الشبكة تعمل عبر WiFi",
   "mesh.banner.permission_needed": "إذن البلوتوث مطلوب",
   "mesh.banner.blocked": "البلوتوث محظور · اسمح به من الإعدادات",
   "mesh.banner.location_permission": "الموقع مطلوب للعثور على النظراء",

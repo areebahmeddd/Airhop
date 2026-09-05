@@ -347,7 +347,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "공개 채널",
   "chat.thread.notices": "이 채널의 공지",
   "chat.thread.invite": "이 채널에 초대하기",
-  "chat.thread.not_in_range": "블루투스 범위 밖입니다. 인터넷으로 전달합니다.",
+  "chat.thread.not_in_range": "근처에 없습니다. 인터넷으로 전달합니다.",
   "chat.thread.not_nearby":
     "근처에 없습니다. 다시 범위에 들어오거나 온라인이 되면 전달합니다.",
   "chat.thread.no_keys":
@@ -761,6 +761,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "메시를 시작하는 중…",
   "mesh.banner.no_bluetooth": "이 기기에 블루투스 없음 · 인터넷만 사용",
   "mesh.banner.bluetooth_off": "블루투스 꺼짐 · 메시 사용 불가",
+  "mesh.banner.bluetooth_off_wifi": "블루투스 꺼짐 · 메시는 WiFi로 동작 중",
   "mesh.banner.permission_needed": "블루투스 권한이 필요합니다",
   "mesh.banner.blocked": "블루투스 차단됨 · 설정에서 허용하세요",
   "mesh.banner.location_permission": "피어를 찾으려면 위치가 필요합니다",

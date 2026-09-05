@@ -357,8 +357,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Canal público",
   "chat.thread.notices": "Avisos deste canal",
   "chat.thread.invite": "Convidar alguém para este canal",
-  "chat.thread.not_in_range":
-    "Fora do alcance do Bluetooth. Entregando pela internet.",
+  "chat.thread.not_in_range": "Não está por perto. Entregando pela internet.",
   "chat.thread.not_nearby":
     "Não está por perto. Vamos entregar quando voltar ao alcance ou ficar online.",
   "chat.thread.no_keys":
@@ -783,6 +782,8 @@ export const strings: Strings = {
   "mesh.banner.starting": "Iniciando a malha…",
   "mesh.banner.no_bluetooth": "Sem Bluetooth neste aparelho · só internet",
   "mesh.banner.bluetooth_off": "Bluetooth desligado · malha indisponível",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth desligado · malha funcionando por WiFi",
   "mesh.banner.permission_needed": "É preciso a permissão de Bluetooth",
   "mesh.banner.blocked": "Bluetooth bloqueado · libere nas configurações",
   "mesh.banner.location_permission":

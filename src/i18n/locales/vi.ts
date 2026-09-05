@@ -350,8 +350,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Kênh công khai",
   "chat.thread.notices": "Bản tin của kênh này",
   "chat.thread.invite": "Mời ai đó vào kênh này",
-  "chat.thread.not_in_range":
-    "Không trong tầm Bluetooth. Đang chuyển qua Internet.",
+  "chat.thread.not_in_range": "Không ở gần. Đang chuyển qua Internet.",
   "chat.thread.not_nearby":
     "Không ở gần. Chúng tôi sẽ chuyển khi họ trở lại trong tầm hoặc lên mạng.",
   "chat.thread.no_keys":
@@ -775,6 +774,8 @@ export const strings: Strings = {
   "mesh.banner.starting": "Đang khởi động mạng lưới…",
   "mesh.banner.no_bluetooth": "Thiết bị này không có Bluetooth · chỉ Internet",
   "mesh.banner.bluetooth_off": "Bluetooth đã tắt · không dùng được mạng lưới",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth đã tắt · mạng lưới chạy qua WiFi",
   "mesh.banner.permission_needed": "Cần quyền Bluetooth",
   "mesh.banner.blocked": "Bluetooth bị chặn · hãy cho phép trong Cài đặt",
   "mesh.banner.location_permission": "Cần vị trí để tìm nút mạng",

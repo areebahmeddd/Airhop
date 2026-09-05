@@ -217,9 +217,11 @@ class AirhopWiFiModule(
     // outstanding requests and then throws TooManyRequestsException.
     private val networkCallbacks = ConcurrentHashMap.newKeySet<ConnectivityManager.NetworkCallback>()
 
-    // Peers we have already dialled or are dialling, keyed by PeerHandle, so a
+    // Peers whose data path is in flight or up, keyed by PeerHandle, so a
     // repeated onServiceDiscovered for the same peer does not open a second
     // socket. Mirrors the advertised-peerID dedup on the BLE side.
+    // Lifted by forgetAttempt once the path is gone, so a peer that drops is
+    // dialled again on its next rediscovery.
     private val dialledPeers = ConcurrentHashMap.newKeySet<PeerHandle>()
 
     // The same guard for the other direction. A connect request arrives as a
@@ -797,7 +799,7 @@ class AirhopWiFiModule(
             .setPskPassphrase(DATA_PATH_PASSPHRASE)
             .setPort(serverPort)
             .build()
-        requestAwareNetwork(specifier, onPeerReady = null)
+        requestAwareNetwork(specifier, peerHandle, onPeerReady = null)
     }
 
     // Initiator side: no port on the specifier (that is the responder's to set),
@@ -808,15 +810,12 @@ class AirhopWiFiModule(
         val specifier = WifiAwareNetworkSpecifier.Builder(session, peerHandle)
             .setPskPassphrase(DATA_PATH_PASSPHRASE)
             .build()
-        requestAwareNetwork(specifier) { network, info ->
+        requestAwareNetwork(specifier, peerHandle) { network, info ->
             val peerAddress = info.peerIpv6Addr
             val peerPort = info.port
-            // Both failure paths leave the peer in dialledPeers and
-            // initiatedPeers rather than clearing them for another attempt. The
-            // timeout hands the callback back, so a retry would not walk toward
-            // the request ceiling, but it would re-dial on every rediscovery for
-            // as long as the peer stays in range. This costs one peer the
-            // accelerator until the next subscribe session; BLE carries it.
+            // Left marked: the path did come up, so onLost is what ends it
+            // and frees the peer. Clearing here would re-dial a peer that just
+            // proved it has nothing to talk to.
             if (peerAddress == null || peerPort <= 0) {
                 Log.w(TAG, "Aware network came up with no peer address or port")
                 return@requestAwareNetwork
@@ -838,6 +837,7 @@ class AirhopWiFiModule(
     @RequiresApi(AWARE_DATA_PATH_MIN_API)
     private fun requestAwareNetwork(
         specifier: WifiAwareNetworkSpecifier,
+        peer: PeerHandle,
         onPeerReady: ((Network, WifiAwareNetworkInfo) -> Unit)?,
     ) {
         val request = NetworkRequest.Builder()
@@ -869,11 +869,13 @@ class AirhopWiFiModule(
             override fun onLost(network: Network) {
                 Log.d(TAG, "WiFi Aware network lost")
                 release(this)
+                forgetAttempt(peer)
             }
 
             override fun onUnavailable() {
                 Log.d(TAG, "WiFi Aware network request unavailable")
                 release(this)
+                forgetAttempt(peer)
             }
         }
 
@@ -892,6 +894,18 @@ class AirhopWiFiModule(
     private fun release(callback: ConnectivityManager.NetworkCallback) {
         if (!networkCallbacks.remove(callback)) return
         runCatching { connectivityManager.unregisterNetworkCallback(callback) }
+    }
+
+    // Let this peer be dialled again, whichever role we took with it.
+    //
+    // Only from onLost and onUnavailable, which is what makes it safe: a live
+    // path raises neither, so a healthy link is never dialled twice, and one
+    // that will not negotiate waits out its request timeout before coming
+    // round.
+    private fun forgetAttempt(peer: PeerHandle) {
+        dialledPeers.remove(peer)
+        initiatedPeers.remove(peer)
+        respondedPeers.remove(peer)
     }
 
     // Register a connected socket as a named link and start its read loop.

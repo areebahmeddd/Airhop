@@ -353,8 +353,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Saluran awam",
   "chat.thread.notices": "Notis untuk saluran ini",
   "chat.thread.invite": "Jemput seseorang ke saluran ini",
-  "chat.thread.not_in_range":
-    "Tidak dalam jangkauan Bluetooth. Dihantar melalui internet.",
+  "chat.thread.not_in_range": "Tidak berdekatan. Dihantar melalui internet.",
   "chat.thread.not_nearby":
     "Tidak berdekatan. Kami akan menghantarnya apabila mereka kembali dalam jangkauan atau dalam talian.",
   "chat.thread.no_keys":
@@ -781,6 +780,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "Tiada Bluetooth pada peranti ini · internet sahaja",
   "mesh.banner.bluetooth_off": "Bluetooth dimatikan · mesh tidak tersedia",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth dimatikan · mesh berjalan melalui WiFi",
   "mesh.banner.permission_needed": "Kebenaran Bluetooth diperlukan",
   "mesh.banner.blocked": "Bluetooth disekat · benarkannya dalam Tetapan",
   "mesh.banner.location_permission": "Lokasi diperlukan untuk mencari rakan",

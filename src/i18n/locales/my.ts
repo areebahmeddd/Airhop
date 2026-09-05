@@ -359,7 +359,7 @@ export const strings: Strings = {
   "chat.thread.notices": "ဤချန်နယ်၏ အသိပေးချက်များ",
   "chat.thread.invite": "ဤချန်နယ်သို့ တစ်စုံတစ်ဦးကို ဖိတ်ပါ",
   "chat.thread.not_in_range":
-    "ဘလူးတုသ်အကွာအဝေးအတွင်း မဟုတ်ပါ။ အင်တာနက်မှတစ်ဆင့် ပို့နေသည်။",
+    "အနီးအနားတွင် မရှိပါ။ အင်တာနက်မှတစ်ဆင့် ပို့နေသည်။",
   "chat.thread.not_nearby":
     "အနီးအနားတွင် မရှိပါ။ ၎င်းတို့ အကွာအဝေးအတွင်း ပြန်ရောက်လာလျှင် သို့မဟုတ် အွန်လိုင်းရောက်လျှင် ပို့ပေးပါမည်။",
   "chat.thread.no_keys":
@@ -790,6 +790,8 @@ export const strings: Strings = {
   "mesh.banner.starting": "မက်ရှ်ကို စတင်နေသည်…",
   "mesh.banner.no_bluetooth": "ဤစက်တွင် ဘလူးတုသ် မရှိပါ · အင်တာနက်သာ",
   "mesh.banner.bluetooth_off": "ဘလူးတုသ် ပိတ်ထားသည် · မက်ရှ် မရနိုင်ပါ",
+  "mesh.banner.bluetooth_off_wifi":
+    "ဘလူးတုသ် ပိတ်ထားသည် · မက်ရှ်ကို WiFi ဖြင့် သုံးနေသည်",
   "mesh.banner.permission_needed": "ဘလူးတုသ် ခွင့်ပြုချက် လိုအပ်သည်",
   "mesh.banner.blocked": "ဘလူးတုသ် ပိတ်ဆို့ထားသည် · ဆက်တင်များတွင် ခွင့်ပြုပါ",
   "mesh.banner.location_permission":

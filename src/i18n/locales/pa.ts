@@ -352,8 +352,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "ਜਨਤਕ ਚੈਨਲ",
   "chat.thread.notices": "ਇਸ ਚੈਨਲ ਲਈ ਨੋਟਿਸ",
   "chat.thread.invite": "ਇਸ ਚੈਨਲ ਵਿੱਚ ਕਿਸੇ ਨੂੰ ਸੱਦੋ",
-  "chat.thread.not_in_range":
-    "ਬਲੂਟੁੱਥ ਦੀ ਪਹੁੰਚ ਵਿੱਚ ਨਹੀਂ। ਇੰਟਰਨੈੱਟ ਰਾਹੀਂ ਪਹੁੰਚਾ ਰਹੇ ਹਾਂ।",
+  "chat.thread.not_in_range": "ਨੇੜੇ ਨਹੀਂ। ਇੰਟਰਨੈੱਟ ਰਾਹੀਂ ਪਹੁੰਚਾ ਰਹੇ ਹਾਂ।",
   "chat.thread.not_nearby":
     "ਨੇੜੇ ਨਹੀਂ। ਜਦੋਂ ਉਹ ਵਾਪਸ ਪਹੁੰਚ ਵਿੱਚ ਜਾਂ ਆਨਲਾਈਨ ਹੋਣਗੇ, ਅਸੀਂ ਪਹੁੰਚਾ ਦਿਆਂਗੇ।",
   "chat.thread.no_keys":
@@ -773,6 +772,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "ਮੈਸ਼ ਸ਼ੁਰੂ ਕਰ ਰਹੇ ਹਾਂ…",
   "mesh.banner.no_bluetooth": "ਇਸ ਡੀਵਾਈਸ ’ਤੇ ਬਲੂਟੁੱਥ ਨਹੀਂ · ਸਿਰਫ਼ ਇੰਟਰਨੈੱਟ",
   "mesh.banner.bluetooth_off": "ਬਲੂਟੁੱਥ ਬੰਦ · ਮੈਸ਼ ਉਪਲਬਧ ਨਹੀਂ",
+  "mesh.banner.bluetooth_off_wifi": "ਬਲੂਟੁੱਥ ਬੰਦ · ਮੈਸ਼ WiFi ਉੱਤੇ ਚੱਲ ਰਿਹਾ ਹੈ",
   "mesh.banner.permission_needed": "ਬਲੂਟੁੱਥ ਦੀ ਇਜਾਜ਼ਤ ਚਾਹੀਦੀ ਹੈ",
   "mesh.banner.blocked": "ਬਲੂਟੁੱਥ ਰੋਕਿਆ ਹੋਇਆ · ਸੈਟਿੰਗਾਂ ਵਿੱਚੋਂ ਇਜਾਜ਼ਤ ਦਿਓ",
   "mesh.banner.location_permission": "ਪੀਅਰ ਲੱਭਣ ਲਈ ਟਿਕਾਣਾ ਚਾਹੀਦਾ ਹੈ",

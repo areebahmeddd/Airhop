@@ -363,8 +363,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Pampublikong channel",
   "chat.thread.notices": "Mga paskil para sa channel na ito",
   "chat.thread.invite": "Mag-imbita ng tao sa channel na ito",
-  "chat.thread.not_in_range":
-    "Wala sa saklaw ng Bluetooth. Inihahatid sa internet.",
+  "chat.thread.not_in_range": "Wala sa malapit. Inihahatid sa internet.",
   "chat.thread.not_nearby":
     "Wala sa malapit. Ihahatid namin kapag nakabalik na sila sa saklaw o online na.",
   "chat.thread.no_keys":
@@ -800,6 +799,8 @@ export const strings: Strings = {
     "Walang Bluetooth sa device na ito · internet lang",
   "mesh.banner.bluetooth_off":
     "Naka-off ang Bluetooth · hindi available ang mesh",
+  "mesh.banner.bluetooth_off_wifi":
+    "Naka-off ang Bluetooth · tumatakbo ang mesh sa WiFi",
   "mesh.banner.permission_needed": "Kailangan ng pahintulot sa Bluetooth",
   "mesh.banner.blocked":
     "Naka-block ang Bluetooth · payagan ito sa Mga Setting",

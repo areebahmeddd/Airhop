@@ -353,8 +353,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Публічний канал",
   "chat.thread.notices": "Оголошення цього каналу",
   "chat.thread.invite": "Запросити когось до цього каналу",
-  "chat.thread.not_in_range":
-    "Не в радіусі Bluetooth. Доставляємо через інтернет.",
+  "chat.thread.not_in_range": "Немає поблизу. Доставляємо через інтернет.",
   "chat.thread.not_nearby":
     "Немає поблизу. Доставимо, коли вони повернуться в радіус або будуть онлайн.",
   "chat.thread.no_keys":
@@ -784,6 +783,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "На цьому пристрої немає Bluetooth · лише інтернет",
   "mesh.banner.bluetooth_off": "Bluetooth вимкнено · mesh недоступний",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth вимкнено · mesh працює через WiFi",
   "mesh.banner.permission_needed": "Потрібен дозвіл на Bluetooth",
   "mesh.banner.blocked":
     "Bluetooth заблоковано · дозвольте його в Налаштуваннях",

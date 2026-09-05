@@ -354,7 +354,7 @@ export const strings: Strings = {
   "chat.thread.notices": "Bu kanalın duyuruları",
   "chat.thread.invite": "Bu kanala birini davet et",
   "chat.thread.not_in_range":
-    "Bluetooth menzilinde değil. İnternet üzerinden teslim ediliyor.",
+    "Yakında değil. İnternet üzerinden teslim ediliyor.",
   "chat.thread.not_nearby":
     "Yakında değil. Menzile geri döndüklerinde ya da çevrimiçi olduklarında teslim edeceğiz.",
   "chat.thread.no_keys":
@@ -780,6 +780,8 @@ export const strings: Strings = {
   "mesh.banner.starting": "Mesh başlatılıyor…",
   "mesh.banner.no_bluetooth": "Bu cihazda Bluetooth yok · yalnızca internet",
   "mesh.banner.bluetooth_off": "Bluetooth kapalı · mesh kullanılamıyor",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth kapalı · mesh WiFi üzerinden çalışıyor",
   "mesh.banner.permission_needed": "Bluetooth izni gerekiyor",
   "mesh.banner.blocked": "Bluetooth engellendi · Ayarlar'dan izin ver",
   "mesh.banner.location_permission": "Eşleri bulmak için konum gerekiyor",

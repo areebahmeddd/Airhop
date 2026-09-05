@@ -351,8 +351,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Öppen kanal",
   "chat.thread.notices": "Anslag för den här kanalen",
   "chat.thread.invite": "Bjud in någon till den här kanalen",
-  "chat.thread.not_in_range":
-    "Inte inom Bluetooth-räckhåll. Levereras över internet.",
+  "chat.thread.not_in_range": "Inte i närheten. Levereras över internet.",
   "chat.thread.not_nearby":
     "Inte i närheten. Vi levererar när hen är tillbaka inom räckhåll eller online.",
   "chat.thread.no_keys":
@@ -777,6 +776,7 @@ export const strings: Strings = {
   "mesh.banner.starting": "Startar meshen…",
   "mesh.banner.no_bluetooth": "Ingen Bluetooth på enheten · endast internet",
   "mesh.banner.bluetooth_off": "Bluetooth av · meshen är otillgänglig",
+  "mesh.banner.bluetooth_off_wifi": "Bluetooth av · meshen körs över WiFi",
   "mesh.banner.permission_needed": "Bluetooth-behörighet krävs",
   "mesh.banner.blocked": "Bluetooth blockerat · tillåt det i Inställningar",
   "mesh.banner.location_permission": "Plats krävs för att hitta peers",

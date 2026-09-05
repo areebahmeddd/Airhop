@@ -358,8 +358,7 @@ export const strings: Strings = {
   "chat.thread.public_channel": "Kituo cha umma",
   "chat.thread.notices": "Matangazo ya kituo hiki",
   "chat.thread.invite": "Alika mtu kwenye kituo hiki",
-  "chat.thread.not_in_range":
-    "Hayupo ndani ya masafa ya Bluetooth. Inafikishwa kupitia intaneti.",
+  "chat.thread.not_in_range": "Hayupo karibu. Inafikishwa kupitia intaneti.",
   "chat.thread.not_nearby":
     "Hayupo karibu. Tutafikisha atakaporudi ndani ya masafa au akiwa mtandaoni.",
   "chat.thread.no_keys":
@@ -783,6 +782,8 @@ export const strings: Strings = {
   "mesh.banner.no_bluetooth":
     "Hakuna Bluetooth kwenye kifaa hiki · intaneti pekee",
   "mesh.banner.bluetooth_off": "Bluetooth imezimwa · mesh haipatikani",
+  "mesh.banner.bluetooth_off_wifi":
+    "Bluetooth imezimwa · mesh inaendelea kwa WiFi",
   "mesh.banner.permission_needed": "Ruhusa ya Bluetooth inahitajika",
   "mesh.banner.blocked": "Bluetooth imezuiwa · iruhusu kwenye Mipangilio",
   "mesh.banner.location_permission": "Mahali panahitajika ili kupata peer",

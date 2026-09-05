@@ -383,6 +383,8 @@ export interface MeshBannerInputs {
   // State of the WiFi Aware fast path. Optional and defaulting to "unknown", so
   // a caller with no reading says nothing rather than guessing.
   wifiFastPath?: WifiFastPath;
+  // State of the LAN transport. Same default and the same reason.
+  lanState?: LanState;
   // A panic wipe left secrets behind. Optional, defaulting to the case where
   // nothing has told us otherwise.
   wipeIncomplete?: boolean;
@@ -397,6 +399,17 @@ export interface MeshBannerInputs {
   peerCount: number;
 }
 
+// Whether the mesh has a local path that is not Bluetooth. Running, not "has
+// peers": who is there is the radar's job, and a banner flickering as people
+// walk past would be worse than one that is merely imprecise.
+function hasOtherLocalTransport(inputs: MeshBannerInputs): boolean {
+  return (
+    inputs.wifiFastPath === "active" ||
+    inputs.lanState === "active" ||
+    inputs.lanState === "searching"
+  );
+}
+
 // One blocker, one banner, one way out.
 //
 // Every branch names the specific thing that is wrong rather than a category,
@@ -404,7 +417,10 @@ export interface MeshBannerInputs {
 // advice that could not be acted on: it was shown for a revoked permission, a
 // permanently blocked one, and a location downgrade, and only one of those is
 // fixed by granting Bluetooth.
-function bleBlockerBanner(blocker: BleBlocker): MeshBanner | null {
+function bleBlockerBanner(
+  blocker: BleBlocker,
+  otherLocalTransport: boolean,
+): MeshBanner | null {
   switch (blocker) {
     case "none":
       return null;
@@ -426,11 +442,18 @@ function bleBlockerBanner(blocker: BleBlocker): MeshBanner | null {
         tone: "caution",
       };
 
+    // Red only when it leaves nothing. WiFi Aware and LAN carry the mesh
+    // without Bluetooth, so "mesh unavailable" over a working LAN is false, and
+    // a red banner over a working mesh teaches people to ignore the colour. The
+    // action stays either way: Bluetooth is still worth back for range, for the
+    // screen being off, and for the other platform.
     case "adapter-off":
       return {
         key: "ble-adapter-off",
-        label: t("mesh.banner.bluetooth_off"),
-        tone: "danger",
+        label: otherLocalTransport
+          ? t("mesh.banner.bluetooth_off_wifi")
+          : t("mesh.banner.bluetooth_off"),
+        tone: otherLocalTransport ? "caution" : "danger",
         action: {
           label: t("mesh.banner.action.turn_on"),
           kind: "enable-bluetooth",
@@ -527,7 +550,10 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   // The one thing standing between the user and a working mesh, said plainly,
   // with the button that fixes it. Exactly one of these can apply, because
   // bleBlocker is one value.
-  const blocked = bleBlockerBanner(inputs.bleBlocker);
+  const blocked = bleBlockerBanner(
+    inputs.bleBlocker,
+    hasOtherLocalTransport(inputs),
+  );
   if (blocked !== null) banners.push(blocked);
 
   // A wrong clock is a hard blocker, so it ranks with them rather than with the
@@ -735,6 +761,7 @@ export function useMeshBanners(): MeshBanner[] {
   const powerSaving = useMeshStateStore((s) => s.powerSaving);
   const clockSkewed = useMeshStateStore((s) => s.clockSkewed);
   const wifiFastPath = useMeshStateStore((s) => s.wifiFastPath);
+  const lanState = useMeshStateStore((s) => s.lanState);
   const wipeIncomplete = useMeshStateStore((s) => s.wipeIncomplete);
   const backgroundLimitsBrand =
     !backgroundLimitsAcknowledged && needsBatteryOptimizationPrompt()
@@ -749,6 +776,7 @@ export function useMeshBanners(): MeshBanner[] {
     powerSaving,
     clockSkewed,
     wifiFastPath,
+    lanState,
     wipeIncomplete,
     nostrConnected,
     torActive,
