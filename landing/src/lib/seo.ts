@@ -91,7 +91,7 @@ export const PAGES: PageSeo[] = Object.values(SEO);
 
 export function canonicalUrl(language: LanguageCode, path: string): string {
   const localized = localizedPath(language, path);
-  return localized === "/" ? SITE_URL : `${SITE_URL}${localized}`;
+  return localized === "/" ? SITE_URL : `${SITE_URL}${localized}/`;
 }
 
 export interface Alternate {

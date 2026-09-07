@@ -86,8 +86,7 @@ function headBlock(page: PageSeo, language: LanguageCode): string {
 function sitemap(pages: PageSeo[]): string {
   const entries = pages.flatMap((page) =>
     LANGUAGE_ORDER.map((language) => {
-      const url = canonicalUrl(language, page.path);
-      const loc = page.path === "/" && language === "en" ? `${url}/` : url;
+      const loc = canonicalUrl(language, page.path);
       const links = alternates(page.path)
         .map(
           (link) =>
